@@ -2,6 +2,11 @@
 
 This checklist is used to verify the functionality of the `release-manager.yml` workflow.
 
+## 0. Prerequisites (Mandatory)
+- [ ] **GitHub App Config**: Ensure the GitHub App has `contents: write` and `workflows: write` permissions.
+- [ ] **Branch Protection**: If `main` is protected, add the GitHub App to the **"Allow bypass"** list in the branch protection rules for `main`. This is required for the workflow to sync `.github/workflows/` files directly.
+- [ ] **Secrets**: Configure `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` in the repository.
+
 ## 1. Release Mode Verification
 - [x] **Trigger**: Run workflow with `mode: release`, `component_path: actions/common/janitor-bot`.
 - [x] **Validation**:

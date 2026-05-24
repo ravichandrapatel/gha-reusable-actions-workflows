@@ -269,6 +269,9 @@ jobs:
 
   # =============================================================================
   # STAGE 3: EXECUTE (SPVS Release/Release Assurance)
+  # NOTE: If 'main' branch is protected, the GitHub App used below MUST be 
+  # added to the "Allow bypass" list in branch protection rules to allow 
+  # workflow syncing during promotion/rollback.
   # =============================================================================
   execute:
     name: Execute Release
