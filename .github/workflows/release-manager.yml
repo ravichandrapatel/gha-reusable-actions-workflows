@@ -1,0 +1,414 @@
+# =============================================================================
+# FILE_NAME: release-manager.yml
+# DESCRIPTION: Release, Promote, and Rollback manager for actions and workflows.
+# ALIGNMENT: OWASP SPVS (Secure Pipeline Verification Standard) 1.0
+# VERSION: 1.3.1
+# EXIT_CODES/SIGNALS: 0 on success, 1 on failure.
+# AUTHORS: DevOps Team
+# =============================================================================
+
+# YAML Anchors for SPVS-compliant pinned actions (Non-security repeated blocks)
+# Note: GitHub Actions does not support merge anchors (<<), only full node references.
+x-refs:
+  - &checkout_action actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+  - &setup_python_action actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+  - &create_token_action actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+
+name: Release Manager
+
+on:
+  workflow_dispatch:
+    inputs:
+      component_path:
+        description: 'Path to component (e.g., actions/common/janitor-bot or workflows/type/name)'
+        required: true
+        type: string
+      mode:
+        description: 'Release stage'
+        required: true
+        type: choice
+        options:
+          - release   # Create versioned tag (name-X.Y.Z) on main
+          - promote   # Update stable tag (name-v1) to version
+          - rollback  # Revert stable tag (name-v1) to previous version
+      version:
+        description: 'Optional for release (auto-derived); Required for promote if not latest'
+        required: false
+        type: string
+
+concurrency:
+  group: release-${{ github.event.inputs.component_path }}
+  cancel-in-progress: false
+
+jobs:
+  # =============================================================================
+  # STAGE 1: VALIDATE (SPVS Plan/Develop)
+  # =============================================================================
+  validate:
+    name: Validate Component
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      component_name: ${{ steps.validate.outputs.component_name }}
+      component_type: ${{ steps.validate.outputs.component_type }}
+      version: ${{ steps.validate.outputs.version }}
+      safe_name: ${{ steps.validate.outputs.safe_name }}
+      current_version: ${{ steps.validate_init.outputs.current_version }}
+    steps:
+      - name: Checkout
+        uses: *checkout_action
+        with:
+          fetch-depth: 0
+
+      - name: Validate Component and Version
+        id: validate_init
+        shell: bash
+        env:
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+        run: |
+          set -euo pipefail
+          # [T-01] Validating component path: "$COMPONENT_PATH"
+          echo "[DBG-001] Starting validation for path: $COMPONENT_PATH"
+          
+          if [[ ! -d "$COMPONENT_PATH" ]]; then
+            echo "[ERR-T-01] Component path $COMPONENT_PATH does not exist." >&2
+            exit 1
+          fi
+
+          # Determine type (actions or workflows)
+          if [[ "$COMPONENT_PATH" =~ ^actions/ ]]; then
+            TYPE="action"
+            echo "[DBG-002] Detected component type: action"
+          elif [[ "$COMPONENT_PATH" =~ ^workflows/ ]]; then
+            TYPE="workflow"
+            echo "[DBG-002] Detected component type: workflow"
+          else
+            echo "[ERR-T-02] Component must be in actions/ or workflows/ directory." >&2
+            exit 1
+          fi
+
+          NAME=$(basename "$COMPONENT_PATH")
+          SAFE_NAME=$(echo "$NAME" | tr '/' '-')
+          
+          echo "component_name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "component_type=$TYPE" >> "$GITHUB_OUTPUT"
+          echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
+
+          # Get current version for semver action
+          echo "[DBG-003] Fetching latest tag for $SAFE_NAME"
+          LATEST_TAG=$(git tag -l "${SAFE_NAME}-[0-9]*" | sort -V | tail -n1 || true)
+          if [[ -z "$LATEST_TAG" ]]; then
+            CURRENT_VER="0.0.0"
+            echo "[DBG-004] No existing tags found, starting from 0.0.0"
+          else
+            CURRENT_VER=${LATEST_TAG#$SAFE_NAME-}
+            echo "[DBG-004] Latest tag found: $LATEST_TAG (version: $CURRENT_VER)"
+          fi
+          echo "current_version=$CURRENT_VER" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate Next Version
+        if: github.event.inputs.mode == 'release' && github.event.inputs.version == ''
+        id: semver
+        uses: ./actions/common/semver
+        with:
+          current_version: ${{ steps.validate_init.outputs.current_version }}
+          safe_name: ${{ steps.validate_init.outputs.safe_name }}
+
+      - name: Finalize Validation
+        id: validate
+        shell: bash
+        env:
+          MODE: ${{ github.event.inputs.mode }}
+          VERSION_INPUT: ${{ github.event.inputs.version }}
+          SAFE_NAME: ${{ steps.validate_init.outputs.safe_name }}
+          NEXT_VERSION: ${{ steps.semver.outputs.next_version }}
+          COMPONENT_TYPE: ${{ steps.validate_init.outputs.component_type }}
+          COMPONENT_NAME: ${{ steps.validate_init.outputs.component_name }}
+        run: |
+          set -euo pipefail
+          echo "[DBG-005] Finalizing validation for mode: $MODE"
+          
+          if [[ "$MODE" == "release" ]]; then
+            if [[ -n "$VERSION_INPUT" ]]; then
+              VERSION="$VERSION_INPUT"
+              echo "[DBG-006] Using provided version: $VERSION"
+            else
+              VERSION="$NEXT_VERSION"
+              echo "[DBG-006] Using auto-calculated version: $VERSION"
+            fi
+            
+            # [T-03] Checking for tag collision (Artifact Integrity)
+            TAG_NAME="${SAFE_NAME}-${VERSION}"
+            echo "[DBG-007] Checking for tag collision: $TAG_NAME"
+            if git rev-parse "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+              echo "[ERR-T-03] Tag $TAG_NAME already exists. Collision detected." >&2
+              exit 1
+            fi
+          else
+            # For promote/rollback, we need a version
+            if [[ -n "$VERSION_INPUT" ]]; then
+              VERSION="$VERSION_INPUT"
+              echo "[DBG-008] Using provided version for $MODE: $VERSION"
+            else
+              # Default to latest versioned tag
+              echo "[DBG-009] No version provided, looking for latest versioned tag"
+              LATEST_TAG=$(git tag -l "${SAFE_NAME}-[0-9]*" | sort -V | tail -n1 || true)
+              if [[ -z "$LATEST_TAG" ]]; then
+                echo "[ERR-T-04] No versioned tags found for $SAFE_NAME. Cannot $MODE." >&2
+                exit 1
+              fi
+              VERSION=${LATEST_TAG#$SAFE_NAME-}
+              echo "[DBG-010] Using latest version: $VERSION"
+            fi
+            
+            # Verify tag exists for promote
+            if [[ "$MODE" == "promote" ]]; then
+              TAG_NAME="${SAFE_NAME}-${VERSION}"
+              echo "[DBG-011] Verifying tag exists for promotion: $TAG_NAME"
+              if ! git rev-parse "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+                echo "[ERR-T-05] Tag $TAG_NAME does not exist. Cannot promote." >&2
+                exit 1
+              fi
+            fi
+          fi
+          
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "[DBG-012] Validation successful. Version to use: $VERSION"
+          echo "::notice::Validated $COMPONENT_TYPE $COMPONENT_NAME for $MODE at version $VERSION"
+
+  # =============================================================================
+  # STAGE 2: SECURITY (SPVS Integrate/Automated Validation)
+  # =============================================================================
+  security:
+    name: Security Scans
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: *checkout_action
+
+      - name: Setup Python
+        uses: *setup_python_action
+        with:
+          python-version: '3.12'
+
+      - name: Install Tools
+        run: |
+          set -euo pipefail
+          # [T-04] Installing security tools (SPVS Build Environment Protection)
+          echo "[DBG-013] Installing Bandit, Checkov, and Shellcheck"
+          pip install --no-cache-dir bandit==1.8.2 checkov==3.2.360
+          
+          echo "[DBG-014] Updating apt and installing Shellcheck"
+          sudo apt-get update -y && sudo apt-get install -y shellcheck
+          
+          echo "[DBG-015] Downloading and installing Actionlint"
+          bash <(curl -L https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          sudo mv actionlint /usr/local/bin/
+          
+          echo "[DBG-016] Verifying tool installations"
+          bandit --version
+          checkov --version
+          shellcheck --version
+          actionlint --version
+
+      - name: Run Actionlint
+        env:
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+          COMPONENT_TYPE: ${{ needs.validate.outputs.component_type }}
+        run: |
+          set -euo pipefail
+          # [T-05] Running actionlint
+          echo "[DBG-017] Starting Actionlint for $COMPONENT_TYPE at $COMPONENT_PATH"
+          if [[ "$COMPONENT_TYPE" == "action" ]]; then
+            actionlint "$COMPONENT_PATH/action.yml"
+          else
+            actionlint "$COMPONENT_PATH/workflow.yml"
+          fi
+          echo "[DBG-018] Actionlint completed successfully"
+
+      - name: Run Checkov
+        env:
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+        run: |
+          set -euo pipefail
+          # [T-06] Running checkov
+          echo "[DBG-019] Starting Checkov scan for $COMPONENT_PATH"
+          checkov -d "$COMPONENT_PATH" --framework github_actions
+          echo "[DBG-020] Checkov scan completed successfully"
+
+      - name: Run Bandit
+        env:
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+        run: |
+          set -euo pipefail
+          # [T-07] Running bandit on Python files
+          echo "[DBG-021] Checking for Python files in $COMPONENT_PATH"
+          if ls "$COMPONENT_PATH"/*.py >/dev/null 2>&1; then
+            echo "[DBG-022] Starting Bandit scan"
+            bandit -r "$COMPONENT_PATH"
+            echo "[DBG-023] Bandit scan completed successfully"
+          else
+            echo "[DBG-024] No Python files found, skipping Bandit."
+          fi
+
+      - name: Run Shellcheck
+        env:
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+        run: |
+          set -euo pipefail
+          # [T-08] Running shellcheck on shell scripts
+          echo "[DBG-025] Checking for Shell scripts in $COMPONENT_PATH"
+          if ls "$COMPONENT_PATH"/*.sh >/dev/null 2>&1; then
+            echo "[DBG-026] Starting Shellcheck scan"
+            shellcheck "$COMPONENT_PATH"/*.sh
+            echo "[DBG-027] Shellcheck scan completed successfully"
+          else
+            echo "[DBG-028] No shell scripts found, skipping Shellcheck."
+          fi
+
+  # =============================================================================
+  # STAGE 3: EXECUTE (SPVS Release/Release Assurance)
+  # =============================================================================
+  execute:
+    name: Execute Release
+    needs: [validate, security]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.mode == 'release' && 'sandbox' || 'production' }}
+    permissions:
+      contents: write
+    steps:
+      - name: Generate Token
+        id: generate_token
+        uses: *create_token_action
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: *checkout_action
+        with:
+          token: ${{ steps.generate_token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          set -euo pipefail
+          # [T-09] Configuring Git for Release (SPVS Artifact Integrity)
+          echo "[DBG-029] Configuring Git user for bot"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Execute Release/Promote/Rollback
+        shell: bash
+        env:
+          MODE: ${{ github.event.inputs.mode }}
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+          COMPONENT_NAME: ${{ needs.validate.outputs.component_name }}
+          COMPONENT_TYPE: ${{ needs.validate.outputs.component_type }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          SAFE_NAME: ${{ needs.validate.outputs.safe_name }}
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          echo "[DBG-030] Starting execution for mode: $MODE"
+          
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          STABLE_TAG="${SAFE_NAME}-v${MAJOR}"
+          VERSION_TAG="${SAFE_NAME}-${VERSION}"
+
+          if [[ "$MODE" == "release" ]]; then
+            # [T-10] Creating versioned tag: "$VERSION_TAG"
+            echo "[DBG-031] Creating versioned tag: $VERSION_TAG"
+            git tag -a "$VERSION_TAG" -m "Release $VERSION_TAG"
+            git push origin "$VERSION_TAG"
+            echo "[DBG-032] Successfully pushed versioned tag"
+            
+          elif [[ "$MODE" == "promote" ]]; then
+            # [T-11] Promoting to stable tag: "$STABLE_TAG"
+            echo "[DBG-033] Promoting stable tag $STABLE_TAG to $VERSION_TAG"
+            git tag -fa "$STABLE_TAG" -m "Promote to $VERSION_TAG"
+            git push origin "$STABLE_TAG" --force
+            echo "[DBG-034] Successfully updated stable tag"
+            
+            if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
+              # [T-12] Syncing workflow to .github/workflows/
+              SRC_WF="$COMPONENT_PATH/workflow.yml"
+              DEST_WF=".github/workflows/${COMPONENT_NAME}.yml"
+              echo "[DBG-035] Syncing workflow file from $SRC_WF to $DEST_WF"
+              mkdir -p .github/workflows
+              cp "$SRC_WF" "$DEST_WF"
+              git add "$DEST_WF"
+              git commit -m "Sync workflow: $COMPONENT_NAME to $VERSION" || echo "[DBG-036] No changes to commit for workflow sync"
+              git push origin main
+              echo "[DBG-037] Successfully synced workflow to main"
+            fi
+
+          elif [[ "$MODE" == "rollback" ]]; then
+            # [T-13] Rolling back stable tag: "$STABLE_TAG"
+            echo "[DBG-038] Starting rollback for $STABLE_TAG"
+            # Find previous versioned tag
+            PREV_TAG=$(git tag -l "${SAFE_NAME}-[0-9]*" | sort -V | grep -B1 "$VERSION_TAG" | head -n1 || true)
+            if [[ -z "$PREV_TAG" || "$PREV_TAG" == "$VERSION_TAG" ]]; then
+              echo "[ERR-T-06] No previous version found for rollback." >&2
+              exit 1
+            fi
+            echo "[DBG-039] Identified previous version: $PREV_TAG"
+            git tag -fa "$STABLE_TAG" -m "Rollback to $PREV_TAG"
+            git push origin "$STABLE_TAG" --force
+            echo "[DBG-040] Successfully rolled back stable tag to $PREV_TAG"
+            
+            if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
+              # [T-14] Syncing previous workflow version
+              DEST_WF=".github/workflows/${COMPONENT_NAME}.yml"
+              echo "[DBG-041] Restoring workflow file from tag $PREV_TAG"
+              git checkout "$PREV_TAG" -- "$COMPONENT_PATH/workflow.yml"
+              cp "$COMPONENT_PATH/workflow.yml" "$DEST_WF"
+              git checkout HEAD -- "$COMPONENT_PATH/workflow.yml" # Restore current state of source
+              git add "$DEST_WF"
+              git commit -m "Rollback workflow: $COMPONENT_NAME to $PREV_TAG" || echo "[DBG-042] No changes to commit for workflow rollback"
+              git push origin main
+              echo "[DBG-043] Successfully restored workflow file to main"
+            fi
+          fi
+
+  # =============================================================================
+  # STAGE 4: AUDIT (SPVS Operate/Visibility)
+  # =============================================================================
+  audit:
+    name: Audit Release
+    needs: [validate, security, execute]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Log Results
+        env:
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+          MODE: ${{ github.event.inputs.mode }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          SECURITY_RESULT: ${{ needs.security.result }}
+          EXECUTE_RESULT: ${{ needs.execute.result }}
+        run: |
+          set -euo pipefail
+          # [T-15] Auditing release event (SPVS Release Assurance)
+          echo "[DBG-044] Starting final audit logging"
+          echo "============================================================================="
+          echo "Release Event Audit"
+          echo "-----------------------------------------------------------------------------"
+          echo "Component: $COMPONENT_PATH"
+          echo "Mode:      $MODE"
+          echo "Version:   $VERSION"
+          echo "-----------------------------------------------------------------------------"
+          echo "Validate Job: $VALIDATE_RESULT"
+          echo "Security Job: $SECURITY_RESULT"
+          echo "Execute Job:  $EXECUTE_RESULT"
+          echo "============================================================================="
+          echo "[DBG-045] Audit logging completed"
