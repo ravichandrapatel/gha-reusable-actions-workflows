@@ -43,10 +43,10 @@ jobs:
     permissions:
       contents: read
     outputs:
-      component_name: ${{ steps.validate.outputs.component_name }}
-      component_type: ${{ steps.validate.outputs.component_type }}
+      component_name: ${{ steps.validate_init.outputs.component_name }}
+      component_type: ${{ steps.validate_init.outputs.component_type }}
       version: ${{ steps.validate.outputs.version }}
-      safe_name: ${{ steps.validate.outputs.safe_name }}
+      safe_name: ${{ steps.validate_init.outputs.safe_name }}
       current_version: ${{ steps.validate_init.outputs.current_version }}
     steps:
       - name: Checkout
