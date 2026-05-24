@@ -8,36 +8,24 @@ This checklist is used to verify the functionality of the `release-manager.yml` 
 - [ ] **Secrets**: Configure `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` in the repository.
 
 ## 1. Release Mode Verification
-- [x] **Trigger**: Run workflow with `mode: release`, `component_path: actions/common/janitor-bot`.
-- [x] **Validation**:
-  - [x] Verify `validate` job succeeds.
-  - [x] Verify `Calculate Next Version` step runs and derives a new version (e.g., `0.0.1`).
-- [x] **Security**:
-  - [x] Verify `security` job succeeds (Checkov, Bandit, Shellcheck). *Note: Actionlint skipped for actions as it misinterpreted them as workflows.*
-- [ ] **Execution**:
-  - [ ] Verify a new tag `janitor-bot-0.0.1` is created in the repository. *Note: Failed due to missing RELEASE_APP_ID/PRIVATE_KEY secrets.*
-- [x] **Audit**:
-  - [x] Verify `audit` job logs the correct metadata.
+- [ ] **Action Release**: Verify versioned tag is created.
+- [ ] **Workflow Release**: Verify versioned tag is created AND `.github/workflows/` is synced in the same commit.
+- [ ] **Tag Collision**: Verify collision detection for versioned tags.
 
-## 2. Tag Collision Verification
-- [x] **Trigger**: Run workflow again with the SAME version (e.g., `0.0.1`) and `mode: release`.
-- [x] **Validation**:
-  - [x] Verify `validate` job FAILS with a "Tag collision detected" error.
+## 2. Promote Mode Verification
+- [ ] **Stable Tag Pointer**: Verify `v1` points to the EXACT same commit as the versioned tag.
+- [ ] **No Force Push**: Verify tags are updated by deleting remote first instead of using `--force`.
+- [ ] **Stable Tag Name**: Verify stable tag is named `v1` (no component prefix).
 
-## 3. Promote Mode Verification
-- [x] **Trigger**: Run workflow with `mode: promote`, `component_path: actions/common/janitor-bot`, `version: 0.0.1`.
-- [x] **Execution**:
-  - [ ] Verify `execute` job succeeds. *Note: Failed due to missing RELEASE_APP_ID/PRIVATE_KEY secrets.*
-  - [ ] Verify stable tag `janitor-bot-v1` is created/updated to point to `janitor-bot-0.0.1`.
+## 3. Rollback Mode Verification
+- [ ] **Rollback Pointer**: Verify `v1` is updated to point to the previous versioned tag.
+- [ ] **Workflow Restoration**: Verify `.github/workflows/` file is restored on `main`.
 
-## 4. Rollback Mode Verification
-- [x] **Trigger**: Run workflow with `mode: rollback`, `component_path: actions/common/janitor-bot`, `version: 0.0.2`.
-- [x] **Execution**:
-  - [ ] Verify `execute` job succeeds. *Note: Failed due to missing RELEASE_APP_ID/PRIVATE_KEY secrets.*
-  - [ ] Verify stable tag `janitor-bot-v1` is updated to point to the PREVIOUS version (e.g., `0.0.1`).
-
-## 5. Security Tool Verification
+## 4. Security Tool Verification
 - [ ] **Actionlint**: Introduce a syntax error in `action.yml` and verify `security` job fails.
 - [x] **Checkov**: Verify GitHub Actions framework scans are performed.
 - [x] **Bandit**: Introduce a security issue in a `.py` file (e.g., `eval()`) and verify `security` job fails.
 - [x] **Shellcheck**: Introduce a shell script issue and verify `security` job fails.
+
+## 5. Branch Protection Verification
+- [ ] **Bypass**: Enable branch protection on `main` and verify the GitHub App can still push workflow syncs (requires "Allow bypass" configuration).

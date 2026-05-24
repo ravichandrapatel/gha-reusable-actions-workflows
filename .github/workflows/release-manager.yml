@@ -2,7 +2,7 @@
 # FILE_NAME: release-manager.yml
 # DESCRIPTION: Release, Promote, and Rollback manager for actions and workflows.
 # ALIGNMENT: OWASP SPVS (Secure Pipeline Verification Standard) 1.0
-# VERSION: 1.3.1
+# VERSION: 1.4.0
 # EXIT_CODES/SIGNALS: 0 on success, 1 on failure.
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -22,8 +22,8 @@ on:
         type: choice
         options:
           - release   # Create versioned tag (name-X.Y.Z) on main
-          - promote   # Update stable tag (name-v1) to version
-          - rollback  # Revert stable tag (name-v1) to previous version
+          - promote   # Update stable tag (v1) to version
+          - rollback  # Revert stable tag (v1) to previous version
       version:
         description: 'Optional for release (auto-derived); Required for promote if not latest'
         required: false
@@ -271,7 +271,7 @@ jobs:
   # STAGE 3: EXECUTE (SPVS Release/Release Assurance)
   # NOTE: If 'main' branch is protected, the GitHub App used below MUST be 
   # added to the "Allow bypass" list in branch protection rules to allow 
-  # workflow syncing during promotion/rollback.
+  # workflow syncing during release/rollback.
   # =============================================================================
   execute:
     name: Execute Release
@@ -318,22 +318,14 @@ jobs:
           set -euo pipefail
           echo "[DBG-030] Starting execution for mode: $MODE"
           
+          # Stable tag is always v1 (or vN based on major) as per user request
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
-          STABLE_TAG="${SAFE_NAME}-v${MAJOR}"
+          STABLE_TAG="v${MAJOR}"
           VERSION_TAG="${SAFE_NAME}-${VERSION}"
 
           if [[ "$MODE" == "release" ]]; then
-            # [T-10] Creating versioned tag: "$VERSION_TAG"
-            echo "[DBG-031] Creating versioned tag: $VERSION_TAG"
-            git tag -a "$VERSION_TAG" -m "Release $VERSION_TAG"
-            git push origin "$VERSION_TAG"
-            echo "[DBG-032] Successfully pushed versioned tag"
-            
-          elif [[ "$MODE" == "promote" ]]; then
-            echo "[DBG-033] Starting promotion to $VERSION_TAG"
-            
             if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
-              # [T-12] Syncing workflow to .github/workflows/
+              # [T-12] Syncing workflow to .github/workflows/ (Do this in release so tag includes it)
               SRC_WF="$COMPONENT_PATH/workflow.yml"
               DEST_WF=".github/workflows/${COMPONENT_NAME}.yml"
               echo "[DBG-035] Syncing workflow file from $SRC_WF to $DEST_WF"
@@ -345,10 +337,24 @@ jobs:
               echo "[DBG-037] Successfully synced workflow to main"
             fi
 
-            # [T-11] Promoting to stable tag: "$STABLE_TAG" (Do this AFTER workflow sync)
-            echo "[DBG-033a] Updating stable tag $STABLE_TAG to $VERSION_TAG"
-            git tag -fa "$STABLE_TAG" -m "Promote to $VERSION_TAG"
-            git push origin "$STABLE_TAG" --force
+            # [T-10] Creating versioned tag: "$VERSION_TAG"
+            echo "[DBG-031] Creating versioned tag: $VERSION_TAG"
+            git tag -a "$VERSION_TAG" -m "Release $VERSION_TAG"
+            git push origin "$VERSION_TAG"
+            echo "[DBG-032] Successfully pushed versioned tag"
+            
+          elif [[ "$MODE" == "promote" ]]; then
+            echo "[DBG-033] Starting promotion of $VERSION_TAG to $STABLE_TAG"
+            
+            # [T-11] Promoting to stable tag: "$STABLE_TAG" (Point to versioned tag commit)
+            echo "[DBG-033a] Updating stable tag $STABLE_TAG to point to $VERSION_TAG"
+            git tag -d "$STABLE_TAG" || true
+            git tag -a "$STABLE_TAG" "$VERSION_TAG" -m "Promote to $VERSION_TAG"
+            
+            # [T-11b] Push tag without --force by deleting remote first
+            echo "[DBG-033b] Pushing stable tag to remote"
+            git push origin :refs/tags/"$STABLE_TAG" || true
+            git push origin "$STABLE_TAG"
             echo "[DBG-034] Successfully updated stable tag"
 
           elif [[ "$MODE" == "rollback" ]]; then
@@ -362,7 +368,7 @@ jobs:
             echo "[DBG-039] Identified previous version: $PREV_TAG"
             
             if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
-              # [T-14] Syncing previous workflow version
+              # [T-14] Syncing previous workflow version to main
               DEST_WF=".github/workflows/${COMPONENT_NAME}.yml"
               echo "[DBG-041] Restoring workflow file from tag $PREV_TAG"
               git checkout "$PREV_TAG" -- "$COMPONENT_PATH/workflow.yml"
@@ -374,10 +380,15 @@ jobs:
               echo "[DBG-043] Successfully restored workflow file to main"
             fi
 
-            # [T-13] Rolling back stable tag: "$STABLE_TAG" (Do this AFTER workflow sync)
-            git tag -fa "$STABLE_TAG" -m "Rollback to $PREV_TAG"
-            git push origin "$STABLE_TAG" --force
-            echo "[DBG-040] Successfully rolled back stable tag to $PREV_TAG"
+            # [T-13] Rolling back stable tag: "$STABLE_TAG" (Point to previous versioned tag)
+            echo "[DBG-040] Updating stable tag $STABLE_TAG to point to $PREV_TAG"
+            git tag -d "$STABLE_TAG" || true
+            git tag -a "$STABLE_TAG" "$PREV_TAG" -m "Rollback to $PREV_TAG"
+            
+            # Push tag without --force
+            git push origin :refs/tags/"$STABLE_TAG" || true
+            git push origin "$STABLE_TAG"
+            echo "[DBG-040a] Successfully rolled back stable tag to $PREV_TAG"
           fi
 
       - name: Generate Release Summary
