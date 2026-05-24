@@ -2,7 +2,7 @@
 # FILE_NAME: release-manager.yml
 # DESCRIPTION: Release, Promote, and Rollback manager for actions and workflows.
 # ALIGNMENT: OWASP SPVS (Secure Pipeline Verification Standard) 1.0
-# VERSION: 1.4.0
+# VERSION: 1.5.0
 # EXIT_CODES/SIGNALS: 0 on success, 1 on failure.
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -22,8 +22,8 @@ on:
         type: choice
         options:
           - release   # Create versioned tag (name-X.Y.Z) on main
-          - promote   # Update stable tag (v1) to version
-          - rollback  # Revert stable tag (v1) to previous version
+          - promote   # Update stable tag (name-v1) to version
+          - rollback  # Revert stable tag (name-v1) to previous version
       version:
         description: 'Optional for release (auto-derived); Required for promote if not latest'
         required: false
@@ -176,6 +176,7 @@ jobs:
   security:
     name: Security Scans
     needs: validate
+    if: github.event.inputs.mode == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -194,7 +195,7 @@ jobs:
           set -euo pipefail
           # [T-04] Installing security tools (SPVS Build Environment Protection)
           echo "[DBG-013] Installing Bandit, Checkov, and Shellcheck"
-          pip install --no-cache-dir bandit==1.8.2 checkov==3.2.360
+          pip install --no-cache-dir bandit==1.8.2 checkov==3.2.529
           
           echo "[DBG-014] Updating apt and installing Shellcheck"
           sudo apt-get update -y && sudo apt-get install -y shellcheck
@@ -276,6 +277,7 @@ jobs:
   execute:
     name: Execute Release
     needs: [validate, security]
+    if: always() && needs.validate.result == 'success' && (needs.security.result == 'success' || needs.security.result == 'skipped')
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event.inputs.mode == 'release' && 'sandbox' || 'production' }}
@@ -286,7 +288,7 @@ jobs:
         id: generate_token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
+          client-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - name: Checkout
@@ -318,8 +320,9 @@ jobs:
           set -euo pipefail
           echo "[DBG-030] Starting execution for mode: $MODE"
           
-          # Stable tag is always v1 as per user request
-          STABLE_TAG="v1"
+          # Stable tag includes component name prefix as per user request
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          STABLE_TAG="${SAFE_NAME}-v${MAJOR}"
           VERSION_TAG="${SAFE_NAME}-${VERSION}"
 
           if [[ "$MODE" == "release" ]]; then
