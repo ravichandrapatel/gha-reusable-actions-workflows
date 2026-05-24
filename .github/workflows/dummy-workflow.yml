@@ -1,0 +1,28 @@
+# =============================================================================
+# FILE_NAME: workflow.yml
+# DESCRIPTION: Dummy reusable workflow for release testing.
+# VERSION: 1.0.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: Dummy Reusable Workflow
+
+on:
+  workflow_call:
+    inputs:
+      message:
+        description: 'A message to echo'
+        required: false
+        type: string
+        default: 'Hello from Dummy Workflow'
+
+jobs:
+  echo_message:
+    name: Echo Message
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo
+        shell: bash
+        run: |
+          # [T-01] Echoing the input message
+          echo "Message: ${{ inputs.message }}"
