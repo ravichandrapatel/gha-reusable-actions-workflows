@@ -301,6 +301,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Execute Release/Promote/Rollback
+        id: execute_step
         shell: bash
         env:
           MODE: ${{ github.event.inputs.mode }}
@@ -326,11 +327,7 @@ jobs:
             echo "[DBG-032] Successfully pushed versioned tag"
             
           elif [[ "$MODE" == "promote" ]]; then
-            # [T-11] Promoting to stable tag: "$STABLE_TAG"
-            echo "[DBG-033] Promoting stable tag $STABLE_TAG to $VERSION_TAG"
-            git tag -fa "$STABLE_TAG" -m "Promote to $VERSION_TAG"
-            git push origin "$STABLE_TAG" --force
-            echo "[DBG-034] Successfully updated stable tag"
+            echo "[DBG-033] Starting promotion to $VERSION_TAG"
             
             if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
               # [T-12] Syncing workflow to .github/workflows/
@@ -345,8 +342,13 @@ jobs:
               echo "[DBG-037] Successfully synced workflow to main"
             fi
 
+            # [T-11] Promoting to stable tag: "$STABLE_TAG" (Do this AFTER workflow sync)
+            echo "[DBG-033a] Updating stable tag $STABLE_TAG to $VERSION_TAG"
+            git tag -fa "$STABLE_TAG" -m "Promote to $VERSION_TAG"
+            git push origin "$STABLE_TAG" --force
+            echo "[DBG-034] Successfully updated stable tag"
+
           elif [[ "$MODE" == "rollback" ]]; then
-            # [T-13] Rolling back stable tag: "$STABLE_TAG"
             echo "[DBG-038] Starting rollback for $STABLE_TAG"
             # Find previous versioned tag
             PREV_TAG=$(git tag -l "${SAFE_NAME}-[0-9]*" | sort -V | grep -B1 "$VERSION_TAG" | head -n1 || true)
@@ -355,9 +357,6 @@ jobs:
               exit 1
             fi
             echo "[DBG-039] Identified previous version: $PREV_TAG"
-            git tag -fa "$STABLE_TAG" -m "Rollback to $PREV_TAG"
-            git push origin "$STABLE_TAG" --force
-            echo "[DBG-040] Successfully rolled back stable tag to $PREV_TAG"
             
             if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
               # [T-14] Syncing previous workflow version
@@ -371,40 +370,39 @@ jobs:
               git push origin main
               echo "[DBG-043] Successfully restored workflow file to main"
             fi
+
+            # [T-13] Rolling back stable tag: "$STABLE_TAG" (Do this AFTER workflow sync)
+            git tag -fa "$STABLE_TAG" -m "Rollback to $PREV_TAG"
+            git push origin "$STABLE_TAG" --force
+            echo "[DBG-040] Successfully rolled back stable tag to $PREV_TAG"
           fi
 
-  # =============================================================================
-  # STAGE 4: AUDIT (SPVS Operate/Visibility)
-  # =============================================================================
-  audit:
-    name: Audit Release
-    needs: [validate, security, execute]
-    if: always()
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Log Results
+      - name: Generate Release Summary
+        if: always()
         env:
           COMPONENT_PATH: ${{ github.event.inputs.component_path }}
           MODE: ${{ github.event.inputs.mode }}
           VERSION: ${{ needs.validate.outputs.version }}
           VALIDATE_RESULT: ${{ needs.validate.result }}
           SECURITY_RESULT: ${{ needs.security.result }}
-          EXECUTE_RESULT: ${{ needs.execute.result }}
+          EXECUTE_RESULT: ${{ steps.execute_step.outcome }}
         run: |
           set -euo pipefail
-          # [T-15] Auditing release event (SPVS Release Assurance)
-          echo "[DBG-044] Starting final audit logging"
-          echo "============================================================================="
-          echo "Release Event Audit"
-          echo "-----------------------------------------------------------------------------"
-          echo "Component: $COMPONENT_PATH"
-          echo "Mode:      $MODE"
-          echo "Version:   $VERSION"
-          echo "-----------------------------------------------------------------------------"
-          echo "Validate Job: $VALIDATE_RESULT"
-          echo "Security Job: $SECURITY_RESULT"
-          echo "Execute Job:  $EXECUTE_RESULT"
-          echo "============================================================================="
-          echo "[DBG-045] Audit logging completed"
+          # [T-15] Generating release summary (SPVS Release Assurance)
+          echo "[DBG-044] Generating job summary"
+          
+          {
+            echo "## Release Manager Summary"
+            echo "| Stage | Result |"
+            echo "| :--- | :--- |"
+            echo "| **Validation** | $VALIDATE_RESULT |"
+            echo "| **Security Scans** | $SECURITY_RESULT |"
+            echo "| **Execution** | $EXECUTE_RESULT |"
+            echo ""
+            echo "### Metadata"
+            echo "- **Component:** \`$COMPONENT_PATH\`"
+            echo "- **Mode:** \`$MODE\`"
+            echo "- **Version:** \`$VERSION\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          
+          echo "[DBG-045] Summary generation completed"
