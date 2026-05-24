@@ -318,9 +318,8 @@ jobs:
           set -euo pipefail
           echo "[DBG-030] Starting execution for mode: $MODE"
           
-          # Stable tag is always v1 (or vN based on major) as per user request
-          MAJOR=$(echo "$VERSION" | cut -d. -f1)
-          STABLE_TAG="v${MAJOR}"
+          # Stable tag is always v1 as per user request
+          STABLE_TAG="v1"
           VERSION_TAG="${SAFE_NAME}-${VERSION}"
 
           if [[ "$MODE" == "release" ]]; then
