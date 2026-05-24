@@ -63,6 +63,7 @@ jobs:
           set -euo pipefail
           # [T-01] Validating component path: "$COMPONENT_PATH"
           echo "[DBG-001] Starting validation for path: $COMPONENT_PATH"
+          ls -R
           
           if [[ ! -d "$COMPONENT_PATH" ]]; then
             echo "[ERR-T-01] Component path $COMPONENT_PATH does not exist." >&2
