@@ -2,7 +2,7 @@
 # FILE_NAME: release-manager.yml
 # DESCRIPTION: Release, Promote, and Rollback manager for actions and workflows.
 # ALIGNMENT: OWASP SPVS (Secure Pipeline Verification Standard) 1.0
-# VERSION: 1.5.0
+# VERSION: 1.6.0
 # EXIT_CODES/SIGNALS: 0 on success, 1 on failure.
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -25,7 +25,7 @@ on:
           - promote   # Update stable tag (name-v1) to version
           - rollback  # Revert stable tag (name-v1) to previous version
       version:
-        description: 'Optional for release (auto-derived); Required for promote if not latest'
+        description: 'Optional for release (auto-derived); Required for promote/rollback to select specific version'
         required: false
         type: string
 
@@ -155,14 +155,12 @@ jobs:
               echo "[DBG-010] Using latest version: $VERSION"
             fi
             
-            # Verify tag exists for promote
-            if [[ "$MODE" == "promote" ]]; then
-              TAG_NAME="${SAFE_NAME}-${VERSION}"
-              echo "[DBG-011] Verifying tag exists for promotion: $TAG_NAME"
-              if ! git rev-parse "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
-                echo "[ERR-T-05] Tag $TAG_NAME does not exist. Cannot promote." >&2
-                exit 1
-              fi
+            # Verify tag exists for promote/rollback
+            TAG_NAME="${SAFE_NAME}-${VERSION}"
+            echo "[DBG-011] Verifying tag exists for $MODE: $TAG_NAME"
+            if ! git rev-parse "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+              echo "[ERR-T-05] Tag $TAG_NAME does not exist. Cannot $MODE." >&2
+              exit 1
             fi
           fi
           
