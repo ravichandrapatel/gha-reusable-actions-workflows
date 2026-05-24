@@ -196,7 +196,7 @@ jobs:
           pip install --no-cache-dir bandit==1.8.2 checkov==3.2.529
           
           echo "[DBG-014] Updating apt and installing Shellcheck"
-          sudo apt-get update -y && sudo apt-get install -y shellcheck
+          sudo apt-get install -y shellcheck
           
           echo "[DBG-015] Downloading and installing Actionlint"
           bash <(curl -L https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
