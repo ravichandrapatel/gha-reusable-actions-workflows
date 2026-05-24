@@ -218,8 +218,9 @@ jobs:
           # [T-05] Running actionlint
           echo "[DBG-017] Starting Actionlint for $COMPONENT_TYPE at $COMPONENT_PATH"
           if [[ "$COMPONENT_TYPE" == "action" ]]; then
-            # [DBG-017a] Running actionlint for action (CD into directory for better detection)
-            cd "$COMPONENT_PATH" && actionlint -verbose action.yml
+            # [DBG-017a] Skipping actionlint for actions (actionlint primarily targets workflows)
+            # Checkov and Shellcheck will cover action security.
+            echo "[DBG-017a] Action detected, skipping actionlint (covered by Checkov)"
           else
             # [DBG-017b] Running actionlint for workflow
             actionlint "$COMPONENT_PATH/workflow.yml"
