@@ -218,8 +218,10 @@ jobs:
           # [T-05] Running actionlint
           echo "[DBG-017] Starting Actionlint for $COMPONENT_TYPE at $COMPONENT_PATH"
           if [[ "$COMPONENT_TYPE" == "action" ]]; then
-            actionlint "$COMPONENT_PATH/action.yml"
+            # [DBG-017a] Running actionlint for action (CD into directory for better detection)
+            cd "$COMPONENT_PATH" && actionlint action.yml
           else
+            # [DBG-017b] Running actionlint for workflow
             actionlint "$COMPONENT_PATH/workflow.yml"
           fi
           echo "[DBG-018] Actionlint completed successfully"
