@@ -1,0 +1,130 @@
+"""
+FILE_NAME: action.yml
+DESCRIPTION: Composite action wrapper for main.py (installs deps, runs detection, exposes outputs).
+VERSION: 1.0.0
+EXIT_CODES/SIGNALS: N/A
+AUTHORS: Platform / DevOps
+"""
+
+name: 'Git Path Filter'
+description: 'Detects file changes between two refs (YAML glob groups, ** and ! last-match-wins); ref-agnostic, pull_request and push'
+inputs:
+  source_branch:
+    description: 'Source/head ref (branch, tag, or SHA; e.g. github.head_ref or github.sha)'
+    required: true
+  base_ref_branch:
+    description: 'Base ref (branch, tag, or SHA; no origin/ prefix)'
+    required: true
+  pattern_filter:
+    description: 'YAML string defining filter groups (key -> list of globs; ! = exclude)'
+    required: true
+  github_token:
+    description: 'GitHub Token for git operations'
+    required: false
+    default: ${{ github.token }}
+  change_types:
+    description: 'Optional comma-separated A,M,D to filter by status (e.g. A,M = added/modified only)'
+    required: false
+    default: ''
+  debug:
+    description: 'Set to true to log include/exclude reason per file'
+    required: false
+    default: 'false'
+  working_directory:
+    description: 'Base path for patterns; only paths under this dir are considered; matching is relative to this dir'
+    required: false
+    default: ''
+  auto_detect_refs:
+    description: 'When true, composite auto-detects source/base refs from GitHub event context (push, pull_request, workflow_dispatch).'
+    required: false
+    default: 'false'
+outputs:
+  changes:
+    description: 'JSON array of keys that have changes'
+    value: ${{ steps.detect.outputs.changes }}
+  changes_json:
+    description: 'Full details (has_changes, files, every_file_matches) for all keys including _unmatched'
+    value: ${{ steps.detect.outputs.changes_json }}
+  source_ref:
+    description: 'Resolved source ref actually passed to git-path-filter (branch name or SHA).'
+    value: ${{ steps.set-refs.outputs.source || inputs.source_branch }}
+  base_ref:
+    description: 'Resolved base ref actually passed to git-path-filter (branch name or SHA).'
+    value: ${{ steps.set-refs.outputs.base || inputs.base_ref_branch }}
+runs:
+  using: "composite"
+  steps:
+    - name: Auto-detect source/base refs from event
+      if: ${{ inputs.auto_detect_refs == 'true' }}
+      id: set-refs
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        REF: ${{ github.ref }}
+        REF_NAME: ${{ github.ref_name }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        HEAD_REF: ${{ github.head_ref }}
+        BASE_REF: ${{ github.base_ref }}
+        SHA: ${{ github.sha }}
+        BEFORE: ${{ github.event.before }}
+      run: |
+        set -euo pipefail
+
+        source_ref=""
+        base_ref=""
+
+        if [ "${EVENT_NAME}" = "pull_request" ]; then
+          source_ref="${HEAD_REF}"
+          base_ref="${BASE_REF}"
+        elif [ "${EVENT_NAME}" = "push" ]; then
+          if [ "${REF}" = "refs/heads/main" ]; then
+            source_ref="${SHA}"
+            base_ref="${BEFORE:-${DEFAULT_BRANCH}}"
+          else
+            branch="${REF#refs/heads/}"
+            source_ref="${branch}"
+            base_ref="${DEFAULT_BRANCH}"
+          fi
+        else
+          source_ref="${REF_NAME}"
+          base_ref="${DEFAULT_BRANCH}"
+        fi
+
+        {
+          echo "source=${source_ref}"
+          echo "base=${base_ref}"
+        } >> "$GITHUB_OUTPUT"
+      shell: bash
+
+    - name: Install Python dependencies
+      run: pip install -r ${{ github.action_path }}/requirements.txt
+      shell: bash
+
+    - name: Write filter spec to file
+      run: |
+        cat <<EOF > filter_spec.yaml
+        ${{ inputs.pattern_filter }}
+        EOF
+      shell: bash
+
+    - name: Run detection script
+      id: detect
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        BASE_REF: ${{ steps.set-refs.outputs.base || inputs.base_ref_branch }}
+        SOURCE_REF: ${{ steps.set-refs.outputs.source || inputs.source_branch }}
+        CHANGE_TYPES: ${{ inputs.change_types }}
+        DEBUG_FLAG: ${{ inputs.debug }}
+        WORKING_DIR: ${{ inputs.working_directory }}
+      run: |
+        set -euo pipefail
+        export PYTHONUNBUFFERED=1
+        EXTRA_ARGS=()
+        [ -n "${CHANGE_TYPES}" ] && EXTRA_ARGS+=(--change-types "${CHANGE_TYPES}")
+        [ "${DEBUG_FLAG}" = "true" ] && EXTRA_ARGS+=(--debug)
+        [ -n "${WORKING_DIR}" ] && EXTRA_ARGS+=(--working-directory "${WORKING_DIR}")
+        python3 -u "${{ github.action_path }}/main.py" \
+          --base-ref "${BASE_REF}" \
+          --source-ref "${SOURCE_REF}" \
+          --filter-spec "filter_spec.yaml" \
+          "${EXTRA_ARGS[@]}"
+      shell: bash
