@@ -48,6 +48,7 @@ jobs:
       version: ${{ steps.validate.outputs.version }}
       safe_name: ${{ steps.validate_init.outputs.safe_name }}
       current_version: ${{ steps.validate_init.outputs.current_version }}
+      workflow_file: ${{ steps.validate_init.outputs.workflow_file }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -87,6 +88,32 @@ jobs:
           echo "component_name=$NAME" >> "$GITHUB_OUTPUT"
           echo "component_type=$TYPE" >> "$GITHUB_OUTPUT"
           echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
+
+          # [T-02a] Discover workflow file if type is workflow
+          if [[ "$TYPE" == "workflow" ]]; then
+            echo "[DBG-002a] Searching for workflow file in $COMPONENT_PATH"
+            WF_FILES=("$COMPONENT_PATH"/*.{yml,yaml})
+            # Filter out non-existent globs if no files match
+            VALID_WF_FILES=()
+            for f in "${WF_FILES[@]}"; do
+              [[ -e "$f" ]] && VALID_WF_FILES+=("$f")
+            done
+
+            if [[ ${#VALID_WF_FILES[@]} -eq 0 ]]; then
+              echo "[ERR-T-02a] No .yml or .yaml file found in $COMPONENT_PATH" >&2
+              exit 1
+            elif [[ ${#VALID_WF_FILES[@]} -gt 1 ]]; then
+              echo "[ERR-T-02b] Multiple workflow files found in $COMPONENT_PATH. Only one is allowed." >&2
+              exit 1
+            fi
+            
+            WF_FILE=$(basename "${VALID_WF_FILES[0]}")
+            echo "[DBG-002b] Discovered workflow file: $WF_FILE"
+            echo "workflow_file=$WF_FILE" >> "$GITHUB_OUTPUT"
+          else
+            # For actions, we don't need a specific workflow file output but set it to empty
+            echo "workflow_file=" >> "$GITHUB_OUTPUT"
+          fi
 
           # Get current version for semver action
           echo "[DBG-003] Fetching latest tag for $SAFE_NAME"
@@ -212,6 +239,7 @@ jobs:
         env:
           COMPONENT_PATH: ${{ github.event.inputs.component_path }}
           COMPONENT_TYPE: ${{ needs.validate.outputs.component_type }}
+          WF_FILE: ${{ needs.validate.outputs.workflow_file }}
         run: |
           set -euo pipefail
           # [T-05] Running actionlint
@@ -222,7 +250,8 @@ jobs:
             echo "[DBG-017a] Action detected, skipping actionlint (covered by Checkov)"
           else
             # [DBG-017b] Running actionlint for workflow
-            actionlint "$COMPONENT_PATH/workflow.yml"
+            echo "[DBG-017b] Running actionlint on $COMPONENT_PATH/$WF_FILE"
+            actionlint "$COMPONENT_PATH/$WF_FILE"
           fi
           echo "[DBG-018] Actionlint completed successfully"
 
@@ -313,6 +342,7 @@ jobs:
           COMPONENT_TYPE: ${{ needs.validate.outputs.component_type }}
           VERSION: ${{ needs.validate.outputs.version }}
           SAFE_NAME: ${{ needs.validate.outputs.safe_name }}
+          WF_FILE: ${{ needs.validate.outputs.workflow_file }}
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
           set -euo pipefail
@@ -325,7 +355,7 @@ jobs:
           if [[ "$MODE" == "release" ]]; then
             if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
               # [T-12] Syncing workflow to .github/workflows/ (Do this in release so tag includes it)
-              SRC_WF="$COMPONENT_PATH/workflow.yml"
+              SRC_WF="$COMPONENT_PATH/$WF_FILE"
               DEST_WF=".github/workflows/${COMPONENT_NAME}.yml"
               echo "[DBG-035] Syncing workflow file from $SRC_WF to $DEST_WF"
               mkdir -p .github/workflows
@@ -370,9 +400,9 @@ jobs:
               # [T-14] Syncing previous workflow version to main
               DEST_WF=".github/workflows/${COMPONENT_NAME}.yml"
               echo "[DBG-041] Restoring workflow file from tag $PREV_TAG"
-              git checkout "$PREV_TAG" -- "$COMPONENT_PATH/workflow.yml"
-              cp "$COMPONENT_PATH/workflow.yml" "$DEST_WF"
-              git checkout HEAD -- "$COMPONENT_PATH/workflow.yml" # Restore current state of source
+              git checkout "$PREV_TAG" -- "$COMPONENT_PATH/$WF_FILE"
+              cp "$COMPONENT_PATH/$WF_FILE" "$DEST_WF"
+              git checkout HEAD -- "$COMPONENT_PATH/$WF_FILE" # Restore current state of source
               git add "$DEST_WF"
               git commit -m "Rollback workflow: $COMPONENT_NAME to $PREV_TAG" || echo "[DBG-042] No changes to commit for workflow rollback"
               git push origin main
