@@ -1,7 +1,6 @@
 # Pre-commit hooks: SPVS security scans + commit message validation (shell only).
-# Install: pip install -r requirements-dev.txt
-#          pre-commit install --hook-type pre-commit --hook-type commit-msg
-# System tools (apt/brew): shellcheck, actionlint, yq
+# Install: bash policies/scripts/install_dev_hooks.sh [--mode venv|pipx]
+#          source .env
 # Run all: pre-commit run --all-files
 
 minimum_pre_commit_version: "3.5.0"
@@ -11,7 +10,7 @@ repos:
     hooks:
       - id: spvs-security-pre-commit
         name: SPVS security (Checkov, Shellcheck, Actionlint, Bandit)
-        entry: bash policies/scripts/pre_commit_spvs.sh
+        entry: bash policies/scripts/pre_commit_spvs_wrapper.sh
         language: system
         files: ^(actions/|workflows/|\.github/workflows/|policies/|\.checkov\.yaml)
         pass_filenames: true

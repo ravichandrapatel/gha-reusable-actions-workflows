@@ -2,3 +2,4 @@
 .checkov.cache/
 .cache/
 .venv/
+.env
