@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: pre_commit_spvs.sh
 # DESCRIPTION: Pre-commit hook — Checkov SPVS, Shellcheck, Actionlint, and Bandit.
-# VERSION: 1.1.0
+# VERSION: 1.2.0
 # EXIT_CODES/SIGNALS: 0 pass, 1 scan failure, 2 missing tool or environment error
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -16,6 +16,7 @@ ACTIONLINT_SHA256="023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0
 REPO_ROOT=""
 CHANGED_FILES=()
 RESOLVED_COMPONENTS=()
+CHECKOV_COMPONENTS=()
 SHELL_FILES=()
 PYTHON_FILES=()
 WORKFLOW_FILES=()
@@ -168,6 +169,60 @@ resolve_components() {
 }
 
 # shellcheck disable=SC2329
+component_yaml_changed() {
+  # INTENT: Return whether a staged path changed YAML under a component (Checkov-relevant).
+  # INPUT: component path relative to repo root.
+  # OUTPUT: 0 if component YAML changed, 1 otherwise.
+  # SIDE_EFFECTS: none.
+  local component="$1"
+  local path
+  for path in "${CHANGED_FILES[@]}"; do
+    [[ "${path}" == "${component}/"* ]] || continue
+    case "${path}" in
+      *.yml | *.yaml)
+        return 0
+        ;;
+    esac
+  done
+  return 1
+}
+
+# shellcheck disable=SC2329
+resolve_checkov_components() {
+  # INTENT: Build Checkov component list — YAML changes only unless policies require full rescan.
+  # INPUT: none (uses globals).
+  # OUTPUT: populates CHECKOV_COMPONENTS array.
+  # SIDE_EFFECTS: none.
+  CHECKOV_COMPONENTS=()
+  local -A seen=()
+  local path component
+
+  if [[ "${SPVS_HOOK_SKIP_CHECKOV:-0}" == "1" ]]; then
+    _log "[DBG-907] Checkov skipped (SPVS_HOOK_SKIP_CHECKOV=1)"
+    return 0
+  fi
+
+  if policies_changed; then
+    _log "[DBG-004a] Policy change detected; Checkov will scan all components"
+    while IFS= read -r component; do
+      [[ -n "${component}" ]] || continue
+      seen["${component}"]=1
+    done < <(discover_all_components)
+  else
+    for path in "${CHANGED_FILES[@]}"; do
+      component="$(component_from_path "${path}")"
+      if [[ -n "${component}" ]] && component_yaml_changed "${component}"; then
+        seen["${component}"]=1
+      fi
+    done
+  fi
+
+  if [[ ${#seen[@]} -gt 0 ]]; then
+    mapfile -t CHECKOV_COMPONENTS < <(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort -u)
+  fi
+}
+
+# shellcheck disable=SC2329
 ensure_actionlint() {
   # INTENT: Use actionlint from PATH or install a pinned binary under .cache/actionlint.
   # INPUT: none (uses REPO_ROOT).
@@ -257,10 +312,6 @@ collect_shell_scripts() {
       if [[ "${path}" == *.sh ]] && [[ -f "${REPO_ROOT}/${path}" ]]; then
         seen["${REPO_ROOT}/${path}"]=1
       fi
-      component="$(component_from_path "${path}")"
-      if [[ -n "${component}" ]]; then
-        _add_glob_to_seen "${REPO_ROOT}/${component}" sh
-      fi
       if [[ "${path}" == policies/scripts/* ]]; then
         _add_glob_to_seen "${REPO_ROOT}/policies/scripts" sh
       fi
@@ -306,10 +357,6 @@ collect_python_files() {
     for path in "${CHANGED_FILES[@]}"; do
       if [[ "${path}" == *.py ]] && [[ -f "${REPO_ROOT}/${path}" ]]; then
         seen["${REPO_ROOT}/${path}"]=1
-      fi
-      component="$(component_from_path "${path}")"
-      if [[ -n "${component}" ]]; then
-        _add_glob_to_seen "${REPO_ROOT}/${component}" py
       fi
       if [[ "${path}" == policies/scripts/* ]]; then
         _add_glob_to_seen "${REPO_ROOT}/policies/scripts" py
@@ -471,6 +518,37 @@ run_bandit() {
 }
 
 # shellcheck disable=SC2329
+execute_checkov_on_dir() {
+  # INTENT: Run Checkov against an already-staged directory tree.
+  # INPUT: staging_root directory path.
+  # OUTPUT: None.
+  # SIDE_EFFECTS: runs checkov; exits 1 on findings.
+  local staging_root="$1"
+  local -a checkov_args=()
+
+  require_command checkov
+  mkdir -p "${REPO_ROOT}/.checkov.cache/ckv"
+  export CKV_CACHE_DIR="${REPO_ROOT}/.checkov.cache/ckv"
+  checkov_args=(
+    -d "${staging_root}"
+    --config-file "${REPO_ROOT}/.checkov.yaml"
+    --framework github_actions
+  )
+  if [[ "${SPVS_HOOK_VERBOSE}" != "1" ]]; then
+    checkov_args+=(--quiet --compact)
+  fi
+  if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
+    checkov "${checkov_args[@]}"
+    return 0
+  fi
+  local checkov_output=""
+  if ! checkov_output="$(checkov "${checkov_args[@]}" 2>&1)"; then
+    printf '%s\n' "${checkov_output}" >&2
+    return 1
+  fi
+}
+
+# shellcheck disable=SC2329
 run_checkov_scan() {
   # INTENT: Stage component or repo workflows and run Checkov SPVS policies.
   # INPUT: staging_root, component_path (optional), include_repo, repo_only flags.
@@ -482,8 +560,6 @@ run_checkov_scan() {
   local repo_only="${4:-false}"
   local -a stage_cmd=()
   local label
-
-  require_command checkov
 
   stage_cmd=(bash "${REPO_ROOT}/policies/scripts/stage_component.sh" --staging-root "${staging_root}")
   if [[ "${repo_only}" == "true" ]]; then
@@ -505,37 +581,21 @@ run_checkov_scan() {
   fi
 
   _log "[DBG-003] Running Checkov on staged ${label}"
-  mkdir -p "${REPO_ROOT}/.checkov.cache/ckv"
-  export CKV_CACHE_DIR="${REPO_ROOT}/.checkov.cache/ckv"
-  local -a checkov_args=(
-    -d "${staging_root}"
-    --config-file "${REPO_ROOT}/.checkov.yaml"
-    --framework github_actions
-  )
-  if [[ "${SPVS_HOOK_VERBOSE}" != "1" ]]; then
-    checkov_args+=(--quiet --compact)
-  fi
-  if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
-    checkov "${checkov_args[@]}"
-    return 0
-  fi
-  local checkov_output=""
-  if ! checkov_output="$(checkov "${checkov_args[@]}" 2>&1)"; then
-    printf '%s\n' "${checkov_output}" >&2
-    return 1
-  fi
+  execute_checkov_on_dir "${staging_root}"
 }
 
 # shellcheck disable=SC2329
 run_checkov() {
-  # INTENT: Orchestrate Checkov scans for all resolved components.
+  # INTENT: Orchestrate Checkov scans for changed component YAML (batched) or repo workflows.
   # INPUT: none (uses globals).
   # OUTPUT: None.
   # SIDE_EFFECTS: temp staging dirs; runs checkov.
-  local staging_root
-  local component
+  local staging_root=""
+  local component=""
   local include_repo="false"
   local scan_repo_only="false"
+  local -a stage_cmd=()
+  local first="true"
 
   if repo_workflows_changed; then
     include_repo="true"
@@ -544,7 +604,7 @@ run_checkov() {
     include_repo="true"
   fi
 
-  if repo_workflows_changed && [[ ${#RESOLVED_COMPONENTS[@]} -eq 0 ]] && ! policies_changed; then
+  if repo_workflows_changed && [[ ${#CHECKOV_COMPONENTS[@]} -eq 0 ]] && ! policies_changed; then
     scan_repo_only="true"
   fi
 
@@ -555,16 +615,48 @@ run_checkov() {
     return 0
   fi
 
-  if [[ ${#RESOLVED_COMPONENTS[@]} -eq 0 ]]; then
-    _log "[DBG-906] No components resolved for Checkov; skipping"
+  if [[ ${#CHECKOV_COMPONENTS[@]} -eq 0 ]]; then
+    _log "[DBG-906] No component YAML changes for Checkov; skipping"
     return 0
   fi
 
-  for component in "${RESOLVED_COMPONENTS[@]}"; do
-    staging_root="$(mktemp -d)"
-    run_checkov_scan "${staging_root}" "${component}" "${include_repo}" "false"
-    rm -rf "${staging_root}"
+  staging_root="$(mktemp -d)"
+  for component in "${CHECKOV_COMPONENTS[@]}"; do
+    stage_cmd=(
+      bash "${REPO_ROOT}/policies/scripts/stage_component.sh"
+      --staging-root "${staging_root}"
+      --component-path "${component}"
+    )
+    if [[ "${first}" != "true" ]]; then
+      stage_cmd+=(--append)
+    fi
+    _log "[DBG-002] Staging for Checkov: ${component}"
+    if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
+      "${stage_cmd[@]}"
+    else
+      "${stage_cmd[@]}" >/dev/null
+    fi
+    first="false"
   done
+
+  if [[ "${include_repo}" == "true" ]]; then
+    stage_cmd=(
+      bash "${REPO_ROOT}/policies/scripts/stage_component.sh"
+      --staging-root "${staging_root}"
+      --include-repo-workflows
+      --append
+    )
+    _log "[DBG-002] Staging repo workflows for Checkov"
+    if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
+      "${stage_cmd[@]}"
+    else
+      "${stage_cmd[@]}" >/dev/null
+    fi
+  fi
+
+  _log "[DBG-003] Running Checkov on ${#CHECKOV_COMPONENTS[@]} staged component(s)"
+  execute_checkov_on_dir "${staging_root}"
+  rm -rf "${staging_root}"
 }
 
 main() {
@@ -590,6 +682,7 @@ main() {
   done
 
   resolve_components
+  resolve_checkov_components
   collect_shell_scripts
   collect_python_files
   collect_workflow_files

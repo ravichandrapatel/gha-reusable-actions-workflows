@@ -34,14 +34,21 @@ require_command() {
   fi
 }
 
-reset_staging_workflows_dir() {
+ensure_staging_workflows_dir() {
   local staging_root="$1"
+  local reset="$2"
   local workflows_dir="${staging_root}/.github/workflows"
-  if [[ -d "${staging_root}/.github" ]]; then
+
+  if [[ "${reset}" == "true" ]] && [[ -d "${staging_root}/.github" ]]; then
     rm -rf "${staging_root}/.github"
   fi
   mkdir -p "${workflows_dir}"
   printf '%s' "${workflows_dir}"
+}
+
+reset_staging_workflows_dir() {
+  local staging_root="$1"
+  ensure_staging_workflows_dir "${staging_root}" "true"
 }
 
 include_repo_workflows() {
@@ -109,14 +116,18 @@ synthesize_workflow_from_action() {
 stage_component() {
   local component_path="$1"
   local staging_root="$2"
-  local workflows_dir dest component_name path_str action_file source candidates
+  local append="${3:-false}"
+  local workflows_dir dest component_name path_str action_file source candidates reset="true"
 
   if [[ ! -d "${component_path}" ]]; then
     _log_err "[DBG-901] Component path does not exist: ${component_path}"
     exit 1
   fi
 
-  workflows_dir="$(reset_staging_workflows_dir "${staging_root}")"
+  if [[ "${append}" == "true" ]]; then
+    reset="false"
+  fi
+  workflows_dir="$(ensure_staging_workflows_dir "${staging_root}" "${reset}")"
   component_name="$(basename "${component_path}")"
   dest="${workflows_dir}/spvs-staged-${component_name}.yml"
   path_str="${component_path//\\//}"
@@ -176,6 +187,7 @@ main() {
   local staging_root=".checkov-staging"
   local include_repo="false"
   local repo_only="false"
+  local append="false"
   local staged=""
 
   while [[ $# -gt 0 ]]; do
@@ -194,6 +206,10 @@ main() {
         ;;
       --repo-workflows-only)
         repo_only="true"
+        shift
+        ;;
+      --append)
+        append="true"
         shift
         ;;
       -h | --help)
@@ -222,12 +238,18 @@ main() {
   fi
 
   if [[ -z "${component_path}" ]]; then
+    if [[ "${include_repo}" == "true" && "${append}" == "true" ]]; then
+      include_repo_workflows "${staging_root}"
+      _log "[DBG-004] Staged repo workflows ready: ${staging_root}/.github/workflows"
+      printf '%s\n' "${staging_root}/.github/workflows"
+      exit 0
+    fi
     _log_err "[DBG-913] --component-path is required unless --repo-workflows-only is set"
     usage
     exit 1
   fi
 
-  staged="$(stage_component "${component_path}" "${staging_root}")"
+  staged="$(stage_component "${component_path}" "${staging_root}" "${append}")"
   if [[ "${include_repo}" == "true" ]]; then
     include_repo_workflows "${staging_root}"
   fi

@@ -38,6 +38,18 @@ if policies_changed; then
   echo "FAIL policies_changed should be false" >&2
   exit 1
 fi
+if component_yaml_changed "actions/common/semver"; then
+  : "component_yaml_changed ok"
+else
+  echo "FAIL component_yaml_changed should be true for action.yml" >&2
+  exit 1
+fi
+
+CHANGED_FILES=("actions/common/semver/run.sh")
+if component_yaml_changed "actions/common/semver"; then
+  echo "FAIL component_yaml_changed should be false for non-yaml" >&2
+  exit 1
+fi
 
 CHANGED_FILES=(".github/workflows/release-manager.yml")
 if repo_workflows_changed; then

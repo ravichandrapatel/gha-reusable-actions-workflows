@@ -340,6 +340,7 @@ write_env_file() {
 # Usage (from repo root): source .env
 export SPVS_REPO_ROOT="${REPO_ROOT}"
 export SPVS_HOOK_VERBOSE="\${SPVS_HOOK_VERBOSE:-0}"
+export SPVS_HOOK_SKIP_CHECKOV="\${SPVS_HOOK_SKIP_CHECKOV:-0}"
 export PATH="${path_prefix}${REPO_ROOT}/.cache/actionlint:${REPO_ROOT}/.cache/yq:\${PATH}"
 EOF
 
