@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: validate_commit_message.sh
 # DESCRIPTION: commit-msg hook — validate ticket prefix and conventional commit type.
-# VERSION: 1.1.0
+# VERSION: 1.2.0
 # EXIT_CODES/SIGNALS: 0 valid, 1 invalid subject, 2 usage error
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -23,6 +23,17 @@ _log_err() {
   printf '%s %s\n' "${PROJECT_PREFIX}" "$*" >&2
 }
 
+_read_commit_subject() {
+  local msg_file="$1"
+  local line=""
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    [[ "${line}" =~ ^[[:space:]]*(#|$) ]] && continue
+    printf '%s' "${line}"
+    return 0
+  done < "${msg_file}"
+  printf '%s' ""
+}
+
 main() {
   local msg_file="${1:-}"
   local subject=""
@@ -33,7 +44,7 @@ main() {
   fi
 
   _log "[DBG-000] Validating commit message"
-  subject="$(grep -Ev '^[[:space:]]*(#|$)' "${msg_file}" | head -n1 || true)"
+  subject="$(_read_commit_subject "${msg_file}")"
 
   if commit_msg_validate_subject "${subject}"; then
     _log "[DBG-001] Commit message valid"

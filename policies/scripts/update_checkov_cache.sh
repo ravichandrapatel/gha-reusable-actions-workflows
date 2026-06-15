@@ -2,13 +2,17 @@
 # =============================================================================
 # FILE_NAME: update_checkov_cache.sh
 # DESCRIPTION: Run Checkov for a component and refresh the repo-local .checkov.cache directory.
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 # EXIT_CODES/SIGNALS: 0 success, 1 validation or scan failure
 # AUTHORS: DevOps Team
 # =============================================================================
 set -euo pipefail
 
 PROJECT_PREFIX="[SPVS-CHECKOV-CACHE]"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=spvs_common_lib.sh
+source "${SCRIPT_DIR}/spvs_common_lib.sh"
 
 COMPONENT_PATH=""
 INCLUDE_REPO_WORKFLOWS="false"
@@ -39,18 +43,9 @@ EOF
 
 # shellcheck disable=SC2329
 require_command() {
-  # INTENT: Fail when a required CLI is missing.
-  # INPUT: command name.
-  # OUTPUT: None.
-  # SIDE_EFFECTS: exits 1 when command is not on PATH.
-  local cmd="$1"
-  if ! command -v "${cmd}" >/dev/null 2>&1; then
-    _log "[DBG-920] Required command not found: ${cmd}"
-    exit 1
-  fi
+  spvs_require_command "$1" 1
 }
 
-# shellcheck disable=SC2329
 parse_args() {
   # INTENT: Parse CLI arguments into globals.
   # INPUT: script arguments.

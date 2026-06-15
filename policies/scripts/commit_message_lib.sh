@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: commit_message_lib.sh
 # DESCRIPTION: Shared commit subject validation and semver bump classification.
-# VERSION: 1.2.0
+# VERSION: 1.3.0
 # EXIT_CODES/SIGNALS: Sourced only; functions return 0/1 or print values.
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -17,15 +17,7 @@ COMMIT_MSG_KEYWORDS=(feat fix chore docs refactor perf test style)
 COMMIT_MSG_SEMVER_MINOR_TYPES=(feat)
 COMMIT_MSG_SEMVER_PATCH_TYPES=(fix chore)
 COMMIT_MSG_VALID_NON_BUMP_TYPES=(docs refactor perf test style)
-
-# shellcheck disable=SC2329
-_commit_msg_ticket_regex() {
-  # INTENT: Print extended-regex ticket prefix (start-anchored).
-  # INPUT: none.
-  # OUTPUT: ticket regex on stdout.
-  # SIDE_EFFECTS: none.
-  printf '%s' '([sS][cC][tT][aA][sS][kK][0-9]+|[iI][nN][cC][0-9]+|[dD][cC][dD][tT]-[0-9]+)'
-}
+readonly COMMIT_MSG_TICKET_REGEX='([sS][cC][tT][aA][sS][kK][0-9]+|[iI][nN][cC][0-9]+|[dD][cC][dD][tT]-[0-9]+)'
 
 # shellcheck disable=SC2329
 _commit_msg_keywords_csv() {
@@ -33,16 +25,8 @@ _commit_msg_keywords_csv() {
   # INPUT: none.
   # OUTPUT: keyword list on stdout.
   # SIDE_EFFECTS: none.
-  local first=1
-  local kw
-  for kw in "${COMMIT_MSG_KEYWORDS[@]}"; do
-    if [[ "${first}" -eq 1 ]]; then
-      printf '%s' "${kw}"
-      first=0
-    else
-      printf ', %s' "${kw}"
-    fi
-  done
+  local IFS=', '
+  printf '%s' "${COMMIT_MSG_KEYWORDS[*]}"
 }
 
 # shellcheck disable=SC2329
@@ -52,10 +36,8 @@ commit_msg_has_ticket_prefix() {
   # OUTPUT: 0 if ticket prefix present, 1 otherwise.
   # SIDE_EFFECTS: none.
   local subject="$1"
-  local ticket
-  ticket="$(_commit_msg_ticket_regex)"
-  [[ "${subject}" =~ ^${ticket}[[:space:]]+ ]] && return 0
-  [[ "${subject}" =~ ^${ticket}:[[:space:]]* ]] && return 0
+  [[ "${subject}" =~ ^${COMMIT_MSG_TICKET_REGEX}[[:space:]]+ ]] && return 0
+  [[ "${subject}" =~ ^${COMMIT_MSG_TICKET_REGEX}:[[:space:]]* ]] && return 0
   return 1
 }
 
@@ -66,13 +48,11 @@ commit_msg_strip_ticket_prefix() {
   # OUTPUT: body after ticket printed to stdout.
   # SIDE_EFFECTS: none.
   local subject="$1"
-  local ticket
-  ticket="$(_commit_msg_ticket_regex)"
-  if [[ "${subject}" =~ ^${ticket}[[:space:]]+(.+)$ ]]; then
+  if [[ "${subject}" =~ ^${COMMIT_MSG_TICKET_REGEX}[[:space:]]+(.+)$ ]]; then
     printf '%s' "${BASH_REMATCH[2]}"
     return 0
   fi
-  if [[ "${subject}" =~ ^${ticket}:[[:space:]]*(.+)$ ]]; then
+  if [[ "${subject}" =~ ^${COMMIT_MSG_TICKET_REGEX}:[[:space:]]*(.+)$ ]]; then
     printf '%s' "${BASH_REMATCH[2]}"
     return 0
   fi
@@ -87,23 +67,11 @@ _commit_body_matches_keyword() {
   # SIDE_EFFECTS: none.
   local body="$1"
   local keyword="$2"
+  local scoped="^${keyword}(\\([^)]*\\))?[[:space:]]*:"
+  local spaced="^${keyword}(\\([^)]*\\))?[[:space:]]+[^[:space:]:]"
 
-  # Pattern 1: keyword(scope): message  OR  keyword: message
-  if printf '%s' "${body}" | grep -Eq "^${keyword}(\\([^)]*\\))?[[:space:]]*:"; then
-    return 0
-  fi
-  # Pattern 2: keyword(scope) message  OR  keyword message (no colon after keyword block)
-  if printf '%s' "${body}" | grep -Eq "^${keyword}(\\([^)]*\\))?[[:space:]]+[^[:space:]:]"; then
-    return 0
-  fi
-  # Pattern 3: keyword() message
-  if printf '%s' "${body}" | grep -Eq "^${keyword}\\(\\)[[:space:]]+[^[:space:]]"; then
-    return 0
-  fi
-  # Pattern 4: keyword(): message
-  if printf '%s' "${body}" | grep -Eq "^${keyword}\\(\\):[[:space:]]*[^[:space:]]"; then
-    return 0
-  fi
+  [[ "${body}" =~ ${scoped} ]] && return 0
+  [[ "${body}" =~ ${spaced} ]] && return 0
   return 1
 }
 

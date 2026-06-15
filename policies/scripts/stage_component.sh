@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: stage_component.sh
 # DESCRIPTION: Stage component workflows/actions under .github/workflows for Checkov.
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 # EXIT_CODES/SIGNALS: 0 success, 1 validation or I/O failure
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -56,7 +56,7 @@ include_repo_workflows() {
   local repo_wf_dir=".github/workflows"
   local dest_dir="${staging_root}/.github/workflows"
   local copied=0
-  local wf_file pattern
+  local wf_file
 
   if [[ ! -d "${repo_wf_dir}" ]]; then
     _log "[DBG-906] No .github/workflows directory; skipping repo workflow staging"
@@ -64,15 +64,13 @@ include_repo_workflows() {
   fi
 
   mkdir -p "${dest_dir}"
-  for pattern in "*.yml" "*.yaml"; do
-    shopt -s nullglob
-    for wf_file in "${repo_wf_dir}"/${pattern}; do
-      cp -f "${wf_file}" "${dest_dir}/spvs-repo-$(basename "${wf_file}")"
-      copied=$((copied + 1))
-      _log "[DBG-005] Staged repo workflow ${wf_file} -> ${dest_dir}/spvs-repo-$(basename "${wf_file}")"
-    done
-    shopt -u nullglob
+  shopt -s nullglob
+  for wf_file in "${repo_wf_dir}"/*.{yml,yaml}; do
+    cp -f "${wf_file}" "${dest_dir}/spvs-repo-$(basename "${wf_file}")"
+    copied=$((copied + 1))
+    _log "[DBG-005] Staged repo workflow ${wf_file} -> ${dest_dir}/spvs-repo-$(basename "${wf_file}")"
   done
+  shopt -u nullglob
 
   if [[ "${copied}" -eq 0 ]]; then
     _log "[DBG-907] No repo workflow files found to stage"
@@ -175,7 +173,14 @@ stage_repo_workflows_only() {
   reset_staging_workflows_dir "${staging_root}" >/dev/null
   include_repo_workflows "${staging_root}"
   dest_dir="${staging_root}/.github/workflows"
-  if [[ ! -d "${dest_dir}" ]] || [[ -z "$(find "${dest_dir}" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+  if [[ ! -d "${dest_dir}" ]]; then
+    _log_err "[DBG-908] No repo workflows staged for repo-workflows-only scan"
+    exit 1
+  fi
+  shopt -s nullglob
+  local staged_files=("${dest_dir}"/*)
+  shopt -u nullglob
+  if [[ ${#staged_files[@]} -eq 0 ]]; then
     _log_err "[DBG-908] No repo workflows staged for repo-workflows-only scan"
     exit 1
   fi

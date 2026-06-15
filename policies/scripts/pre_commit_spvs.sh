@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: pre_commit_spvs.sh
 # DESCRIPTION: Pre-commit hook — Checkov SPVS, Shellcheck, Actionlint, and Bandit.
-# VERSION: 1.2.0
+# VERSION: 1.3.0
 # EXIT_CODES/SIGNALS: 0 pass, 1 scan failure, 2 missing tool or environment error
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -11,11 +11,15 @@ set -euo pipefail
 PROJECT_PREFIX="[SPVS-PRE-COMMIT]"
 SPVS_HOOK_VERBOSE="${SPVS_HOOK_VERBOSE:-0}"
 
-ACTIONLINT_VERSION="1.7.7"
-ACTIONLINT_SHA256="023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=spvs_common_lib.sh
+source "${SCRIPT_DIR}/spvs_common_lib.sh"
+
 REPO_ROOT=""
 CHANGED_FILES=()
-RESOLVED_COMPONENTS=()
+DISCOVERED_COMPONENTS=()
+POLICIES_CHANGED=0
+REPO_WORKFLOWS_CHANGED=0
 CHECKOV_COMPONENTS=()
 SHELL_FILES=()
 PYTHON_FILES=()
@@ -42,15 +46,7 @@ _log_err() {
 
 # shellcheck disable=SC2329
 require_command() {
-  # INTENT: Fail fast when a required security CLI is missing.
-  # INPUT: command name.
-  # OUTPUT: None.
-  # SIDE_EFFECTS: exits 2 when command is not on PATH.
-  local cmd="$1"
-  if ! command -v "${cmd}" >/dev/null 2>&1; then
-    _log_err "[DBG-920] Required command not found: ${cmd}"
-    exit 2
-  fi
+  spvs_require_command "$1" 2
 }
 
 # shellcheck disable=SC2329
@@ -72,10 +68,8 @@ component_from_path() {
   # OUTPUT: component path or empty string.
   # SIDE_EFFECTS: none.
   local path="$1"
-  if [[ "${path}" =~ ^actions/[^/]+/[^/]+ ]]; then
-    printf '%s' "${path}" | cut -d/ -f1-3
-  elif [[ "${path}" =~ ^workflows/[^/]+/[^/]+ ]]; then
-    printf '%s' "${path}" | cut -d/ -f1-3
+  if [[ "${path}" =~ ^((actions|workflows)/[^/]+/[^/]+) ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
   fi
 }
 
@@ -115,6 +109,24 @@ repo_workflows_changed() {
 }
 
 # shellcheck disable=SC2329
+cache_change_flags() {
+  # INTENT: Compute policy and repo-workflow change flags once per hook run.
+  # INPUT: none (uses CHANGED_FILES).
+  # OUTPUT: none.
+  # SIDE_EFFECTS: sets POLICIES_CHANGED and REPO_WORKFLOWS_CHANGED.
+  if policies_changed; then
+    POLICIES_CHANGED=1
+  else
+    POLICIES_CHANGED=0
+  fi
+  if repo_workflows_changed; then
+    REPO_WORKFLOWS_CHANGED=1
+  else
+    REPO_WORKFLOWS_CHANGED=0
+  fi
+}
+
+# shellcheck disable=SC2329
 discover_all_components() {
   # INTENT: List every actions/*/* and workflows/*/* component directory.
   # INPUT: none (uses REPO_ROOT).
@@ -132,40 +144,19 @@ discover_all_components() {
         printf '%s/%s/%s\n' "${tree}" "$(basename "${category}")" "$(basename "${component}")"
       done
     done
-  done | sort -u
+  done | LC_ALL=C sort -u
 }
 
 # shellcheck disable=SC2329
-resolve_components() {
-  # INTENT: Build unique sorted component list from changed files or full discovery.
-  # INPUT: none (uses globals).
-  # OUTPUT: populates RESOLVED_COMPONENTS array.
-  # SIDE_EFFECTS: none.
-  RESOLVED_COMPONENTS=()
-  local -A seen=()
-  local path component
-
-  if policies_changed; then
-    _log "[DBG-004] Policy/config change detected; resolving all components"
-    while IFS= read -r component; do
-      [[ -n "${component}" ]] || continue
-      seen["${component}"]=1
-    done < <(discover_all_components)
-  else
-    for path in "${CHANGED_FILES[@]}"; do
-      component="$(component_from_path "${path}")"
-      if [[ -n "${component}" ]]; then
-        seen["${component}"]=1
-      fi
-    done
+ensure_discovered_components() {
+  # INTENT: Lazily populate DISCOVERED_COMPONENTS once per hook run.
+  # INPUT: none.
+  # OUTPUT: none.
+  # SIDE_EFFECTS: fills DISCOVERED_COMPONENTS when empty.
+  if [[ ${#DISCOVERED_COMPONENTS[@]} -gt 0 ]]; then
+    return 0
   fi
-
-  for component in "${!seen[@]}"; do
-    RESOLVED_COMPONENTS+=("${component}")
-  done
-  if [[ ${#RESOLVED_COMPONENTS[@]} -gt 0 ]]; then
-    mapfile -t RESOLVED_COMPONENTS < <(printf '%s\n' "${RESOLVED_COMPONENTS[@]}" | LC_ALL=C sort -u)
-  fi
+  mapfile -t DISCOVERED_COMPONENTS < <(discover_all_components)
 }
 
 # shellcheck disable=SC2329
@@ -202,12 +193,13 @@ resolve_checkov_components() {
     return 0
   fi
 
-  if policies_changed; then
+  if [[ "${POLICIES_CHANGED}" -eq 1 ]]; then
     _log "[DBG-004a] Policy change detected; Checkov will scan all components"
-    while IFS= read -r component; do
+    ensure_discovered_components
+    for component in "${DISCOVERED_COMPONENTS[@]}"; do
       [[ -n "${component}" ]] || continue
       seen["${component}"]=1
-    done < <(discover_all_components)
+    done
   else
     for path in "${CHANGED_FILES[@]}"; do
       component="$(component_from_path "${path}")"
@@ -218,155 +210,56 @@ resolve_checkov_components() {
   fi
 
   if [[ ${#seen[@]} -gt 0 ]]; then
-    mapfile -t CHECKOV_COMPONENTS < <(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort -u)
+    mapfile -t CHECKOV_COMPONENTS < <(spvs_sorted_keys seen)
   fi
 }
 
 # shellcheck disable=SC2329
-ensure_actionlint() {
-  # INTENT: Use actionlint from PATH or install a pinned binary under .cache/actionlint.
-  # INPUT: none (uses REPO_ROOT).
-  # OUTPUT: None.
-  # SIDE_EFFECTS: may download actionlint; updates PATH.
-  if command -v actionlint >/dev/null 2>&1; then
-    return 0
-  fi
-
-  local cache_dir="${REPO_ROOT}/.cache/actionlint"
-  local archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
-  local url="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${archive}"
-  local bin="${cache_dir}/actionlint"
-
-  if [[ -x "${bin}" ]]; then
-    export PATH="${cache_dir}:${PATH}"
-    return 0
-  fi
-
-  require_command curl
-  require_command tar
-  require_command sha256sum
-
-  _log "[DBG-019] Installing actionlint ${ACTIONLINT_VERSION} to ${cache_dir}"
-  mkdir -p "${cache_dir}"
-  curl -fsSL -o "${cache_dir}/${archive}" "${url}"
-  echo "${ACTIONLINT_SHA256}  ${cache_dir}/${archive}" | sha256sum -c -
-  tar xzf "${cache_dir}/${archive}" -C "${cache_dir}" actionlint
-  rm -f "${cache_dir}/${archive}"
-  chmod +x "${bin}"
-  export PATH="${cache_dir}:${PATH}"
-}
-
-# shellcheck disable=SC2329
-_glob_files_in_dir() {
-  # INTENT: Print absolute paths for *.suffix files in a directory.
-  # INPUT: directory path; file suffix without dot (e.g. sh, py).
-  # OUTPUT: matching file paths one per line.
+# shellcheck disable=SC2329,SC2034
+collect_language_files() {
+  # INTENT: Gather shell or Python files for Shellcheck/Bandit from changes or full rescan.
+  # INPUT: file suffix without dot (sh or py); output array variable name.
+  # OUTPUT: populates the named array.
   # SIDE_EFFECTS: reads filesystem.
-  local dir="$1"
-  local suffix="$2"
-  local file_path
-  if [[ ! -d "${dir}" ]]; then
-    return 0
+  local suffix="$1"
+  local output_name="$2"
+  local -n output_ref="${output_name}"
+  local -A seen=()
+  local path component
+
+  output_ref=()
+
+  if [[ "${POLICIES_CHANGED}" -eq 1 ]]; then
+    spvs_add_glob_to_seen "${REPO_ROOT}/policies/scripts" "${suffix}" seen
+    ensure_discovered_components
+    for component in "${DISCOVERED_COMPONENTS[@]}"; do
+      [[ -n "${component}" ]] || continue
+      spvs_add_glob_to_seen "${REPO_ROOT}/${component}" "${suffix}" seen
+    done
+  else
+    for path in "${CHANGED_FILES[@]}"; do
+      if [[ "${path}" == *.${suffix} ]] && [[ -f "${REPO_ROOT}/${path}" ]]; then
+        seen["${REPO_ROOT}/${path}"]=1
+      fi
+      if [[ "${path}" == policies/scripts/* ]]; then
+        spvs_add_glob_to_seen "${REPO_ROOT}/policies/scripts" "${suffix}" seen
+      fi
+    done
   fi
-  shopt -s nullglob
-  for file_path in "${dir}"/*."${suffix}"; do
-    if [[ -f "${file_path}" ]]; then
-      printf '%s\n' "${file_path}"
-    fi
-  done
-  shopt -u nullglob
+
+  if [[ ${#seen[@]} -gt 0 ]]; then
+    mapfile -t output_ref < <(spvs_sorted_keys seen)
+  fi
 }
 
 # shellcheck disable=SC2329
 collect_shell_scripts() {
-  # INTENT: Gather shell scripts to scan with Shellcheck from changed files and components.
-  # INPUT: none (uses globals).
-  # OUTPUT: populates SHELL_FILES array.
-  # SIDE_EFFECTS: reads filesystem.
-  local -A seen=()
-  local path component full_rescan=0
-  SHELL_FILES=()
-
-  _add_glob_to_seen() {
-    local dir="$1"
-    local suffix="$2"
-    local file_path
-    while IFS= read -r file_path; do
-      [[ -n "${file_path}" ]] || continue
-      seen["${file_path}"]=1
-    done < <(_glob_files_in_dir "${dir}" "${suffix}")
-  }
-
-  if policies_changed; then
-    full_rescan=1
-  fi
-
-  if [[ "${full_rescan}" -eq 1 ]]; then
-    _add_glob_to_seen "${REPO_ROOT}/policies/scripts" sh
-    while IFS= read -r component; do
-      [[ -n "${component}" ]] || continue
-      _add_glob_to_seen "${REPO_ROOT}/${component}" sh
-    done < <(discover_all_components)
-  else
-    for path in "${CHANGED_FILES[@]}"; do
-      if [[ "${path}" == *.sh ]] && [[ -f "${REPO_ROOT}/${path}" ]]; then
-        seen["${REPO_ROOT}/${path}"]=1
-      fi
-      if [[ "${path}" == policies/scripts/* ]]; then
-        _add_glob_to_seen "${REPO_ROOT}/policies/scripts" sh
-      fi
-    done
-  fi
-
-  if [[ ${#seen[@]} -gt 0 ]]; then
-    mapfile -t SHELL_FILES < <(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort)
-  fi
+  collect_language_files sh SHELL_FILES
 }
 
 # shellcheck disable=SC2329
 collect_python_files() {
-  # INTENT: Gather Python files to scan with Bandit from changed files and components.
-  # INPUT: none (uses globals).
-  # OUTPUT: populates PYTHON_FILES array.
-  # SIDE_EFFECTS: reads filesystem.
-  local -A seen=()
-  local path component full_rescan=0
-  PYTHON_FILES=()
-
-  _add_glob_to_seen() {
-    local dir="$1"
-    local suffix="$2"
-    local file_path
-    while IFS= read -r file_path; do
-      [[ -n "${file_path}" ]] || continue
-      seen["${file_path}"]=1
-    done < <(_glob_files_in_dir "${dir}" "${suffix}")
-  }
-
-  if policies_changed; then
-    full_rescan=1
-  fi
-
-  if [[ "${full_rescan}" -eq 1 ]]; then
-    _add_glob_to_seen "${REPO_ROOT}/policies/scripts" py
-    while IFS= read -r component; do
-      [[ -n "${component}" ]] || continue
-      _add_glob_to_seen "${REPO_ROOT}/${component}" py
-    done < <(discover_all_components)
-  else
-    for path in "${CHANGED_FILES[@]}"; do
-      if [[ "${path}" == *.py ]] && [[ -f "${REPO_ROOT}/${path}" ]]; then
-        seen["${REPO_ROOT}/${path}"]=1
-      fi
-      if [[ "${path}" == policies/scripts/* ]]; then
-        _add_glob_to_seen "${REPO_ROOT}/policies/scripts" py
-      fi
-    done
-  fi
-
-  if [[ ${#seen[@]} -gt 0 ]]; then
-    mapfile -t PYTHON_FILES < <(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort)
-  fi
+  collect_language_files py PYTHON_FILES
 }
 
 # shellcheck disable=SC2329
@@ -382,7 +275,7 @@ workflow_file_for_component() {
     return 0
   fi
   shopt -s nullglob
-  local candidates=("${dir}"/*.yml "${dir}"/*.yaml)
+  local candidates=("${dir}"/*.{yml,yaml})
   shopt -u nullglob
   if [[ ${#candidates[@]} -eq 0 ]]; then
     return 0
@@ -401,15 +294,9 @@ collect_workflow_files() {
   # OUTPUT: populates WORKFLOW_FILES array.
   # SIDE_EFFECTS: reads filesystem.
   local -A seen=()
-  local path component wf full_rescan wf_file
+  local path component wf wf_file
 
-  if policies_changed || repo_workflows_changed; then
-    full_rescan=1
-  else
-    full_rescan=0
-  fi
-
-  if [[ "${full_rescan}" -eq 1 ]]; then
+  if [[ "${POLICIES_CHANGED}" -eq 1 ]] || [[ "${REPO_WORKFLOWS_CHANGED}" -eq 1 ]]; then
     shopt -s nullglob
     for wf_file in "${REPO_ROOT}"/.github/workflows/*.{yml,yaml}; do
       seen["${wf_file}"]=1
@@ -421,12 +308,7 @@ collect_workflow_files() {
   else
     for path in "${CHANGED_FILES[@]}"; do
       case "${path}" in
-        .github/workflows/*.yml | .github/workflows/*.yaml)
-          if [[ -f "${REPO_ROOT}/${path}" ]]; then
-            seen["${REPO_ROOT}/${path}"]=1
-          fi
-          ;;
-        workflows/*/*/*.yml | workflows/*/*/*.yaml)
+        .github/workflows/*.yml | .github/workflows/*.yaml | workflows/*/*/*.yml | workflows/*/*/*.yaml)
           if [[ -f "${REPO_ROOT}/${path}" ]]; then
             seen["${REPO_ROOT}/${path}"]=1
           fi
@@ -444,77 +326,62 @@ collect_workflow_files() {
 
   WORKFLOW_FILES=()
   if [[ ${#seen[@]} -gt 0 ]]; then
-    mapfile -t WORKFLOW_FILES < <(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort)
+    mapfile -t WORKFLOW_FILES < <(spvs_sorted_keys seen)
   fi
 }
 
 # shellcheck disable=SC2329
 run_shellcheck() {
-  # INTENT: Run Shellcheck on changed shell scripts.
+  # INTENT: Run Shellcheck on changed shell scripts in one invocation.
   # INPUT: none (uses SHELL_FILES).
   # OUTPUT: None.
   # SIDE_EFFECTS: runs shellcheck; exits 1 on findings.
-  local script
   if [[ ${#SHELL_FILES[@]} -eq 0 ]]; then
     _log "[DBG-010] No shell scripts to scan; skipping Shellcheck"
     return 0
   fi
   require_command shellcheck
   _log "[DBG-011] Running Shellcheck on ${#SHELL_FILES[@]} file(s)"
-  for script in "${SHELL_FILES[@]}"; do
-    _log "[DBG-012] Shellcheck: ${script#"${REPO_ROOT}/"}"
-    (
-      cd "$(dirname "${script}")"
-      shellcheck -x "$(basename "${script}")"
-    )
-  done
+  shellcheck -x "${SHELL_FILES[@]}"
 }
 
 # shellcheck disable=SC2329
 run_actionlint() {
-  # INTENT: Run Actionlint on workflow YAML files (not composite action.yml).
+  # INTENT: Run Actionlint on workflow YAML files in one invocation.
   # INPUT: none (uses WORKFLOW_FILES).
   # OUTPUT: None.
   # SIDE_EFFECTS: runs actionlint; exits 1 on findings.
-  local wf_file
   if [[ ${#WORKFLOW_FILES[@]} -eq 0 ]]; then
     _log "[DBG-013] No workflow files to scan; skipping Actionlint"
     return 0
   fi
-  ensure_actionlint
+  spvs_ensure_actionlint "${REPO_ROOT}" _log
   require_command actionlint
   _log "[DBG-014] Running Actionlint on ${#WORKFLOW_FILES[@]} file(s)"
-  for wf_file in "${WORKFLOW_FILES[@]}"; do
-    _log "[DBG-015] Actionlint: ${wf_file#"${REPO_ROOT}/"}"
-    actionlint "${wf_file}"
-  done
+  actionlint "${WORKFLOW_FILES[@]}"
 }
 
 # shellcheck disable=SC2329
 run_bandit() {
-  # INTENT: Run Bandit on changed Python files.
+  # INTENT: Run Bandit on changed Python files in one invocation.
   # INPUT: none (uses PYTHON_FILES).
   # OUTPUT: None.
   # SIDE_EFFECTS: runs bandit; exits 1 on findings.
-  local py_file
   if [[ ${#PYTHON_FILES[@]} -eq 0 ]]; then
     _log "[DBG-016] No Python files to scan; skipping Bandit"
     return 0
   fi
   require_command bandit
   _log "[DBG-017] Running Bandit on ${#PYTHON_FILES[@]} file(s)"
-  for py_file in "${PYTHON_FILES[@]}"; do
-    _log "[DBG-018] Bandit: ${py_file#"${REPO_ROOT}/"}"
-    if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
-      bandit -q "${py_file}"
-      continue
-    fi
-    local bandit_output=""
-    if ! bandit_output="$(bandit -q "${py_file}" 2>&1)"; then
-      printf '%s\n' "${bandit_output}" >&2
-      return 1
-    fi
-  done
+  if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
+    bandit -q "${PYTHON_FILES[@]}"
+    return 0
+  fi
+  local bandit_output=""
+  if ! bandit_output="$(bandit -q "${PYTHON_FILES[@]}" 2>&1)"; then
+    printf '%s\n' "${bandit_output}" >&2
+    return 1
+  fi
 }
 
 # shellcheck disable=SC2329
@@ -549,6 +416,19 @@ execute_checkov_on_dir() {
 }
 
 # shellcheck disable=SC2329
+run_stage_component() {
+  # INTENT: Invoke stage_component.sh, suppressing stdout unless verbose.
+  # INPUT: stage_component argument list.
+  # OUTPUT: none.
+  # SIDE_EFFECTS: runs staging script.
+  if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
+    bash "${REPO_ROOT}/policies/scripts/stage_component.sh" "$@"
+  else
+    bash "${REPO_ROOT}/policies/scripts/stage_component.sh" "$@" >/dev/null
+  fi
+}
+
+# shellcheck disable=SC2329
 run_checkov_scan() {
   # INTENT: Stage component or repo workflows and run Checkov SPVS policies.
   # INPUT: staging_root, component_path (optional), include_repo, repo_only flags.
@@ -558,26 +438,20 @@ run_checkov_scan() {
   local component_path="${2:-}"
   local include_repo="${3:-false}"
   local repo_only="${4:-false}"
-  local -a stage_cmd=()
   local label
 
-  stage_cmd=(bash "${REPO_ROOT}/policies/scripts/stage_component.sh" --staging-root "${staging_root}")
   if [[ "${repo_only}" == "true" ]]; then
     label="repo-workflows"
-    stage_cmd+=(--repo-workflows-only)
+    _log "[DBG-002] Staging for Checkov: ${label}"
+    run_stage_component --staging-root "${staging_root}" --repo-workflows-only
   else
     label="${component_path}"
-    stage_cmd+=(--component-path "${component_path}")
+    _log "[DBG-002] Staging for Checkov: ${label}"
     if [[ "${include_repo}" == "true" ]]; then
-      stage_cmd+=(--include-repo-workflows)
+      run_stage_component --staging-root "${staging_root}" --component-path "${component_path}" --include-repo-workflows
+    else
+      run_stage_component --staging-root "${staging_root}" --component-path "${component_path}"
     fi
-  fi
-
-  _log "[DBG-002] Staging for Checkov: ${label}"
-  if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
-    "${stage_cmd[@]}"
-  else
-    "${stage_cmd[@]}" >/dev/null
   fi
 
   _log "[DBG-003] Running Checkov on staged ${label}"
@@ -594,17 +468,16 @@ run_checkov() {
   local component=""
   local include_repo="false"
   local scan_repo_only="false"
-  local -a stage_cmd=()
   local first="true"
 
-  if repo_workflows_changed; then
+  if [[ "${REPO_WORKFLOWS_CHANGED}" -eq 1 ]]; then
     include_repo="true"
   fi
-  if policies_changed; then
+  if [[ "${POLICIES_CHANGED}" -eq 1 ]]; then
     include_repo="true"
   fi
 
-  if repo_workflows_changed && [[ ${#CHECKOV_COMPONENTS[@]} -eq 0 ]] && ! policies_changed; then
+  if [[ "${REPO_WORKFLOWS_CHANGED}" -eq 1 ]] && [[ ${#CHECKOV_COMPONENTS[@]} -eq 0 ]] && [[ "${POLICIES_CHANGED}" -eq 0 ]]; then
     scan_repo_only="true"
   fi
 
@@ -622,36 +495,18 @@ run_checkov() {
 
   staging_root="$(mktemp -d)"
   for component in "${CHECKOV_COMPONENTS[@]}"; do
-    stage_cmd=(
-      bash "${REPO_ROOT}/policies/scripts/stage_component.sh"
-      --staging-root "${staging_root}"
-      --component-path "${component}"
-    )
-    if [[ "${first}" != "true" ]]; then
-      stage_cmd+=(--append)
-    fi
     _log "[DBG-002] Staging for Checkov: ${component}"
-    if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
-      "${stage_cmd[@]}"
+    if [[ "${first}" == "true" ]]; then
+      run_stage_component --staging-root "${staging_root}" --component-path "${component}"
+      first="false"
     else
-      "${stage_cmd[@]}" >/dev/null
+      run_stage_component --staging-root "${staging_root}" --component-path "${component}" --append
     fi
-    first="false"
   done
 
   if [[ "${include_repo}" == "true" ]]; then
-    stage_cmd=(
-      bash "${REPO_ROOT}/policies/scripts/stage_component.sh"
-      --staging-root "${staging_root}"
-      --include-repo-workflows
-      --append
-    )
     _log "[DBG-002] Staging repo workflows for Checkov"
-    if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
-      "${stage_cmd[@]}"
-    else
-      "${stage_cmd[@]}" >/dev/null
-    fi
+    run_stage_component --staging-root "${staging_root}" --include-repo-workflows --append
   fi
 
   _log "[DBG-003] Running Checkov on ${#CHECKOV_COMPONENTS[@]} staged component(s)"
@@ -681,7 +536,7 @@ main() {
     CHANGED_FILES+=("$(normalize_path "${raw}")")
   done
 
-  resolve_components
+  cache_change_flags
   resolve_checkov_components
   collect_shell_scripts
   collect_python_files

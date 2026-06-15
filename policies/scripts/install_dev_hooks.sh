@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: install_dev_hooks.sh
 # DESCRIPTION: Install SPVS dev tooling (venv or pipx), system CLIs, and pre-commit hooks.
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 # EXIT_CODES/SIGNALS: 0 success, 1 install failure, 2 usage error
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -10,8 +10,10 @@ set -euo pipefail
 
 PROJECT_PREFIX="[SPVS-DEV-INSTALL]"
 
-ACTIONLINT_VERSION="1.7.7"
-ACTIONLINT_SHA256="023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=spvs_common_lib.sh
+source "${SCRIPT_DIR}/spvs_common_lib.sh"
+
 YQ_VERSION="4.44.5"
 YQ_SHA256_linux_amd64="cc9ee4d476717d2b90e4f20cf2bf31f9d6bfba830227960f6e0401db74270311"
 YQ_SHA256_linux_arm64="7b9c0272212f468f7751996e4e66fec56f9e8b2d5140ffcfc5beaf1af9a7097e"
@@ -98,40 +100,9 @@ parse_args() {
 
 # shellcheck disable=SC2329
 require_command() {
-  # INTENT: Fail when a required CLI is missing.
-  # INPUT: command name.
-  # OUTPUT: None.
-  # SIDE_EFFECTS: exits 1 when command is not on PATH.
-  local cmd="$1"
-  if ! command -v "${cmd}" >/dev/null 2>&1; then
-    _log "[DBG-920] Required command not found: ${cmd}"
-    exit 1
-  fi
+  spvs_require_command "$1" 1
 }
 
-# shellcheck disable=SC2329
-detect_platform() {
-  # INTENT: Map uname -m to release artifact architecture suffix.
-  # INPUT: none.
-  # OUTPUT: linux_amd64 or linux_arm64 printed to stdout.
-  # SIDE_EFFECTS: none.
-  local arch
-  arch="$(uname -m)"
-  case "${arch}" in
-    x86_64 | amd64)
-      printf '%s' "linux_amd64"
-      ;;
-    aarch64 | arm64)
-      printf '%s' "linux_arm64"
-      ;;
-    *)
-      _log "[DBG-910] Unsupported CPU architecture: ${arch}"
-      exit 1
-      ;;
-  esac
-}
-
-# shellcheck disable=SC2329
 install_shellcheck() {
   # INTENT: Install shellcheck via apt or Homebrew when missing.
   # INPUT: none.
@@ -161,39 +132,12 @@ install_actionlint() {
   # INPUT: none.
   # OUTPUT: None.
   # SIDE_EFFECTS: downloads binary into repo .cache/.
-  local cache_dir="${REPO_ROOT}/.cache/actionlint"
-  local platform archive url bin
-
   if command -v actionlint >/dev/null 2>&1; then
     _log "[DBG-003] actionlint already installed: $(command -v actionlint)"
     return 0
   fi
 
-  platform="$(detect_platform)"
-  archive="actionlint_${ACTIONLINT_VERSION}_${platform}.tar.gz"
-  url="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${archive}"
-  bin="${cache_dir}/actionlint"
-
-  if [[ -x "${bin}" ]]; then
-    _log "[DBG-004] Using cached actionlint: ${bin}"
-    return 0
-  fi
-
-  require_command curl
-  require_command tar
-  require_command sha256sum
-
-  _log "[DBG-005] Installing actionlint ${ACTIONLINT_VERSION} to ${cache_dir}"
-  mkdir -p "${cache_dir}"
-  curl -fsSL -o "${cache_dir}/${archive}" "${url}"
-  if [[ "${platform}" == "linux_amd64" ]]; then
-    echo "${ACTIONLINT_SHA256}  ${cache_dir}/${archive}" | sha256sum -c -
-  else
-    _log "[DBG-006] Skipping SHA256 verify for ${platform} (pin verify on amd64 only)"
-  fi
-  tar xzf "${cache_dir}/${archive}" -C "${cache_dir}" actionlint
-  rm -f "${cache_dir}/${archive}"
-  chmod +x "${bin}"
+  spvs_ensure_actionlint "${REPO_ROOT}" _log
 }
 
 # shellcheck disable=SC2329
@@ -234,7 +178,7 @@ install_yq() {
     _log "[DBG-008] Found non-mikefarah yq; installing mikefarah/yq beside it"
   fi
 
-  platform="$(detect_platform)"
+  platform="$(spvs_detect_platform)" || exit 1
   archive="yq_${platform}.tar.gz"
   url="https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/${archive}"
   bin="${cache_dir}/yq"
