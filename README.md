@@ -65,16 +65,43 @@ graph TD
 
 ## Commit Message Format
 
-The system uses **Conventional Commits** to automatically determine the next semantic version. Versioning starts at `1.0.0` by default.
+Every commit subject must start with a **ticket reference**, followed by a **Conventional Commit** keyword. This is enforced locally via the `commit-msg` pre-commit hook and drives **SemVer** in the Release Manager.
 
-| Prefix | Bump Type | Example |
+### Ticket prefix (required)
+
+| Pattern | Example |
+| :--- | :--- |
+| `sctask<number>` | `sctask9876543 feat: add cleanup rule` |
+| `inc<number>` | `INC0012345 fix: resolve null pointer` |
+| `DCDT-<number>` | `DCDT-12345 chore: update dependencies` |
+
+Ticket matching is case-insensitive (`SCTASK`, `inc`, `dcdt-` are all valid). An optional colon may follow the ticket (`DCDT-1234: feat ...`).
+
+### Subject formats (four supported patterns)
+
+| # | Format | Example |
 | :--- | :--- | :--- |
-| `feat:` or `feat(...):` | **Minor** | `feat: add new cleanup rule` (1.0.0 -> 1.1.0) |
-| `fix:` or `fix(...):` | **Patch** | `fix: resolve null pointer in janitor` (1.0.0 -> 1.0.1) |
-| `bugfix:` | **Patch** | `bugfix: handle empty repo list` |
-| `chore:` | **Patch** | `chore: update dependencies` |
+| 1 | `TICKET keyword(scope): message` | `DCDT-1234 feat(release): add hook` |
+| 2 | `TICKET: keyword(scope) message` | `SCTASK99: fix(janitor) correct path` |
+| 3 | `TICKET: keyword() message` | `INC42: feat() add capability` |
+| 4 | `TICKET keyword(): message` | `DCDT-1234 fix(): resolve null pointer` |
 
-> **Note**: If no qualifying keywords are found in the commits since the last tag, the release will fail to prevent empty version bumps.
+Scope is optional in all patterns (`keyword:` and `keyword()` are valid).
+
+### Standard keywords (required after ticket)
+
+| Keyword | Definition | SemVer bump |
+| :--- | :--- | :--- |
+| `feat` | A new feature for the user or the codebase. | **Minor** |
+| `fix` | A bug fix. | **Patch** |
+| `chore` | Changes that do not affect source or test files (e.g. dependencies, build process). | **Patch** |
+| `docs` | Changes to documentation only. | **None** |
+| `refactor` | Code changes that neither fix a bug nor add a feature. | **None** |
+| `perf` | Code changes that improve performance. | **None** |
+| `test` | Adding missing tests or correcting existing tests. | **None** |
+| `style` | Changes that do not affect code meaning (whitespace, formatting, etc.). | **None** |
+
+> **Note**: If no `feat`, `fix`, or `chore` commits exist since the last tag, release fails to prevent empty version bumps. Merge commits (`Merge branch ...`) are exempt from the hook.
 
 ## Security Guardrails
 

@@ -113,11 +113,10 @@ runs:
   steps:
     - name: Run Janitor Bot
       id: janitor
-      run: |
-        python3 "${{ github.action_path }}/janitor.py" --mode "${{ inputs.mode }}"
-        echo "report_path=janitor_report.md" >> "$GITHUB_OUTPUT"
       shell: bash
       env:
+        ACTION_PATH: ${{ github.action_path }}
+        INPUT_MODE: ${{ inputs.mode }}
         GH_TOKEN: ${{ inputs.gh_token }}
         SCOPE: ${{ inputs.scope }}
         ORG_NAME: ${{ inputs.org_name }}
@@ -143,3 +142,7 @@ runs:
         CLEANUP_PACKAGES: ${{ inputs.cleanup_packages }}
         PKG_NAME_PATTERN: ${{ inputs.pkg_name_pattern }}
         PKG_TYPE: ${{ inputs.pkg_type }}
+      run: |
+        set -euo pipefail
+        python3 -u "${ACTION_PATH}/janitor.py" --mode "${INPUT_MODE}"
+        echo "report_path=janitor_report.md" >> "$GITHUB_OUTPUT"

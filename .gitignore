@@ -1,0 +1,4 @@
+.checkov-staging/
+.checkov.cache/
+.cache/
+.venv/

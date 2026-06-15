@@ -1,0 +1,20 @@
+metadata:
+  id: CKV2_SPVS_13
+  name: "SPVS: Prohibit curl/wget piped or process-substituted into shell execution"
+  category: SUPPLY_CHAIN
+  guideline: >-
+    Do not use curl|bash, wget|sh, or bash<(curl ...). Pin tools with checksum
+    verification or install from package managers.
+definition:
+  or:
+    - cond_type: attribute
+      resource_types:
+        - steps
+      attribute: run
+      operator: not_exists
+    - cond_type: attribute
+      resource_types:
+        - steps
+      attribute: run
+      operator: not_regex_match
+      value: "(?s).*((curl|wget)[^\\n]*(\\|\\s*(ba)?sh|<\\()|(ba)?sh\\s*<\\s*\\(\\s*(curl|wget))"

@@ -1,0 +1,20 @@
+metadata:
+  id: CKV2_SPVS_14
+  name: "SPVS: GitHub context expressions must be mapped to env, not used in run strings"
+  category: SUPPLY_CHAIN
+  guideline: >-
+    Map ${{ github.* }} and ${{ steps.* }} to env: variables; never interpolate
+    github.action_path, github.repository, or step outputs directly in run blocks.
+definition:
+  or:
+    - cond_type: attribute
+      resource_types:
+        - steps
+      attribute: run
+      operator: not_exists
+    - cond_type: attribute
+      resource_types:
+        - steps
+      attribute: run
+      operator: not_regex_match
+      value: "(?s).*\\$\\{\\{\\s*(github\\.|steps\\.)"

@@ -1,0 +1,12 @@
+metadata:
+  id: CKV2_SPVS_10
+  name: "SPVS: Top-level permissions must not be write-all"
+  category: IAM
+  guideline: "Never set workflow-level permissions to write-all."
+definition:
+  cond_type: attribute
+  resource_types:
+    - permissions
+  attribute: permissions
+  operator: not_equals
+  value: "write-all"

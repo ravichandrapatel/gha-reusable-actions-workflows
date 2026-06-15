@@ -1,0 +1,29 @@
+metadata:
+  id: CKV2_SPVS_4
+  name: "SPVS: Python invocations must use -u or PYTHONUNBUFFERED=1 for unbuffered logs"
+  category: SUPPLY_CHAIN
+  guideline: "Use python -u or set PYTHONUNBUFFERED=1 for real-time log streaming."
+definition:
+  or:
+    - cond_type: attribute
+      resource_types:
+        - steps
+      attribute: run
+      operator: not_exists
+    - cond_type: attribute
+      resource_types:
+        - steps
+      attribute: run
+      operator: not_regex_match
+      value: "(?s).*\\bpython3?\\b"
+    - cond_type: attribute
+      resource_types:
+        - steps
+      attribute: run
+      operator: regex_match
+      value: "(?s).*\\bpython3?\\s+(-\\S+\\s+)*-u\\b"
+    - cond_type: attribute
+      resource_types:
+        - steps
+      attribute: env.PYTHONUNBUFFERED
+      operator: exists

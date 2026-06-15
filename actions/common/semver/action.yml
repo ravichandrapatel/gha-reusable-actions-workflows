@@ -31,7 +31,15 @@ runs:
         SAFE_NAME: ${{ inputs.safe_name }}
       run: |
         set -euo pipefail
-        
+        # CHECKPOINT: semver reads ticket-prefixed conventional commits via commit_message_lib.sh
+        LIB="${{ github.workspace }}/policies/scripts/commit_message_lib.sh"
+        if [[ ! -f "${LIB}" ]]; then
+          echo "[ERR-T-00] Missing commit message library at ${LIB}" >&2
+          exit 1
+        fi
+        # shellcheck source=commit_message_lib.sh
+        source "${LIB}"
+
         # [T-01] Fetching commit messages since last tag
         LAST_TAG="${SAFE_NAME}-${CURRENT_VER}"
         if git rev-parse "refs/tags/$LAST_TAG" >/dev/null 2>&1; then
@@ -58,20 +66,28 @@ runs:
 
         if [[ -n "$COMMITS" ]]; then
           while IFS= read -r line; do
-            # Extract message (skip hash)
             MSG=$(echo "$line" | cut -d' ' -f2-)
-            
-            # [T-02] Checking commit: $MSG
-            # Minor bump for feat(...) or feat:
-            if [[ "$MSG" =~ ^feat(\(.*\))?: ]]; then
-              BUMP="minor"
-              break # Minor takes precedence
-            # Patch bump for fix, bugfix, chore
-            elif [[ "$MSG" =~ ^fix(\(.*\))?: || "$MSG" =~ ^bugfix(\(.*\))?: || "$MSG" =~ ^chore(\(.*\))?: ]]; then
-              if [[ "$BUMP" != "minor" ]]; then
-                BUMP="patch"
-              fi
-            fi
+            BODY="$(commit_msg_strip_ticket_prefix "${MSG}")"
+            CLASS="$(commit_msg_classify_semver_bump "${BODY}")"
+
+            # [T-02] Checking commit: $MSG -> $CLASS
+            case "${CLASS}" in
+              minor)
+                BUMP="minor"
+                break
+                ;;
+              patch)
+                if [[ "$BUMP" != "minor" ]]; then
+                  BUMP="patch"
+                fi
+                ;;
+              skip)
+                continue
+                ;;
+              none)
+                continue
+                ;;
+            esac
           done <<< "$COMMITS"
         fi
 
@@ -80,10 +96,9 @@ runs:
         elif [[ "$BUMP" == "patch" ]]; then
           NEXT_VER="${MAJOR}.${MINOR}.$((PATCH + 1))"
         else
-          # [ERR-T-01] No version-bumping keywords found.
-          # As per requirement: "bump only if commit has feat, fix, bugfix, chore"
-          echo "[ERR-T-01] No version-bumping keywords (feat, fix, bugfix, chore) found in commits since $LAST_TAG." >&2
+          echo "[ERR-T-01] No version-bumping keywords (feat, fix, chore) found in commits since $LAST_TAG." >&2
           echo "[ERR-T-01] Release aborted: No qualifying changes for a version bump." >&2
+          echo "[ERR-T-01] Use ticket-prefixed subjects, e.g. DCDT-12345 feat: description" >&2
           exit 1
         fi
 

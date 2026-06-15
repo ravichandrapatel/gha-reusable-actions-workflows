@@ -1,10 +1,10 @@
-"""
-FILE_NAME: action.yml
-DESCRIPTION: Composite action wrapper for main.py (installs deps, runs detection, exposes outputs).
-VERSION: 1.0.0
-EXIT_CODES/SIGNALS: N/A
-AUTHORS: Platform / DevOps
-"""
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Composite action wrapper for main.py (installs deps, runs detection, exposes outputs).
+# VERSION: 1.0.0
+# EXIT_CODES/SIGNALS: N/A
+# AUTHORS: Platform / DevOps
+# =============================================================================
 
 name: 'Git Path Filter'
 description: 'Detects file changes between two refs (YAML glob groups, ** and ! last-match-wins); ref-agnostic, pull_request and push'
@@ -96,19 +96,26 @@ runs:
       shell: bash
 
     - name: Install Python dependencies
-      run: pip install -r ${{ github.action_path }}/requirements.txt
       shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        pip install -r "${ACTION_PATH}/requirements.txt"
 
     - name: Write filter spec to file
-      run: |
-        cat <<EOF > filter_spec.yaml
-        ${{ inputs.pattern_filter }}
-        EOF
       shell: bash
+      env:
+        PATTERN_FILTER: ${{ inputs.pattern_filter }}
+      run: |
+        set -euo pipefail
+        printf '%s\n' "${PATTERN_FILTER}" > filter_spec.yaml
 
     - name: Run detection script
       id: detect
+      shell: bash
       env:
+        ACTION_PATH: ${{ github.action_path }}
         GITHUB_TOKEN: ${{ inputs.github_token }}
         BASE_REF: ${{ steps.set-refs.outputs.base || inputs.base_ref_branch }}
         SOURCE_REF: ${{ steps.set-refs.outputs.source || inputs.source_branch }}
@@ -122,9 +129,8 @@ runs:
         [ -n "${CHANGE_TYPES}" ] && EXTRA_ARGS+=(--change-types "${CHANGE_TYPES}")
         [ "${DEBUG_FLAG}" = "true" ] && EXTRA_ARGS+=(--debug)
         [ -n "${WORKING_DIR}" ] && EXTRA_ARGS+=(--working-directory "${WORKING_DIR}")
-        python3 -u "${{ github.action_path }}/main.py" \
+        python3 -u "${ACTION_PATH}/main.py" \
           --base-ref "${BASE_REF}" \
           --source-ref "${SOURCE_REF}" \
           --filter-spec "filter_spec.yaml" \
           "${EXTRA_ARGS[@]}"
-      shell: bash

@@ -1,0 +1,12 @@
+metadata:
+  id: CKV2_SPVS_12
+  name: "SPVS: Use GitHub-hosted or ephemeral self-hosted runners; bare self-hosted is prohibited"
+  category: GENERAL_SECURITY
+  guideline: "Prefer ubuntu-latest or self-hosted runners with an ephemeral label."
+definition:
+  cond_type: attribute
+  resource_types:
+    - jobs
+  attribute: runs-on
+  operator: not_equals
+  value: "self-hosted"

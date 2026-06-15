@@ -7,6 +7,9 @@
 
 name: Dummy Reusable Workflow
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:
@@ -20,9 +23,14 @@ jobs:
   echo_message:
     name: Echo Message
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Echo
         shell: bash
+        env:
+          MESSAGE: ${{ inputs.message }}
         run: |
+          set -euo pipefail
           # [T-01] Echoing the input message
-          echo "Message: ${{ inputs.message }}"
+          echo "Message: ${MESSAGE}"

@@ -39,6 +39,7 @@ runs:
     - name: Run Issues Bot
       id: issues_bot
       env:
+        ACTION_PATH: ${{ github.action_path }}
         MODE: ${{ inputs.mode }}
         ISSUE_TITLE: ${{ inputs.issue-title }}
         TRACKING_ID: ${{ inputs.tracking-id }}
@@ -53,7 +54,7 @@ runs:
         set -euo pipefail
         EXTRA=()
         [ -n "${LABELS}" ] && EXTRA+=(--labels "${LABELS}")
-        python3 "${{ github.action_path }}/issues_bot.py" \
+        python3 -u "${ACTION_PATH}/issues_bot.py" \
           --mode "${MODE}" \
           --repo "${REPO}" \
           --issue-title "${ISSUE_TITLE}" \

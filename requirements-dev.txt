@@ -1,0 +1,6 @@
+# Dev tooling for local SPVS pre-commit hooks.
+# pip: pre-commit, checkov, bandit
+# System (apt/brew): shellcheck, actionlint, yq (mikefarah/yq v4)
+pre-commit>=3.5.0
+checkov==3.2.529
+bandit==1.8.2

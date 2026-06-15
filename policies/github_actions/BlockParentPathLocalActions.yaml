@@ -1,0 +1,21 @@
+metadata:
+  id: CKV2_SPVS_5B
+  name: "SPVS: Parent-path local action refs (../) are prohibited unless explicitly skipped"
+  category: SUPPLY_CHAIN
+  guideline: >-
+    Do not reference actions via ../ paths. Use ./ for same-repo actions or a
+    pinned internal /actions/ ref. Add checkov:skip=CKV2_SPVS_5B with justification
+    only when a documented exception is required.
+definition:
+  or:
+    - cond_type: attribute
+      resource_types:
+        - steps
+      attribute: uses
+      operator: not_exists
+    - cond_type: attribute
+      resource_types:
+        - steps
+      attribute: uses
+      operator: not_starting_with
+      value: "../"

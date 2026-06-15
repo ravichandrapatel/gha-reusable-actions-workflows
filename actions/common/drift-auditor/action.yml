@@ -44,10 +44,10 @@ runs:
   using: 'composite'
   steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
+      uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
       with:
         terraform_version: ${{ inputs.terraform_version }}
 
@@ -76,12 +76,12 @@ runs:
         [ -n "${REPO:-}" ] && ARGS+=(--repo "$REPO")
         ARGS+=(--init-timeout "$INIT_TIMEOUT" --plan-timeout "$PLAN_TIMEOUT")
         [ -n "${EXCLUDE:-}" ] && ARGS+=(--exclude "$EXCLUDE")
-        python3 "$ACTION_PATH/drift_auditor.py" "${ARGS[@]}"
+        python3 -u "$ACTION_PATH/drift_auditor.py" "${ARGS[@]}"
       shell: bash
 
     - name: Upload drift report artifact
       if: always() && hashFiles('drift-report.md') != ''
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: drift-report
         path: drift-report.md

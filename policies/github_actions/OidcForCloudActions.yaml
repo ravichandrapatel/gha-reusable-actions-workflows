@@ -1,0 +1,19 @@
+metadata:
+  id: CKV2_SPVS_8
+  name: "SPVS: Cloud OIDC actions require job permissions.id-token write"
+  category: IAM
+  guideline: "Jobs using configure-aws-credentials, azure/login, or google-github-actions/auth need id-token: write."
+definition:
+  or:
+    - cond_type: attribute
+      resource_types:
+        - jobs
+      attribute: steps.*.uses
+      operator: not_regex_match
+      value: ".*(configure-aws-credentials|azure/login|google-github-actions/auth)"
+    - cond_type: attribute
+      resource_types:
+        - jobs
+      attribute: permissions.id-token
+      operator: equals
+      value: "write"

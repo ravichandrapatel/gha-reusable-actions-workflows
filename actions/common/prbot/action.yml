@@ -28,17 +28,23 @@ runs:
   steps:
     - name: Run PR Bot
       id: prbot
-      run: |
-        python3 "${{ github.action_path }}/prbot.py" \
-          --repo "${{ inputs.repo }}" \
-          --title "${{ inputs.title }}" \
-          --source-branch "${{ inputs.source_branch }}" \
-          --target-branch "${{ inputs.target_branch }}"
       shell: bash
       env:
+        ACTION_PATH: ${{ github.action_path }}
+        INPUT_REPO: ${{ inputs.repo }}
+        INPUT_TITLE: ${{ inputs.title }}
+        INPUT_SOURCE_BRANCH: ${{ inputs.source_branch }}
+        INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
         GITHUB_TOKEN: ${{ inputs.github_token }}
         PRBOT_PAYLOAD: ${{ inputs.payload }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
         GITHUB_API_URL: ${{ github.api_url }}
+      run: |
+        set -euo pipefail
+        python3 -u "${ACTION_PATH}/prbot.py" \
+          --repo "${INPUT_REPO}" \
+          --title "${INPUT_TITLE}" \
+          --source-branch "${INPUT_SOURCE_BRANCH}" \
+          --target-branch "${INPUT_TARGET_BRANCH}"
         # All console output from prbot.py is prefixed with [PROJECT-PRBOT] and debug codes.

@@ -1,0 +1,38 @@
+# Checkov: OWASP SPVS GitHub Actions YAML policies (workflows and composite actions).
+#
+# Repository/branch controls (PR reviews, signed commits, force-push block, CODEOWNERS)
+# are enforced via GitHub branch protection / repo settings, not workflow YAML.
+#
+framework:
+  - github_actions
+
+external-checks-dir:
+  - policies/github_actions
+
+check:
+  - CKV_GHA_1
+  - CKV_GHA_2
+  - CKV_GHA_3
+  - CKV_GHA_4
+  - CKV2_GHA_1
+  - CKV2_SPVS_1
+  - CKV2_SPVS_2
+  - CKV2_SPVS_3
+  - CKV2_SPVS_4
+  - CKV2_SPVS_5
+  - CKV2_SPVS_5B
+  - CKV2_SPVS_6
+  - CKV2_SPVS_7
+  - CKV2_SPVS_8
+  - CKV2_SPVS_9
+  - CKV2_SPVS_10
+  - CKV2_SPVS_11
+  - CKV2_SPVS_12
+  - CKV2_SPVS_13
+  - CKV2_SPVS_14
+  - CKV2_SPVS_15
+
+soft-fail: false
+
+output:
+  - cli

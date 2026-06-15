@@ -33,6 +33,9 @@ concurrency:
   group: release-${{ github.event.inputs.component_path }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   # =============================================================================
   # STAGE 1: VALIDATE (SPVS Plan/Develop)
@@ -225,9 +228,16 @@ jobs:
           echo "[DBG-014] Updating apt and installing Shellcheck"
           sudo apt-get install -y shellcheck
           
-          echo "[DBG-015] Downloading and installing Actionlint"
-          bash <(curl -L https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-          sudo mv actionlint /usr/local/bin/
+          echo "[DBG-015] Downloading and installing Actionlint (pinned release + checksum)"
+          ACTIONLINT_VERSION="1.7.7"
+          ACTIONLINT_SHA256="023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
+          ACTIONLINT_ARCHIVE="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "${ACTIONLINT_ARCHIVE}" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${ACTIONLINT_ARCHIVE}"
+          echo "${ACTIONLINT_SHA256}  ${ACTIONLINT_ARCHIVE}" | sha256sum -c -
+          tar xzf "${ACTIONLINT_ARCHIVE}" actionlint
+          sudo install -m 755 actionlint /usr/local/bin/actionlint
+          rm -f "${ACTIONLINT_ARCHIVE}" actionlint
           
           echo "[DBG-016] Verifying tool installations"
           bandit --version
@@ -258,11 +268,21 @@ jobs:
       - name: Run Checkov
         env:
           COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+          PYTHONUNBUFFERED: "1"
         run: |
           set -euo pipefail
-          # [T-06] Running checkov
-          echo "[DBG-019] Starting Checkov scan for $COMPONENT_PATH"
-          checkov -d "$COMPONENT_PATH" --framework github_actions
+          # [T-06] Running checkov with OWASP SPVS YAML policies
+          echo "[DBG-019] Staging component for Checkov: $COMPONENT_PATH"
+          python3 -u policies/scripts/stage_component.py \
+            --component-path "$COMPONENT_PATH" \
+            --staging-root ".checkov-staging" \
+            --include-repo-workflows
+          echo "[DBG-019a] Running Checkov (github_actions + CKV2_SPVS_* YAML policies)"
+          mkdir -p .checkov.cache/ckv
+          export CKV_CACHE_DIR="$(pwd)/.checkov.cache/ckv"
+          checkov -d ".checkov-staging" \
+            --config-file .checkov.yaml \
+            --framework github_actions
           echo "[DBG-020] Checkov scan completed successfully"
 
       - name: Run Bandit
@@ -332,6 +352,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Setup Python
+        if: github.event.inputs.mode == 'promote'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+
       - name: Execute Release/Promote/Rollback
         id: execute_step
         shell: bash
@@ -374,6 +400,25 @@ jobs:
             
           elif [[ "$MODE" == "promote" ]]; then
             echo "[DBG-033] Starting promotion of $VERSION_TAG to $STABLE_TAG"
+
+            # [T-11a] Refresh and commit .checkov.cache on promote (gitignored locally; force-added here).
+            echo "[DBG-033c] Refreshing Checkov cache for promotion"
+            pip install --no-cache-dir checkov==3.2.529
+            bash policies/scripts/update_checkov_cache.sh \
+              --component-path "$COMPONENT_PATH" \
+              --include-repo-workflows
+            if git status --porcelain .checkov.cache | grep -q .; then
+              git add -f .checkov.cache
+              if git diff --cached --quiet; then
+                echo "[DBG-033d] Checkov cache unchanged after staging; skipping commit"
+              else
+                git commit -m "chore(checkov): refresh cache on promote ${VERSION_TAG}"
+                git push origin main
+                echo "[DBG-033e] Pushed refreshed .checkov.cache to main"
+              fi
+            else
+              echo "[DBG-033d] Checkov cache unchanged; skipping commit"
+            fi
             
             # [T-11] Promoting to stable tag: "$STABLE_TAG" (Point to versioned tag commit)
             echo "[DBG-033a] Updating stable tag $STABLE_TAG to point to $VERSION_TAG"
