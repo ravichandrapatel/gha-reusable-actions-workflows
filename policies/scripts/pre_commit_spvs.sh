@@ -336,13 +336,22 @@ run_shellcheck() {
   # INPUT: none (uses SHELL_FILES).
   # OUTPUT: None.
   # SIDE_EFFECTS: runs shellcheck; exits 1 on findings.
+  local -A source_dirs=()
+  local -a shellcheck_path_args=()
+  local script dir
   if [[ ${#SHELL_FILES[@]} -eq 0 ]]; then
     _log "[DBG-010] No shell scripts to scan; skipping Shellcheck"
     return 0
   fi
   require_command shellcheck
+  for script in "${SHELL_FILES[@]}"; do
+    source_dirs["$(dirname "${script}")"]=1
+  done
+  for dir in "${!source_dirs[@]}"; do
+    shellcheck_path_args+=(-P "${dir}")
+  done
   _log "[DBG-011] Running Shellcheck on ${#SHELL_FILES[@]} file(s)"
-  shellcheck -x "${SHELL_FILES[@]}"
+  shellcheck -x "${shellcheck_path_args[@]}" "${SHELL_FILES[@]}"
 }
 
 # shellcheck disable=SC2329
