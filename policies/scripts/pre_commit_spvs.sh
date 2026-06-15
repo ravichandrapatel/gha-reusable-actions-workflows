@@ -2,13 +2,14 @@
 # =============================================================================
 # FILE_NAME: pre_commit_spvs.sh
 # DESCRIPTION: Pre-commit hook — Checkov SPVS, Shellcheck, Actionlint, and Bandit.
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 # EXIT_CODES/SIGNALS: 0 pass, 1 scan failure, 2 missing tool or environment error
 # AUTHORS: DevOps Team
 # =============================================================================
 set -euo pipefail
 
 PROJECT_PREFIX="[SPVS-PRE-COMMIT]"
+SPVS_HOOK_VERBOSE="${SPVS_HOOK_VERBOSE:-0}"
 
 ACTIONLINT_VERSION="1.7.7"
 ACTIONLINT_SHA256="023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
@@ -21,11 +22,21 @@ WORKFLOW_FILES=()
 
 # shellcheck disable=SC2329
 _log() {
-  # INTENT: Central logger with greppable debug codes.
+  # INTENT: Verbose operational logger (suppressed unless SPVS_HOOK_VERBOSE=1).
   # INPUT: message string.
   # OUTPUT: None.
-  # SIDE_EFFECTS: writes to stdout.
+  # SIDE_EFFECTS: writes to stdout when verbose.
+  [[ "${SPVS_HOOK_VERBOSE}" == "1" ]] || return 0
   printf '%s %s\n' "${PROJECT_PREFIX}" "$*"
+}
+
+# shellcheck disable=SC2329
+_log_err() {
+  # INTENT: Always-on error logger for hook failures.
+  # INPUT: message string.
+  # OUTPUT: None.
+  # SIDE_EFFECTS: writes to stderr.
+  printf '%s %s\n' "${PROJECT_PREFIX}" "$*" >&2
 }
 
 # shellcheck disable=SC2329
@@ -36,7 +47,7 @@ require_command() {
   # SIDE_EFFECTS: exits 2 when command is not on PATH.
   local cmd="$1"
   if ! command -v "${cmd}" >/dev/null 2>&1; then
-    _log "[DBG-920] Required command not found: ${cmd}"
+    _log_err "[DBG-920] Required command not found: ${cmd}"
     exit 2
   fi
 }
@@ -447,7 +458,15 @@ run_bandit() {
   _log "[DBG-017] Running Bandit on ${#PYTHON_FILES[@]} file(s)"
   for py_file in "${PYTHON_FILES[@]}"; do
     _log "[DBG-018] Bandit: ${py_file#"${REPO_ROOT}/"}"
-    bandit -q "${py_file}"
+    if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
+      bandit -q "${py_file}"
+      continue
+    fi
+    local bandit_output=""
+    if ! bandit_output="$(bandit -q "${py_file}" 2>&1)"; then
+      printf '%s\n' "${bandit_output}" >&2
+      return 1
+    fi
   done
 }
 
@@ -479,14 +498,32 @@ run_checkov_scan() {
   fi
 
   _log "[DBG-002] Staging for Checkov: ${label}"
-  "${stage_cmd[@]}"
+  if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
+    "${stage_cmd[@]}"
+  else
+    "${stage_cmd[@]}" >/dev/null
+  fi
 
   _log "[DBG-003] Running Checkov on staged ${label}"
   mkdir -p "${REPO_ROOT}/.checkov.cache/ckv"
   export CKV_CACHE_DIR="${REPO_ROOT}/.checkov.cache/ckv"
-  checkov -d "${staging_root}" \
-    --config-file "${REPO_ROOT}/.checkov.yaml" \
+  local -a checkov_args=(
+    -d "${staging_root}"
+    --config-file "${REPO_ROOT}/.checkov.yaml"
     --framework github_actions
+  )
+  if [[ "${SPVS_HOOK_VERBOSE}" != "1" ]]; then
+    checkov_args+=(--quiet --compact)
+  fi
+  if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
+    checkov "${checkov_args[@]}"
+    return 0
+  fi
+  local checkov_output=""
+  if ! checkov_output="$(checkov "${checkov_args[@]}" 2>&1)"; then
+    printf '%s\n' "${checkov_output}" >&2
+    return 1
+  fi
 }
 
 # shellcheck disable=SC2329

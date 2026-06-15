@@ -114,7 +114,8 @@ class GitHubApiClient:
         req = urllib.request.Request(url, data=body_bytes, method=method, headers=headers)
 
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310 - scheme restricted to https above
+            # scheme restricted to https above
+            with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310
                 raw = resp.read().decode("utf-8")
                 if not raw:
                     return None

@@ -9,8 +9,14 @@
 set -euo pipefail
 
 PROJECT_PREFIX="[SPVS-CHECKOV-STAGE]"
+SPVS_HOOK_VERBOSE="${SPVS_HOOK_VERBOSE:-0}"
 
 _log() {
+  [[ "${SPVS_HOOK_VERBOSE}" == "1" ]] || return 0
+  printf '%s %s\n' "${PROJECT_PREFIX}" "$*" >&2
+}
+
+_log_err() {
   printf '%s %s\n' "${PROJECT_PREFIX}" "$*" >&2
 }
 
@@ -23,7 +29,7 @@ EOF
 require_command() {
   local cmd="$1"
   if ! command -v "${cmd}" >/dev/null 2>&1; then
-    _log "[DBG-920] Required command not found: ${cmd}"
+    _log_err "[DBG-920] Required command not found: ${cmd}"
     exit 1
   fi
 }
@@ -74,12 +80,12 @@ synthesize_workflow_from_action() {
   require_command yq
 
   if ! yq eval '.runs.using' "${action_file}" | grep -qx 'composite'; then
-    _log "[DBG-915] Only composite actions are supported for staging"
+    _log_err "[DBG-915] Only composite actions are supported for staging"
     exit 1
   fi
 
   if [[ "$(yq eval '.runs.steps | length' "${action_file}")" == "0" ]]; then
-    _log "[DBG-916] action.yml runs.steps must not be empty"
+    _log_err "[DBG-916] action.yml runs.steps must not be empty"
     exit 1
   fi
 
@@ -106,7 +112,7 @@ stage_component() {
   local workflows_dir dest component_name path_str action_file source candidates
 
   if [[ ! -d "${component_path}" ]]; then
-    _log "[DBG-901] Component path does not exist: ${component_path}"
+    _log_err "[DBG-901] Component path does not exist: ${component_path}"
     exit 1
   fi
 
@@ -121,7 +127,7 @@ stage_component() {
       action_file="${component_path}/action.yaml"
     fi
     if [[ ! -f "${action_file}" ]]; then
-      _log "[DBG-902] No action.yml found in ${component_path}"
+      _log_err "[DBG-902] No action.yml found in ${component_path}"
       exit 1
     fi
     synthesize_workflow_from_action "${action_file}" "${component_name}" "${dest}"
@@ -134,7 +140,7 @@ stage_component() {
     candidates=("${component_path}"/*.yml "${component_path}"/*.yaml)
     shopt -u nullglob
     if [[ ${#candidates[@]} -eq 0 ]]; then
-      _log "[DBG-903] No workflow YAML found in ${component_path}"
+      _log_err "[DBG-903] No workflow YAML found in ${component_path}"
       exit 1
     fi
     if [[ ${#candidates[@]} -gt 1 ]]; then
@@ -147,7 +153,7 @@ stage_component() {
     return 0
   fi
 
-  _log "[DBG-905] Component must live under actions/ or workflows/"
+  _log_err "[DBG-905] Component must live under actions/ or workflows/"
   exit 1
 }
 
@@ -159,7 +165,7 @@ stage_repo_workflows_only() {
   include_repo_workflows "${staging_root}"
   dest_dir="${staging_root}/.github/workflows"
   if [[ ! -d "${dest_dir}" ]] || [[ -z "$(find "${dest_dir}" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
-    _log "[DBG-908] No repo workflows staged for repo-workflows-only scan"
+    _log_err "[DBG-908] No repo workflows staged for repo-workflows-only scan"
     exit 1
   fi
   printf '%s' "${dest_dir}"
@@ -195,7 +201,7 @@ main() {
         exit 0
         ;;
       *)
-        _log "[DBG-909] Unknown argument: $1"
+        _log_err "[DBG-909] Unknown argument: $1"
         usage
         exit 1
         ;;
@@ -206,7 +212,7 @@ main() {
 
   if [[ "${repo_only}" == "true" ]]; then
     if [[ -n "${component_path}" ]]; then
-      _log "[DBG-914] --repo-workflows-only cannot be combined with --component-path"
+      _log_err "[DBG-914] --repo-workflows-only cannot be combined with --component-path"
       exit 1
     fi
     staged="$(stage_repo_workflows_only "${staging_root}")"
@@ -216,7 +222,7 @@ main() {
   fi
 
   if [[ -z "${component_path}" ]]; then
-    _log "[DBG-913] --component-path is required unless --repo-workflows-only is set"
+    _log_err "[DBG-913] --component-path is required unless --repo-workflows-only is set"
     usage
     exit 1
   fi

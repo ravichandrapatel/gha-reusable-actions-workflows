@@ -87,12 +87,9 @@ jobs:
 
           NAME=$(basename "$COMPONENT_PATH")
           SAFE_NAME=$(echo "$NAME" | tr '/' '-')
-          
-          echo "component_name=$NAME" >> "$GITHUB_OUTPUT"
-          echo "component_type=$TYPE" >> "$GITHUB_OUTPUT"
-          echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
 
           # [T-02a] Discover workflow file if type is workflow
+          WORKFLOW_FILE_OUTPUT=""
           if [[ "$TYPE" == "workflow" ]]; then
             echo "[DBG-002a] Searching for workflow file in $COMPONENT_PATH"
             WF_FILES=("$COMPONENT_PATH"/*.{yml,yaml})
@@ -109,13 +106,10 @@ jobs:
               echo "[ERR-T-02b] Multiple workflow files found in $COMPONENT_PATH. Only one is allowed." >&2
               exit 1
             fi
-            
+
             WF_FILE=$(basename "${VALID_WF_FILES[0]}")
             echo "[DBG-002b] Discovered workflow file: $WF_FILE"
-            echo "workflow_file=$WF_FILE" >> "$GITHUB_OUTPUT"
-          else
-            # For actions, we don't need a specific workflow file output but set it to empty
-            echo "workflow_file=" >> "$GITHUB_OUTPUT"
+            WORKFLOW_FILE_OUTPUT="$WF_FILE"
           fi
 
           # Get current version for semver action
@@ -125,10 +119,17 @@ jobs:
             CURRENT_VER="0.0.0"
             echo "[DBG-004] No existing tags found, starting from 0.0.0"
           else
-            CURRENT_VER=${LATEST_TAG#$SAFE_NAME-}
+            CURRENT_VER="${LATEST_TAG#"${SAFE_NAME}"-}"
             echo "[DBG-004] Latest tag found: $LATEST_TAG (version: $CURRENT_VER)"
           fi
-          echo "current_version=$CURRENT_VER" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "component_name=$NAME"
+            echo "component_type=$TYPE"
+            echo "safe_name=$SAFE_NAME"
+            echo "workflow_file=$WORKFLOW_FILE_OUTPUT"
+            echo "current_version=$CURRENT_VER"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Calculate Next Version
         if: github.event.inputs.mode == 'release' && github.event.inputs.version == ''
@@ -181,7 +182,7 @@ jobs:
                 echo "[ERR-T-04] No versioned tags found for $SAFE_NAME. Cannot $MODE." >&2
                 exit 1
               fi
-              VERSION=${LATEST_TAG#$SAFE_NAME-}
+              VERSION="${LATEST_TAG#"${SAFE_NAME}"-}"
               echo "[DBG-010] Using latest version: $VERSION"
             fi
             
@@ -279,7 +280,8 @@ jobs:
             --include-repo-workflows
           echo "[DBG-019a] Running Checkov (github_actions + CKV2_SPVS_* YAML policies)"
           mkdir -p .checkov.cache/ckv
-          export CKV_CACHE_DIR="$(pwd)/.checkov.cache/ckv"
+          CKV_CACHE_DIR="$(pwd)/.checkov.cache/ckv"
+          export CKV_CACHE_DIR
           checkov -d ".checkov-staging" \
             --config-file .checkov.yaml \
             --framework github_actions

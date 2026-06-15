@@ -15,7 +15,8 @@ import argparse
 import json
 import os
 import shutil
-import subprocess  # nosec B404 - used with list args only, no shell
+# used with list args only, no shell
+import subprocess  # nosec B404
 import sys
 import tempfile
 import time
@@ -76,7 +77,8 @@ class GitHubApiClient:
             headers["Content-Type"] = "application/json"
         req = urllib.request.Request(url, data=body_bytes, method=method, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310 - scheme restricted to https above
+            # scheme restricted to https above
+            with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310
                 raw = resp.read().decode("utf-8")
                 # API resilience: pause before hitting rate limit (cleaner than 403 in logs)
                 try:
@@ -290,7 +292,8 @@ def _run_plan_worker(
         init_cmd.extend(["-backend-config", os.path.join(worker_dir, backend_config_path)])
 
     try:
-        r = subprocess.run(  # nosec B603 B607 - list args, terraform from PATH in CI
+        # list args, terraform from PATH in CI
+        r = subprocess.run(  # nosec B603 B607
             init_cmd,
             cwd=cwd,
             env=env,
@@ -302,7 +305,8 @@ def _run_plan_worker(
             # _log("[ERR-T-01] terraform init failed")
             return (workspace, 1, [], (r.stderr or r.stdout or "init failed")[:500])
 
-        r = subprocess.run(  # nosec B603 B607 - list args, terraform from PATH in CI
+        # list args, terraform from PATH in CI
+        r = subprocess.run(  # nosec B603 B607
             ["terraform", "workspace", "select", workspace],
             cwd=cwd,
             env=env,
@@ -321,7 +325,8 @@ def _run_plan_worker(
             "-input=false",
             f"-var-file={var_file_relative_to_worker}",
         ]
-        r = subprocess.run(  # nosec B603 B607 - list args, terraform from PATH in CI
+        # list args, terraform from PATH in CI
+        r = subprocess.run(  # nosec B603 B607
             plan_cmd,
             cwd=cwd,
             env=env,
@@ -348,7 +353,8 @@ def _run_plan_worker(
         if worker_dir:
             try:
                 shutil.rmtree(worker_dir, ignore_errors=True)
-            except OSError as e:  # nosec B110 - cleanup best-effort; log and continue
+            except OSError as e:
+                # cleanup best-effort; log and continue
                 _log(f"[DBG] Cleanup ignored: {e}")
 
 
@@ -386,8 +392,9 @@ def get_backend_workspaces(
     if backend_config_path:
         init_cmd.extend(["-backend-config", backend_config_path])
     try:
+        # list args, terraform from PATH in CI
         subprocess.run(init_cmd, cwd=worker_dir, env=env, capture_output=True, timeout=init_timeout, check=False)  # nosec B603 B607
-        r = subprocess.run(  # nosec B603 B607 - list args, terraform from PATH in CI
+        r = subprocess.run(  # nosec B603 B607
             ["terraform", "workspace", "list"],
             cwd=worker_dir,
             env=env,
@@ -408,7 +415,8 @@ def get_backend_workspaces(
         if worker_dir:
             try:
                 shutil.rmtree(worker_dir, ignore_errors=True)
-            except OSError as e:  # nosec B110 - cleanup best-effort; log and continue
+            except OSError as e:
+                # cleanup best-effort; log and continue
                 _log(f"[DBG] Cleanup ignored: {e}")
 
 

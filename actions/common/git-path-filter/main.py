@@ -13,7 +13,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess  # nosec B404 - used with list args only, no shell
+# used with list args only, no shell
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 from typing import Any
@@ -129,7 +130,8 @@ def run_git_cmd(args: list[str], ignore_error: bool = False, cwd: str | None = N
     """INTENT: Run git command; return stdout. INPUT: args, optional ignore_error, cwd. OUTPUT: str. SIDE_EFFECTS: subprocess."""
     # [T-02] Execute git (list args, no shell)
     try:
-        result = subprocess.run(  # nosec B603 - list args, git from PATH
+        # list args, git from PATH
+        result = subprocess.run(  # nosec B603
             args,
             capture_output=True,
             text=True,

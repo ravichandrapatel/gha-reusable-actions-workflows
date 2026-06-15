@@ -229,7 +229,8 @@ class GitHubApiClient:
             else:
                 data_bytes = None
             try:
-                with urllib.request.urlopen(req, data=data_bytes, timeout=30) as res:  # nosec B310 - scheme restricted to https above
+                # scheme restricted to https above
+                with urllib.request.urlopen(req, data=data_bytes, timeout=30) as res:  # nosec B310
                     self._limiter.update_from_headers(res.headers)
                     self._limiter.maybe_wait()
                     body = res.read().decode()

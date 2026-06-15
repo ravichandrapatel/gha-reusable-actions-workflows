@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -16,16 +17,29 @@ from typing import Any
 import yaml
 
 PROJECT_PREFIX = "[SPVS-CHECKOV-STAGE]"
+SPVS_HOOK_VERBOSE = os.environ.get("SPVS_HOOK_VERBOSE", "0")
 
 
 def _log(message: str) -> None:
     """
-    INTENT: Emit structured operational logs for staging diagnostics.
+    INTENT: Emit staging diagnostics when SPVS_HOOK_VERBOSE=1.
     INPUT: message - log line without prefix.
     OUTPUT: None.
     SIDE_EFFECTS: writes to stdout.
     """
+    if SPVS_HOOK_VERBOSE != "1":
+        return
     print(f"{PROJECT_PREFIX} {message}")
+
+
+def _log_err(message: str) -> None:
+    """
+    INTENT: Emit staging errors regardless of verbosity.
+    INPUT: message - log line without prefix.
+    OUTPUT: None.
+    SIDE_EFFECTS: writes to stderr.
+    """
+    print(f"{PROJECT_PREFIX} {message}", file=sys.stderr)
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -39,14 +53,14 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         with path.open(encoding="utf-8") as handle:
             loaded = yaml.safe_load(handle)
     except OSError as exc:
-        _log(f"[DBG-910] Failed to read YAML file {path}: {exc}")
+        _log_err(f"[DBG-910] Failed to read YAML file {path}: {exc}")
         raise SystemExit(1) from exc
     except yaml.YAMLError as exc:
-        _log(f"[DBG-911] Invalid YAML in {path}: {exc}")
+        _log_err(f"[DBG-911] Invalid YAML in {path}: {exc}")
         raise SystemExit(1) from exc
 
     if not isinstance(loaded, dict):
-        _log(f"[DBG-912] Expected mapping document in {path}")
+        _log_err(f"[DBG-912] Expected mapping document in {path}")
         raise SystemExit(1)
     return loaded
 
@@ -63,7 +77,7 @@ def _write_yaml(path: Path, payload: dict[str, Any]) -> None:
         with path.open("w", encoding="utf-8") as handle:
             yaml.safe_dump(payload, handle, sort_keys=False)
     except OSError as exc:
-        _log(f"[DBG-913] Failed to write staged workflow {path}: {exc}")
+        _log_err(f"[DBG-913] Failed to write staged workflow {path}: {exc}")
         raise SystemExit(1) from exc
 
 
@@ -76,17 +90,17 @@ def _synthesize_workflow_from_action(action_doc: dict[str, Any], component_name:
     """
     runs_block = action_doc.get("runs", {})
     if not isinstance(runs_block, dict):
-        _log("[DBG-914] action.yml missing runs block")
+        _log_err("[DBG-914] action.yml missing runs block")
         raise SystemExit(1)
 
     using = runs_block.get("using")
     if using != "composite":
-        _log(f"[DBG-915] Unsupported action type '{using}'; only composite actions are staged")
+        _log_err(f"[DBG-915] Unsupported action type '{using}'; only composite actions are staged")
         raise SystemExit(1)
 
     steps = runs_block.get("steps", [])
     if not isinstance(steps, list):
-        _log("[DBG-916] action.yml runs.steps must be a list")
+        _log_err("[DBG-916] action.yml runs.steps must be a list")
         raise SystemExit(1)
 
     return {
@@ -113,7 +127,7 @@ def stage_component(component_path: Path, staging_root: Path) -> Path:
     """
     # _log("[T-01] Resolving component path")
     if not component_path.is_dir():
-        _log(f"[DBG-901] Component path does not exist: {component_path}")
+        _log_err(f"[DBG-901] Component path does not exist: {component_path}")
         raise SystemExit(1)
 
     workflows_dir = staging_root / ".github" / "workflows"
@@ -130,7 +144,7 @@ def stage_component(component_path: Path, staging_root: Path) -> Path:
         if not action_file.is_file():
             action_file = component_path / "action.yaml"
         if not action_file.is_file():
-            _log(f"[DBG-902] No action.yml found in {component_path}")
+            _log_err(f"[DBG-902] No action.yml found in {component_path}")
             raise SystemExit(1)
         _log(f"[DBG-002] Synthesizing workflow from {action_file}")
         action_doc = _load_yaml(action_file)
@@ -141,7 +155,7 @@ def stage_component(component_path: Path, staging_root: Path) -> Path:
     if path_str.startswith("workflows/") or "/workflows/" in path_str:
         candidates = sorted(component_path.glob("*.yml")) + sorted(component_path.glob("*.yaml"))
         if not candidates:
-            _log(f"[DBG-903] No workflow YAML found in {component_path}")
+            _log_err(f"[DBG-903] No workflow YAML found in {component_path}")
             raise SystemExit(1)
         if len(candidates) > 1:
             _log(f"[DBG-904] Multiple workflow files found; using {candidates[0]}")
@@ -150,7 +164,7 @@ def stage_component(component_path: Path, staging_root: Path) -> Path:
         shutil.copy2(source, dest)
         return dest
 
-    _log("[DBG-905] Component must live under actions/ or workflows/")
+    _log_err("[DBG-905] Component must live under actions/ or workflows/")
     raise SystemExit(1)
 
 
@@ -192,7 +206,7 @@ def stage_repo_workflows_only(staging_root: Path) -> Path:
     include_repo_workflows(staging_root)
     dest_dir = staging_root / ".github" / "workflows"
     if not dest_dir.is_dir() or not any(dest_dir.iterdir()):
-        _log("[DBG-908] No repo workflows staged for repo-workflows-only scan")
+        _log_err("[DBG-908] No repo workflows staged for repo-workflows-only scan")
         raise SystemExit(1)
     return dest_dir
 

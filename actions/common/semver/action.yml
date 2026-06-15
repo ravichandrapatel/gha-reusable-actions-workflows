@@ -32,7 +32,7 @@ runs:
       run: |
         set -euo pipefail
         # CHECKPOINT: semver reads ticket-prefixed conventional commits via commit_message_lib.sh
-        LIB="${{ github.workspace }}/policies/scripts/commit_message_lib.sh"
+        LIB="${GITHUB_WORKSPACE}/policies/scripts/commit_message_lib.sh"
         if [[ ! -f "${LIB}" ]]; then
           echo "[ERR-T-00] Missing commit message library at ${LIB}" >&2
           exit 1
