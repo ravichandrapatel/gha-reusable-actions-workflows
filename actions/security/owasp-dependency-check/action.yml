@@ -140,7 +140,7 @@ inputs:
   disableOpenSSL:
     required: false
     default: false
-    description: 'Disable OpenSSL Analyzer'
+    description: 'Disable OpenSSLCertificates Analyzer'
   disableCmake:
     required: false
     default: false

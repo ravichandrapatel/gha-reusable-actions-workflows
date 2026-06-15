@@ -151,8 +151,9 @@ resolve_components() {
   for component in "${!seen[@]}"; do
     RESOLVED_COMPONENTS+=("${component}")
   done
-  IFS=$'\n' RESOLVED_COMPONENTS=($(sort <<<"${RESOLVED_COMPONENTS[*]:-}"))
-  unset IFS
+  if [[ ${#RESOLVED_COMPONENTS[@]} -gt 0 ]]; then
+    mapfile -t RESOLVED_COMPONENTS < <(printf '%s\n' "${RESOLVED_COMPONENTS[@]}" | LC_ALL=C sort -u)
+  fi
 }
 
 # shellcheck disable=SC2329
@@ -190,33 +191,22 @@ ensure_actionlint() {
 }
 
 # shellcheck disable=SC2329
-add_shell_scripts_from_dir() {
-  # INTENT: Add all *.sh files from a directory to the seen map.
-  # INPUT: directory absolute path; nameref to seen associative array.
-  # OUTPUT: None.
-  # SIDE_EFFECTS: mutates seen map.
+_glob_files_in_dir() {
+  # INTENT: Print absolute paths for *.suffix files in a directory.
+  # INPUT: directory path; file suffix without dot (e.g. sh, py).
+  # OUTPUT: matching file paths one per line.
+  # SIDE_EFFECTS: reads filesystem.
   local dir="$1"
-  local -n seen_ref="$2"
-  local script
+  local suffix="$2"
+  local file_path
+  if [[ ! -d "${dir}" ]]; then
+    return 0
+  fi
   shopt -s nullglob
-  for script in "${dir}"/*.sh; do
-    [[ -f "${script}" ]] && seen_ref["${script}"]=1
-  done
-  shopt -u nullglob
-}
-
-# shellcheck disable=SC2329
-add_python_files_from_dir() {
-  # INTENT: Add all *.py files from a directory to the seen map.
-  # INPUT: directory absolute path; nameref to seen associative array.
-  # OUTPUT: None.
-  # SIDE_EFFECTS: mutates seen map.
-  local dir="$1"
-  local -n seen_ref="$2"
-  local py_file
-  shopt -s nullglob
-  for py_file in "${dir}"/*.py; do
-    [[ -f "${py_file}" ]] && seen_ref["${py_file}"]=1
+  for file_path in "${dir}"/*."${suffix}"; do
+    if [[ -f "${file_path}" ]]; then
+      printf '%s\n' "${file_path}"
+    fi
   done
   shopt -u nullglob
 }
@@ -231,15 +221,25 @@ collect_shell_scripts() {
   local path component full_rescan=0
   SHELL_FILES=()
 
+  _add_glob_to_seen() {
+    local dir="$1"
+    local suffix="$2"
+    local file_path
+    while IFS= read -r file_path; do
+      [[ -n "${file_path}" ]] || continue
+      seen["${file_path}"]=1
+    done < <(_glob_files_in_dir "${dir}" "${suffix}")
+  }
+
   if policies_changed; then
     full_rescan=1
   fi
 
   if [[ "${full_rescan}" -eq 1 ]]; then
-    add_shell_scripts_from_dir "${REPO_ROOT}/policies/scripts" seen
+    _add_glob_to_seen "${REPO_ROOT}/policies/scripts" sh
     while IFS= read -r component; do
       [[ -n "${component}" ]] || continue
-      add_shell_scripts_from_dir "${REPO_ROOT}/${component}" seen
+      _add_glob_to_seen "${REPO_ROOT}/${component}" sh
     done < <(discover_all_components)
   else
     for path in "${CHANGED_FILES[@]}"; do
@@ -248,19 +248,17 @@ collect_shell_scripts() {
       fi
       component="$(component_from_path "${path}")"
       if [[ -n "${component}" ]]; then
-        add_shell_scripts_from_dir "${REPO_ROOT}/${component}" seen
+        _add_glob_to_seen "${REPO_ROOT}/${component}" sh
       fi
       if [[ "${path}" == policies/scripts/* ]]; then
-        add_shell_scripts_from_dir "${REPO_ROOT}/policies/scripts" seen
+        _add_glob_to_seen "${REPO_ROOT}/policies/scripts" sh
       fi
     done
   fi
 
-  for path in "${!seen[@]}"; do
-    SHELL_FILES+=("${path}")
-  done
-  IFS=$'\n' SHELL_FILES=($(sort <<<"${SHELL_FILES[*]:-}"))
-  unset IFS
+  if [[ ${#seen[@]} -gt 0 ]]; then
+    mapfile -t SHELL_FILES < <(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort)
+  fi
 }
 
 # shellcheck disable=SC2329
@@ -273,15 +271,25 @@ collect_python_files() {
   local path component full_rescan=0
   PYTHON_FILES=()
 
+  _add_glob_to_seen() {
+    local dir="$1"
+    local suffix="$2"
+    local file_path
+    while IFS= read -r file_path; do
+      [[ -n "${file_path}" ]] || continue
+      seen["${file_path}"]=1
+    done < <(_glob_files_in_dir "${dir}" "${suffix}")
+  }
+
   if policies_changed; then
     full_rescan=1
   fi
 
   if [[ "${full_rescan}" -eq 1 ]]; then
-    add_python_files_from_dir "${REPO_ROOT}/policies/scripts" seen
+    _add_glob_to_seen "${REPO_ROOT}/policies/scripts" py
     while IFS= read -r component; do
       [[ -n "${component}" ]] || continue
-      add_python_files_from_dir "${REPO_ROOT}/${component}" seen
+      _add_glob_to_seen "${REPO_ROOT}/${component}" py
     done < <(discover_all_components)
   else
     for path in "${CHANGED_FILES[@]}"; do
@@ -290,19 +298,17 @@ collect_python_files() {
       fi
       component="$(component_from_path "${path}")"
       if [[ -n "${component}" ]]; then
-        add_python_files_from_dir "${REPO_ROOT}/${component}" seen
+        _add_glob_to_seen "${REPO_ROOT}/${component}" py
       fi
       if [[ "${path}" == policies/scripts/* ]]; then
-        add_python_files_from_dir "${REPO_ROOT}/policies/scripts" seen
+        _add_glob_to_seen "${REPO_ROOT}/policies/scripts" py
       fi
     done
   fi
 
-  for path in "${!seen[@]}"; do
-    PYTHON_FILES+=("${path}")
-  done
-  IFS=$'\n' PYTHON_FILES=($(sort <<<"${PYTHON_FILES[*]:-}"))
-  unset IFS
+  if [[ ${#seen[@]} -gt 0 ]]; then
+    mapfile -t PYTHON_FILES < <(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort)
+  fi
 }
 
 # shellcheck disable=SC2329
@@ -379,11 +385,9 @@ collect_workflow_files() {
   fi
 
   WORKFLOW_FILES=()
-  for wf_file in "${!seen[@]}"; do
-    WORKFLOW_FILES+=("${wf_file}")
-  done
-  IFS=$'\n' WORKFLOW_FILES=($(sort <<<"${WORKFLOW_FILES[*]:-}"))
-  unset IFS
+  if [[ ${#seen[@]} -gt 0 ]]; then
+    mapfile -t WORKFLOW_FILES < <(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort)
+  fi
 }
 
 # shellcheck disable=SC2329
@@ -401,7 +405,10 @@ run_shellcheck() {
   _log "[DBG-011] Running Shellcheck on ${#SHELL_FILES[@]} file(s)"
   for script in "${SHELL_FILES[@]}"; do
     _log "[DBG-012] Shellcheck: ${script#"${REPO_ROOT}/"}"
-    shellcheck "${script}"
+    (
+      cd "$(dirname "${script}")"
+      shellcheck -x "$(basename "${script}")"
+    )
   done
 }
 

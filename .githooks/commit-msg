@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# =============================================================================
+# FILE_NAME: commit-msg
+# DESCRIPTION: Git commit-msg hook — SPVS ticket/keyword validation for this repo.
+# VERSION: 1.0.0
+# EXIT_CODES/SIGNALS: 0 valid, 1 invalid subject, 2 hook error
+# AUTHORS: DevOps Team
+# =============================================================================
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+MSG_FILE="${1:?commit-msg hook requires message file argument}"
+
+# Preserve global compliance behavior: drop Cursor co-author trailer if present.
+sed -i '/Co-authored-by: Cursor <cursoragent@cursor.com>/d' "${MSG_FILE}"
+
+if [[ -f "${REPO_ROOT}/.env" ]]; then
+  # shellcheck disable=SC1091
+  source "${REPO_ROOT}/.env"
+fi
+
+exec bash "${REPO_ROOT}/policies/scripts/validate_commit_message.sh" "${MSG_FILE}"

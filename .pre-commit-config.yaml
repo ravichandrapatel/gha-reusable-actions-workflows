@@ -1,7 +1,8 @@
 # Pre-commit hooks: SPVS security scans + commit message validation (shell only).
 # Install: bash policies/scripts/install_dev_hooks.sh [--mode venv|pipx]
 #          source .env
-# Run all: pre-commit run --all-files
+# Hooks:   global core.hooksPath (SPVS chained when policies/ exists in repo)
+# Manual:  pre-commit run --all-files
 
 minimum_pre_commit_version: "3.5.0"
 

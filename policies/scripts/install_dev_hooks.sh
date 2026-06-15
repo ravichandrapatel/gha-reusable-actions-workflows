@@ -346,40 +346,98 @@ EOF
 }
 
 # shellcheck disable=SC2329
-install_pre_commit_hooks() {
-  # INTENT: Register pre-commit and commit-msg hooks using tools on PATH.
+install_git_hooks() {
+  # INTENT: Extend global core.hooksPath hooks with SPVS checks for repos that ship policies/.
   # INPUT: none.
   # OUTPUT: None.
-  # SIDE_EFFECTS: writes .git/hooks/* via pre-commit.
-  local pre_commit_bin=""
-  local hooks_path=""
+  # SIDE_EFFECTS: writes commit-msg/pre-commit under global hooksPath; removes local override.
+  local global_hooks_path=""
+  local hooks_dir=""
+  local commit_msg_hook=""
+  local pre_commit_hook=""
 
   if [[ "${SKIP_HOOKS}" == "true" ]]; then
-    _log "[DBG-015] Skipping pre-commit hook install (--skip-hooks)"
+    _log "[DBG-015] Skipping git hook install (--skip-hooks)"
     return 0
   fi
 
-  hooks_path="$(git config --get core.hooksPath 2>/dev/null || true)"
-  if [[ -n "${hooks_path}" ]]; then
-    _log "[DBG-922] git core.hooksPath is set to: ${hooks_path}"
-    _log "[DBG-922] pre-commit cannot install while hooksPath is active."
-    _log "[DBG-922] For this repo only: git config --local --unset-all core.hooksPath"
-    _log "[DBG-922] Then re-run: bash policies/scripts/install_dev_hooks.sh"
+  global_hooks_path="$(git config --global --get core.hooksPath 2>/dev/null || true)"
+  if [[ -z "${global_hooks_path}" ]]; then
+    _log "[DBG-910] Global core.hooksPath is not set; set it first, then re-run install"
+    _log "[DBG-910] Example: git config --global core.hooksPath ~/.git-global-compliance/hooks"
     exit 1
   fi
 
+  if [[ "${global_hooks_path}" != /* ]]; then
+    global_hooks_path="${HOME}/${global_hooks_path#~/}"
+  fi
+
+  hooks_dir="${global_hooks_path}"
+  commit_msg_hook="${hooks_dir}/commit-msg"
+  pre_commit_hook="${hooks_dir}/pre-commit"
+
+  mkdir -p "${hooks_dir}"
+
+  # CHECKPOINT: keep global hooksPath authoritative; remove repo-local override if present.
+  if git config --local --get core.hooksPath >/dev/null 2>&1; then
+    git config --local --unset-all core.hooksPath
+    _log "[DBG-016] Removed repo-local core.hooksPath override (global hooks restored)"
+  fi
+
+  if [[ -f "${commit_msg_hook}" ]] && ! grep -q 'SPVS-GLOBAL-HOOK' "${commit_msg_hook}" 2>/dev/null; then
+    cp -a "${commit_msg_hook}" "${commit_msg_hook}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
+    _log "[DBG-016a] Backed up existing global commit-msg hook"
+  fi
+
+  cat > "${commit_msg_hook}" <<'EOF'
+#!/usr/bin/env bash
+# SPVS-GLOBAL-HOOK: managed by gha-reusable-actions-workflows install_dev_hooks.sh
+set -euo pipefail
+
+MSG_FILE="${1:?commit-msg hook requires message file argument}"
+
+# Global compliance: drop Cursor co-author trailer when present.
+sed -i '/Co-authored-by: Cursor <cursoragent@cursor.com>/d' "${MSG_FILE}"
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+VALIDATOR="${REPO_ROOT}/policies/scripts/validate_commit_message.sh"
+if [[ -f "${VALIDATOR}" ]]; then
+  if [[ -f "${REPO_ROOT}/.env" ]]; then
+    # shellcheck disable=SC1091
+    source "${REPO_ROOT}/.env"
+  fi
+  bash "${VALIDATOR}" "${MSG_FILE}"
+fi
+EOF
+
+  cat > "${pre_commit_hook}" <<'EOF'
+#!/usr/bin/env bash
+# SPVS-GLOBAL-HOOK: managed by gha-reusable-actions-workflows install_dev_hooks.sh
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+WRAPPER="${REPO_ROOT}/policies/scripts/pre_commit_spvs_wrapper.sh"
+if [[ ! -f "${WRAPPER}" ]]; then
+  exit 0
+fi
+
+cd "${REPO_ROOT}"
+if [[ -f "${REPO_ROOT}/.env" ]]; then
   # shellcheck disable=SC1091
   source "${REPO_ROOT}/.env"
+fi
 
-  pre_commit_bin="$(command -v pre-commit || true)"
-  if [[ -z "${pre_commit_bin}" ]]; then
-    _log "[DBG-910] pre-commit not found on PATH after install"
-    exit 1
-  fi
+mapfile -d '' -t STAGED_FILES < <(git diff --cached --name-only -z --diff-filter=ACMR)
+if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
+  exit 0
+fi
 
-  _log "[DBG-016] Installing git hooks via ${pre_commit_bin}"
-  cd "${REPO_ROOT}"
-  pre-commit install --hook-type pre-commit --hook-type commit-msg
+exec bash "${WRAPPER}" "${STAGED_FILES[@]}"
+EOF
+
+  chmod +x "${commit_msg_hook}" "${pre_commit_hook}"
+  _log "[DBG-017] Updated global hooks under ${hooks_dir}"
+  _log "[DBG-017a] Global core.hooksPath unchanged; SPVS runs when policies/ exists in repo"
 }
 
 # shellcheck disable=SC2329
@@ -430,7 +488,7 @@ main() {
   fi
 
   write_env_file
-  install_pre_commit_hooks
+  install_git_hooks
   verify_tools
 
   _log "[DBG-018] Install complete. Run: source .env"

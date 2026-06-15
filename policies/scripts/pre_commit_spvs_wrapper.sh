@@ -12,7 +12,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 ENV_FILE="${REPO_ROOT}/.env"
 
 if [[ -f "${ENV_FILE}" ]]; then
-  # shellcheck disable=SC1091
+  # shellcheck source=/dev/null
   source "${ENV_FILE}"
 fi
 
