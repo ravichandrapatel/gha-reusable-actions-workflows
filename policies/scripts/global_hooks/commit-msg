@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# =============================================================================
+# FILE_NAME: commit-msg
+# DESCRIPTION: Global git commit-msg hook — shell-only ticket/conventional validation.
+# VERSION: 1.1.0
+# EXIT_CODES/SIGNALS: 0 valid, 1 invalid subject, 2 usage error
+# AUTHORS: DevOps Team
+# =============================================================================
+# SPVS-GLOBAL-HOOK: installed by policies/scripts/install_dev_hooks.sh
+set -euo pipefail
+
+MSG_FILE="${1:?commit-msg hook requires message file argument}"
+
+# Global compliance: drop Cursor co-author trailer when present.
+sed -i '/Co-authored-by: Cursor <cursoragent@cursor.com>/d' "${MSG_FILE}"
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "${REPO_ROOT}" ]]; then
+  exit 0
+fi
+
+cd "${REPO_ROOT}"
+
+if [[ -f "${REPO_ROOT}/.env" ]]; then
+  # shellcheck disable=SC1091
+  source "${REPO_ROOT}/.env"
+fi
+
+VALIDATOR="${REPO_ROOT}/policies/scripts/validate_commit_message.sh"
+if [[ -f "${VALIDATOR}" ]]; then
+  exec bash "${VALIDATOR}" "${MSG_FILE}"
+fi
+
+exit 0

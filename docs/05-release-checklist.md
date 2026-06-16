@@ -60,7 +60,7 @@ Run during Release Manager `mode: release` (security job) and locally via [Chapt
 - [ ] **Checkov:** SPVS policies (`CKV2_SPVS_*`) enforced via [`.checkov.yaml`](../.checkov.yaml) and `policies/github_actions/`.
   - Actions scanned via **synthetic workflow** from composite steps.
   - Workflows scanned via **direct copy** of `workflow.yml`.
-  - Stage locally: `python3 policies/scripts/stage_component.py --include-repo-workflows`.
+  - Stage locally: `bash policies/scripts/stage_component.sh --include-repo-workflows`.
   - Full policy catalog: [README — Custom policies](../README.md#custom-policies-ckv2_spvs_1--ckv2_spvs_15).
 - [ ] **Bandit:** security issue in `.py` fails the security job.
 - [ ] **Shellcheck:** issue in `.sh` fails the security job.

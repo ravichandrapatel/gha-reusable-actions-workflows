@@ -98,15 +98,6 @@ bash policies/scripts/stage_component.sh \
   --include-repo-workflows
 ```
 
-### Stage a component (Python — used in CI)
-
-```bash
-python3 policies/scripts/stage_component.py \
-  --component-path actions/common/semver \
-  --staging-root /tmp/checkov-stage \
-  --include-repo-workflows
-```
-
 ### Run Checkov manually
 
 ```bash

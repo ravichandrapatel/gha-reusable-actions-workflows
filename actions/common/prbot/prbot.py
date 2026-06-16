@@ -24,7 +24,7 @@ PROJECT_PREFIX = "[PROJECT-PRBOT]"
 
 class GitHubApiError(Exception):
     """ROLE: Data. INTENT: Represent 4xx GitHub API error for clear reporting.
-    INPUT: code (int), body (str). OUTPUT: N/A. SIDE_EFFECTS: None."""
+    INPUT: code  (int), body (str). OUTPUT: N/A. SIDE_EFFECTS: None."""
 
     def __init__(self, code: int, body: str) -> None:
         self.code = code

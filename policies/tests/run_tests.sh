@@ -13,5 +13,6 @@ cd "${ROOT}"
 
 bash policies/tests/test_pre_commit_spvs.sh
 bash policies/tests/test_commit_message_lib.sh
+bash policies/tests/test_checkov_inline_skip.sh
 
 echo "All shell policy tests passed"

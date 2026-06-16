@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: install_dev_hooks.sh
 # DESCRIPTION: Install SPVS dev tooling (venv or pipx), system CLIs, and pre-commit hooks.
-# VERSION: 1.1.0
+# VERSION: 1.2.0
 # EXIT_CODES/SIGNALS: 0 success, 1 install failure, 2 usage error
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -43,13 +43,20 @@ usage() {
   cat <<'EOF'
 Usage: install_dev_hooks.sh [options]
 
-Install Python dev tools, optional system CLIs, write .env, and register pre-commit hooks.
+Install Python dev tools, optional system CLIs, write .env, and install **global** git hooks.
+
+Global hooks (core.hooksPath) are **shell scripts** — Terraform, SPVS, and commit-msg validation.
+Do not use `pre-commit install` in the repo unless you want duplicate .git/hooks entries.
 
 Options:
   --mode venv|pipx   Python install strategy (default: venv)
-  --skip-system      Skip shellcheck/actionlint/yq installation
-  --skip-hooks       Skip pre-commit install (tools only)
+  --skip-system      Skip shellcheck/actionlint/yq/terraform/tflint installation
+  --skip-hooks       Skip global git hook install (tools only)
   -h, --help         Show this help
+
+One-time global git setup (before first install):
+  git config --global core.hooksPath ~/.git-global-compliance/hooks
+  mkdir -p ~/.git-global-compliance/hooks
 
 After install:
   source .env
@@ -229,6 +236,62 @@ install_system_tools() {
   install_shellcheck
   install_actionlint
   install_yq
+  install_terraform
+  install_tflint
+}
+
+# shellcheck disable=SC2329
+install_terraform() {
+  # INTENT: Install HashiCorp Terraform CLI when missing (for pre-commit terraform hooks).
+  # INPUT: none.
+  # OUTPUT: None.
+  # SIDE_EFFECTS: may invoke package manager; warns instead of failing when unavailable.
+  if command -v terraform >/dev/null 2>&1; then
+    _log "[DBG-011a] terraform already installed: $(command -v terraform)"
+    return 0
+  fi
+
+  _log "[DBG-011b] Installing terraform"
+  if command -v apt-get >/dev/null 2>&1; then
+    require_command sudo
+    if sudo apt-get install -y terraform 2>/dev/null; then
+      return 0
+    fi
+    _log "[DBG-906] apt terraform package unavailable; install from https://developer.hashicorp.com/terraform/install"
+    return 0
+  fi
+  if command -v brew >/dev/null 2>&1; then
+    brew install terraform || _log "[DBG-906] brew install terraform failed; install manually"
+    return 0
+  fi
+  _log "[DBG-906] Install terraform manually for .tf pre-commit hooks"
+}
+
+# shellcheck disable=SC2329
+install_tflint() {
+  # INTENT: Install tflint when missing (for pre-commit-terraform tflint hook).
+  # INPUT: none.
+  # OUTPUT: None.
+  # SIDE_EFFECTS: may invoke package manager; warns instead of failing when unavailable.
+  if command -v tflint >/dev/null 2>&1; then
+    _log "[DBG-011c] tflint already installed: $(command -v tflint)"
+    return 0
+  fi
+
+  _log "[DBG-011d] Installing tflint"
+  if command -v apt-get >/dev/null 2>&1; then
+    require_command sudo
+    if sudo apt-get install -y tflint 2>/dev/null; then
+      return 0
+    fi
+    _log "[DBG-906] apt tflint unavailable; see https://github.com/terraform-linters/tflint"
+    return 0
+  fi
+  if command -v brew >/dev/null 2>&1; then
+    brew install tflint || _log "[DBG-906] brew install tflint failed; install manually"
+    return 0
+  fi
+  _log "[DBG-906] Install tflint manually for terraform_tflint pre-commit hook"
 }
 
 # shellcheck disable=SC2329
@@ -293,18 +356,23 @@ EOF
 
 # shellcheck disable=SC2329
 install_git_hooks() {
-  # INTENT: Extend global core.hooksPath hooks with SPVS checks for repos that ship policies/.
+  # INTENT: Install dedicated global shell hooks (Terraform, SPVS, commit-msg validation).
   # INPUT: none.
   # OUTPUT: None.
-  # SIDE_EFFECTS: writes commit-msg/pre-commit under global hooksPath; removes local override.
+  # SIDE_EFFECTS: copies policies/scripts/global_hooks/* to global hooksPath.
   local global_hooks_path=""
   local hooks_dir=""
-  local commit_msg_hook=""
-  local pre_commit_hook=""
+  local hook_src="${REPO_ROOT}/policies/scripts/global_hooks"
+  local hook_name=""
 
   if [[ "${SKIP_HOOKS}" == "true" ]]; then
     _log "[DBG-015] Skipping git hook install (--skip-hooks)"
     return 0
+  fi
+
+  if [[ ! -d "${hook_src}" ]]; then
+    _log "[DBG-910] Missing global hook templates at ${hook_src}"
+    exit 1
   fi
 
   global_hooks_path="$(git config --global --get core.hooksPath 2>/dev/null || true)"
@@ -319,9 +387,6 @@ install_git_hooks() {
   fi
 
   hooks_dir="${global_hooks_path}"
-  commit_msg_hook="${hooks_dir}/commit-msg"
-  pre_commit_hook="${hooks_dir}/pre-commit"
-
   mkdir -p "${hooks_dir}"
 
   # CHECKPOINT: keep global hooksPath authoritative; remove repo-local override if present.
@@ -330,60 +395,21 @@ install_git_hooks() {
     _log "[DBG-016] Removed repo-local core.hooksPath override (global hooks restored)"
   fi
 
-  if [[ -f "${commit_msg_hook}" ]] && ! grep -q 'SPVS-GLOBAL-HOOK' "${commit_msg_hook}" 2>/dev/null; then
-    cp -a "${commit_msg_hook}" "${commit_msg_hook}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
-    _log "[DBG-016a] Backed up existing global commit-msg hook"
-  fi
+  for hook_name in pre-commit commit-msg run_terraform_hooks.sh; do
+    if [[ ! -f "${hook_src}/${hook_name}" ]]; then
+      _log "[DBG-910] Missing global hook template: ${hook_src}/${hook_name}"
+      exit 1
+    fi
+    if [[ -f "${hooks_dir}/${hook_name}" ]] && ! grep -q 'SPVS-GLOBAL-HOOK' "${hooks_dir}/${hook_name}" 2>/dev/null; then
+      cp -a "${hooks_dir}/${hook_name}" "${hooks_dir}/${hook_name}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
+      _log "[DBG-016a] Backed up existing global ${hook_name}"
+    fi
+    cp -f "${hook_src}/${hook_name}" "${hooks_dir}/${hook_name}"
+    chmod +x "${hooks_dir}/${hook_name}"
+  done
 
-  cat > "${commit_msg_hook}" <<'EOF'
-#!/usr/bin/env bash
-# SPVS-GLOBAL-HOOK: managed by gha-reusable-actions-workflows install_dev_hooks.sh
-set -euo pipefail
-
-MSG_FILE="${1:?commit-msg hook requires message file argument}"
-
-# Global compliance: drop Cursor co-author trailer when present.
-sed -i '/Co-authored-by: Cursor <cursoragent@cursor.com>/d' "${MSG_FILE}"
-
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-VALIDATOR="${REPO_ROOT}/policies/scripts/validate_commit_message.sh"
-if [[ -f "${VALIDATOR}" ]]; then
-  if [[ -f "${REPO_ROOT}/.env" ]]; then
-    # shellcheck disable=SC1091
-    source "${REPO_ROOT}/.env"
-  fi
-  bash "${VALIDATOR}" "${MSG_FILE}"
-fi
-EOF
-
-  cat > "${pre_commit_hook}" <<'EOF'
-#!/usr/bin/env bash
-# SPVS-GLOBAL-HOOK: managed by gha-reusable-actions-workflows install_dev_hooks.sh
-set -euo pipefail
-
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-WRAPPER="${REPO_ROOT}/policies/scripts/pre_commit_spvs_wrapper.sh"
-if [[ ! -f "${WRAPPER}" ]]; then
-  exit 0
-fi
-
-cd "${REPO_ROOT}"
-if [[ -f "${REPO_ROOT}/.env" ]]; then
-  # shellcheck disable=SC1091
-  source "${REPO_ROOT}/.env"
-fi
-
-mapfile -d '' -t STAGED_FILES < <(git diff --cached --name-only -z --diff-filter=ACMR)
-if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
-  exit 0
-fi
-
-exec bash "${WRAPPER}" "${STAGED_FILES[@]}"
-EOF
-
-  chmod +x "${commit_msg_hook}" "${pre_commit_hook}"
-  _log "[DBG-017] Updated global hooks under ${hooks_dir}"
-  _log "[DBG-017a] Global core.hooksPath unchanged; SPVS runs when policies/ exists in repo"
+  _log "[DBG-017] Installed global shell hooks under ${hooks_dir}"
+  _log "[DBG-017a] pre-commit: Terraform + SPVS; commit-msg: validate_commit_message.sh"
 }
 
 # shellcheck disable=SC2329
@@ -407,7 +433,15 @@ verify_tools() {
       _log "[DBG-910] Missing tool after install: ${tool}"
       exit 1
     fi
-    _log "[DBG-017] OK ${tool} -> $(command -v "${tool}")"
+    _log "[DBG-018] OK ${tool} -> $(command -v "${tool}")"
+  done
+
+  for tool in terraform tflint; do
+    if command -v "${tool}" >/dev/null 2>&1; then
+      _log "[DBG-018] OK ${tool} -> $(command -v "${tool}")"
+    else
+      _log "[DBG-906] Optional ${tool} not installed (required only when committing .tf files)"
+    fi
   done
 }
 
@@ -437,7 +471,7 @@ main() {
   install_git_hooks
   verify_tools
 
-  _log "[DBG-018] Install complete. Run: source .env"
+  _log "[DBG-019] Install complete. Run: source .env"
 }
 
 main "$@"

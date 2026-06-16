@@ -2,136 +2,104 @@
 
 > **Part III — Local development**
 
-This chapter covers installing and using the repository’s **pre-commit** and **commit-msg** hooks. They align with **OWASP SPVS** and run the same class of checks as the Release Manager security stage (Checkov, Actionlint, Bandit, Shellcheck).
+Global git hooks are **shell-only** scripts installed to your `core.hooksPath`. They do **not** invoke the Python `pre-commit run` driver on commit. Hook definitions in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) mirror the same shell entrypoints for optional manual runs.
 
 ---
 
-## What the hooks do
+## Architecture
 
-| Hook | When it runs | What it checks |
-| :--- | :--- | :--- |
-| **pre-commit** | Before `git commit` completes | SPVS security scans on staged files |
-| **commit-msg** | After you write the message | Ticket prefix + conventional commit keyword |
+```mermaid
+flowchart TB
+  subgraph global [Global ~/.git-global-compliance/hooks]
+    PC[pre-commit shell]
+    CM[commit-msg shell]
+    TF[run_terraform_hooks.sh]
+  end
+  subgraph repo [Each cloned repository]
+    ENV[.env + .venv tools]
+    SPVS[pre_commit_spvs_wrapper.sh]
+    VAL[validate_commit_message.sh]
+  end
+  PC --> TF
+  PC --> SPVS
+  CM --> VAL
+  SPVS --> ENV
+  VAL --> ENV
+```
 
-### Pre-commit scans (`pre_commit_spvs.sh`)
-
-Scans are **scoped to what you changed**, except when policy or Checkov config changes trigger a full rescan.
-
-| Tool | Targets |
+| Global script | Runs |
 | :--- | :--- |
-| **Checkov** | `actions/*/*` and `workflows/*/*` YAML changes; `.github/workflows/` when those files change |
-| **Shellcheck** | Changed `*.sh` files |
-| **Actionlint** | Changed workflow YAML |
-| **Bandit** | Changed `*.py` files |
+| `pre-commit` | Terraform shell checks → SPVS wrapper (if `policies/` exists) |
+| `commit-msg` | Strip Cursor trailer → **`validate_commit_message.sh`** |
+| `run_terraform_hooks.sh` | `terraform fmt -check`, `validate`, `tflint` on staged `.tf` |
 
-Commit message rules: [README — Commit Message Format](../README.md#commit-message-format).
-
----
-
-## Prerequisites
-
-1. **Python 3.12+** with `venv` support (or **pipx**).
-2. **Global** git hooks directory (required by the default installer):
-
-   ```bash
-   git config --global core.hooksPath ~/.git-global-compliance/hooks
-   mkdir -p ~/.git-global-compliance/hooks
-   ```
-
-3. **Optional system packages** (installed automatically when possible): `shellcheck`, `actionlint`, `yq`.
+Do **not** run `pre-commit install` in the repo when using global hooks (avoids duplicate `.git/hooks` entries).
 
 ---
 
-## Installation
+## What runs on commit
 
-From the repository root:
+### Pre-commit (shell)
+
+| Check | When | Script |
+| :--- | :--- | :--- |
+| **Terraform fmt/validate/tflint** | Staged `.tf` / `.tfvars` | `run_terraform_hooks.sh` (global) |
+| **SPVS** (Checkov, Shellcheck, Actionlint, Bandit) | Staged paths under `actions/`, `workflows/`, `policies/`, etc. | `pre_commit_spvs_wrapper.sh` |
+
+Skip flags: `SPVS_HOOK_SKIP_CHECKOV=1`, `SPVS_HOOK_SKIP_TERRAFORM=1`.
+
+### Commit-msg (shell)
+
+| Check | Script |
+| :--- | :--- |
+| Ticket + conventional keyword | `policies/scripts/validate_commit_message.sh` |
+
+Runs on **every commit** in repos that ship `policies/scripts/validate_commit_message.sh`.
+
+---
+
+## Setup
+
+### One-time (per machine)
+
+```bash
+git config --global core.hooksPath ~/.git-global-compliance/hooks
+mkdir -p ~/.git-global-compliance/hooks
+```
+
+### Each clone
 
 ```bash
 bash policies/scripts/install_dev_hooks.sh
 source .env
 ```
 
-The installer:
-
-1. Creates `.venv/` (default) and installs `pre-commit`, `checkov`, `bandit`.
-2. Installs or caches **shellcheck**, **actionlint**, and **yq** (unless skipped).
-3. Writes **`.env`** with `PATH` and SPVS variables.
-4. Updates **global** `core.hooksPath` hooks for repos that contain `policies/scripts/`.
-
-### Install options
-
-| Option | Purpose |
-| :--- | :--- |
-| `--mode venv` | Use `.venv/` (default) |
-| `--mode pipx` | Install Python CLIs with pipx |
-| `--skip-system` | Skip shellcheck / actionlint / yq installation |
-| `--skip-hooks` | Tools and `.env` only; skip global hook install |
+Copies `policies/scripts/global_hooks/*` → global `core.hooksPath` (three shell scripts).
 
 ---
 
 ## Daily usage
 
-### 1. Load the environment
-
 ```bash
 source .env
+git commit -m "DCDT-1234 feat(terraform): add vpc module"
 ```
-
-### 2. Stage and commit
-
-```bash
-git add actions/common/semver/action.yml
-git commit -m "DCDT-1234 feat(release): add semver bump helper"
-```
-
-Valid subject examples:
-
-```text
-DCDT-1234 feat(scope): add hook
-SCTASK99: fix(janitor) correct path
-INC42: feat() add capability
-DCDT-1234 fix(): resolve null pointer
-```
-
-### 3. Fix failures and retry
-
-Read tool output, fix the issue, re-stage, and commit again.
 
 ---
 
-## Alternative hook setups
-
-### Repo-local hooks (`.githooks/`)
-
-Sample hooks ship in this repository:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-These apply **only to this clone** and source `.env` automatically when present.
-
-### pre-commit framework
+## Manual runs (shell)
 
 ```bash
 source .env
-pre-commit install --hook-type pre-commit --hook-type commit-msg
+bash policies/scripts/global_hooks/run_terraform_hooks.sh
+bash policies/scripts/pre_commit_spvs_wrapper.sh path/to/file.yml
+bash policies/scripts/validate_commit_message.sh /tmp/commit-msg.txt
+```
+
+Optional — same checks via pre-commit framework:
+
+```bash
 pre-commit run --all-files
-```
-
-Configuration: [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
-
----
-
-## Manual runs
-
-```bash
-source .env
-
-mapfile -d '' -t STAGED < <(git diff --cached --name-only -z --diff-filter=ACMR)
-bash policies/scripts/pre_commit_spvs_wrapper.sh "${STAGED[@]}"
-
-bash policies/scripts/validate_commit_message.sh /path/to/commit-msg-file
 ```
 
 ---
@@ -140,14 +108,9 @@ bash policies/scripts/validate_commit_message.sh /path/to/commit-msg-file
 
 | Variable | Default | Effect |
 | :--- | :--- | :--- |
-| `SPVS_HOOK_VERBOSE` | `0` | `1` = verbose output |
-| `SPVS_HOOK_SKIP_CHECKOV` | `0` | `1` = skip Checkov only |
-| `SPVS_REPO_ROOT` | set by `.env` | Repository root |
-
-```bash
-SPVS_HOOK_VERBOSE=1 git commit -m "DCDT-1234 chore: debug hook output"
-SPVS_HOOK_SKIP_CHECKOV=1 git commit -m "DCDT-1234 docs: update hook docs"
-```
+| `SPVS_HOOK_VERBOSE` | `0` | Verbose hook output |
+| `SPVS_HOOK_SKIP_CHECKOV` | `0` | Skip Checkov in SPVS |
+| `SPVS_HOOK_SKIP_TERRAFORM` | `0` | Skip Terraform shell hooks |
 
 ---
 
@@ -155,18 +118,9 @@ SPVS_HOOK_SKIP_CHECKOV=1 git commit -m "DCDT-1234 docs: update hook docs"
 
 | Symptom | Fix |
 | :--- | :--- |
-| `Global core.hooksPath is not set` | Configure global hooks path, re-run installer |
-| `Required command not found` | `source .env` from repo root |
-| Checkov fails on composite actions | Ensure **mikefarah/yq** is on PATH |
-| Commit message rejected | See [README — Commit format](../README.md#commit-message-format) |
-
-Verification:
-
-```bash
-source .env
-command -v pre-commit checkov bandit shellcheck actionlint yq
-bash policies/tests/run_tests.sh
-```
+| Commit-msg not validated | Re-run installer; ensure global `commit-msg` exists |
+| `terraform: command not found` | Install Terraform or skip with `SPVS_HOOK_SKIP_TERRAFORM=1` |
+| SPVS tools missing | `source .env` |
 
 ---
 

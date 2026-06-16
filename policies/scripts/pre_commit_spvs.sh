@@ -14,6 +14,8 @@ SPVS_HOOK_VERBOSE="${SPVS_HOOK_VERBOSE:-0}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=spvs_common_lib.sh
 source "${SCRIPT_DIR}/spvs_common_lib.sh"
+# shellcheck source=checkov_inline_skip_lib.sh
+source "${SCRIPT_DIR}/checkov_inline_skip_lib.sh"
 
 REPO_ROOT=""
 CHANGED_FILES=()
@@ -82,7 +84,7 @@ policies_changed() {
   local path
   for path in "${CHANGED_FILES[@]}"; do
     case "${path}" in
-      .checkov.yaml | policies/scripts/stage_component.sh | policies/scripts/stage_component.py)
+      .checkov.yaml | policies/scripts/stage_component.sh)
         return 0
         ;;
       policies/github_actions/*)
@@ -395,33 +397,14 @@ run_bandit() {
 
 # shellcheck disable=SC2329
 execute_checkov_on_dir() {
-  # INTENT: Run Checkov against an already-staged directory tree.
+  # INTENT: Run Checkov against an already-staged directory tree (inline skips honored).
   # INPUT: staging_root directory path.
   # OUTPUT: None.
   # SIDE_EFFECTS: runs checkov; exits 1 on findings.
   local staging_root="$1"
-  local -a checkov_args=()
 
   require_command checkov
-  mkdir -p "${REPO_ROOT}/.checkov.cache/ckv"
-  export CKV_CACHE_DIR="${REPO_ROOT}/.checkov.cache/ckv"
-  checkov_args=(
-    -d "${staging_root}"
-    --config-file "${REPO_ROOT}/.checkov.yaml"
-    --framework github_actions
-  )
-  if [[ "${SPVS_HOOK_VERBOSE}" != "1" ]]; then
-    checkov_args+=(--quiet --compact)
-  fi
-  if [[ "${SPVS_HOOK_VERBOSE}" == "1" ]]; then
-    checkov "${checkov_args[@]}"
-    return 0
-  fi
-  local checkov_output=""
-  if ! checkov_output="$(checkov "${checkov_args[@]}" 2>&1)"; then
-    printf '%s\n' "${checkov_output}" >&2
-    return 1
-  fi
+  spvs_run_checkov_with_inline_skips "${staging_root}" "${REPO_ROOT}" "${SPVS_HOOK_VERBOSE}"
 }
 
 # shellcheck disable=SC2329

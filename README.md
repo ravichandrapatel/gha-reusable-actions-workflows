@@ -65,7 +65,7 @@ graph TD
 
 ## Commit Message Format
 
-Every commit subject must start with a **ticket reference**, followed by a **Conventional Commit** keyword. This is enforced locally via the `commit-msg` pre-commit hook and drives **SemVer** in the Release Manager.
+Every commit subject must start with a **ticket reference**, followed by a **Conventional Commit** keyword. This is enforced locally via the global **`commit-msg` shell hook** (`validate_commit_message.sh`) and drives **SemVer** in the Release Manager.
 
 ### Ticket prefix (required)
 
@@ -148,7 +148,7 @@ flowchart TB
     R[.github/workflows/*.yml]
   end
   subgraph stage [Staging scripts]
-    S[stage_component.sh / stage_component.py]
+    S[stage_component.sh]
   end
   subgraph scan [Checkov]
     C[github_actions framework]
@@ -199,7 +199,7 @@ Each rule lives in [`policies/github_actions/`](policies/github_actions/). Below
 | **CKV2_SPVS_3** | [NoSetXtrace](policies/github_actions/NoSetXtrace.yaml) | No `set -x`, `set -o xtrace`, or xtrace in `run:` blocks. | Use structured logging (`echo "::notice::"`, prefixed helpers) instead of xtrace. |
 | **CKV2_SPVS_4** | [PythonUnbuffered](policies/github_actions/PythonUnbuffered.yaml) | Any step that invokes `python`/`python3` must use `-u` or `PYTHONUNBUFFERED=1`. | `python -u script.py` or step-level `env: PYTHONUNBUFFERED: "1"`. |
 | **CKV2_SPVS_5** | [PinActionsToSha](policies/github_actions/PinActionsToSha.yaml) | Third-party `uses:` refs must pin to a **40-character commit SHA**, use `./` same-repo paths, `docker://`, or approved **internal** `/actions/` tags. | `actions/checkout@<sha> # v6.0.2`; monorepo refs like `org/repo/actions/name@v1` per regex in policy. |
-| **CKV2_SPVS_5B** | [BlockParentPathLocalActions](policies/github_actions/BlockParentPathLocalActions.yaml) | Local action refs must not start with `../`. | Use `./.github/actions/name` or pinned remote refs; skip only with documented `checkov:skip=CKV2_SPVS_5B`. |
+| **CKV2_SPVS_5B** | [BlockParentPathLocalActions](policies/github_actions/BlockParentPathLocalActions.yaml) | Local action refs must not start with `../`. | Use `./.github/actions/name` or pinned remote refs; skip with `# checkov:skip=CKV2_SPVS_5,CKV2_SPVS_5B: reason` (both IDs — see note below). |
 | **CKV2_SPVS_6** | [InputsViaEnvNotRun](policies/github_actions/InputsViaEnvNotRun.yaml) | `${{ inputs.* }}` and `${{ github.event.inputs.* }}` must not appear inside `run:` strings. | Map to `env:` (e.g. `INPUT_FOO: ${{ inputs.foo }}`) and reference `"${INPUT_FOO}"` in shell. |
 | **CKV2_SPVS_13** | [NoCurlPipeBash](policies/github_actions/NoCurlPipeBash.yaml) | No `curl\|bash`, `wget\|sh`, or `bash <(curl …)` installers. | Download to file, verify checksum, or use apt/brew/cached binaries (see `install_dev_hooks.sh`). |
 | **CKV2_SPVS_14** | [ContextExpressionsViaEnvNotRun](policies/github_actions/ContextExpressionsViaEnvNotRun.yaml) | `${{ github.* }}` and `${{ steps.* }}` must not appear inside `run:` strings. | Map context values to `env:` before the `run:` block (prevents injection and audit gaps). |
@@ -239,6 +239,21 @@ Custom `CKV2_SPVS_*` policies extend and specialize these rules for this monorep
 | **Operate** | Promote / rollback modes; stable `v1` tags; branch protection and GitHub App bypass documented in prerequisites |
 
 Repository and branch controls called out in [`.checkov.yaml`](.checkov.yaml) (PR reviews, signed commits, force-push blocks, CODEOWNERS) are **not** expressed in workflow YAML—they must be configured in GitHub settings.
+
+#### Inline policy skips (workflow YAML)
+
+Checkov **does not honor** `# checkov:skip=` comments for the `github_actions` framework when you run `checkov` directly. This repo applies skips via `policies/scripts/run_checkov_spvs.sh` (used by pre-commit hooks and Release Manager).
+
+```yaml
+uses: ../other-action  # checkov:skip=CKV2_SPVS_5,CKV2_SPVS_5B: monorepo layout; see readme.md
+```
+
+| Requirement | Detail |
+| :--- | :--- |
+| **Scan command** | `bash policies/scripts/run_checkov_spvs.sh --staging-root "$STAGING" --repo-root "$(pwd)"` — not raw `checkov` |
+| **Tooling** | Requires **yq** (`bash policies/scripts/install_dev_hooks.sh`) |
+| **Multiple checks** | List every check ID that fires on that line, comma-separated |
+| **Justification** | Document the reason in the component `readme.md` |
 
 ---
 
