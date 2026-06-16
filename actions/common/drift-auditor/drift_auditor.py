@@ -293,7 +293,7 @@ def _run_plan_worker(
 
     try:
         # list args, terraform from PATH in CI
-        r = subprocess.run(  # nosec B603 B607
+        r = subprocess.run(  # nosec B603
             init_cmd,
             cwd=cwd,
             env=env,
@@ -326,7 +326,7 @@ def _run_plan_worker(
             f"-var-file={var_file_relative_to_worker}",
         ]
         # list args, terraform from PATH in CI
-        r = subprocess.run(  # nosec B603 B607
+        r = subprocess.run(  # nosec B603
             plan_cmd,
             cwd=cwd,
             env=env,
@@ -393,7 +393,7 @@ def get_backend_workspaces(
         init_cmd.extend(["-backend-config", backend_config_path])
     try:
         # list args, terraform from PATH in CI
-        subprocess.run(init_cmd, cwd=worker_dir, env=env, capture_output=True, timeout=init_timeout, check=False)  # nosec B603 B607
+        subprocess.run(init_cmd, cwd=worker_dir, env=env, capture_output=True, timeout=init_timeout, check=False)  # nosec B603
         r = subprocess.run(  # nosec B603 B607
             ["terraform", "workspace", "list"],
             cwd=worker_dir,

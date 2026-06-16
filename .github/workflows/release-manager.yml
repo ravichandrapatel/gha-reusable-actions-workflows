@@ -224,7 +224,7 @@ jobs:
           set -euo pipefail
           # [T-04] Installing security tools (SPVS Build Environment Protection)
           echo "[DBG-013] Installing Bandit, Checkov, and Shellcheck"
-          pip install --no-cache-dir bandit==1.8.2 checkov==3.2.529
+          pip install --no-cache-dir bandit==1.9.4 checkov==3.3.1
           
           echo "[DBG-014] Updating apt and installing Shellcheck"
           sudo apt-get install -y shellcheck
@@ -417,7 +417,7 @@ jobs:
 
             # [T-11a] Refresh and commit .checkov.cache on promote (gitignored locally; force-added here).
             echo "[DBG-033c] Refreshing Checkov cache for promotion"
-            pip install --no-cache-dir checkov==3.2.529
+            pip install --no-cache-dir checkov==3.3.1
             bash policies/scripts/update_checkov_cache.sh \
               --component-path "$COMPONENT_PATH" \
               --include-repo-workflows

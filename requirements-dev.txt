@@ -2,5 +2,5 @@
 # pip: pre-commit, checkov, bandit
 # System (apt/brew): shellcheck, actionlint, yq, terraform, tflint
 pre-commit>=3.5.0
-checkov==3.2.529
-bandit==1.8.2
+checkov==3.3.1
+bandit==1.9.4

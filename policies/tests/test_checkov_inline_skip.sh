@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # =============================================================================
 # FILE_NAME: test_checkov_inline_skip.sh
 # DESCRIPTION: Unit tests for checkov_inline_skip_lib.sh inline skip matching.

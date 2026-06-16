@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # =============================================================================
 # FILE_NAME: test_pre_commit_spvs.sh
 # DESCRIPTION: Unit tests for pre_commit_spvs.sh helper functions.
@@ -51,6 +52,7 @@ if component_yaml_changed "actions/common/semver"; then
   exit 1
 fi
 
+# shellcheck disable=SC2034
 CHANGED_FILES=(".github/workflows/release-manager.yml")
 if repo_workflows_changed; then
   : "repo_workflows_changed ok"

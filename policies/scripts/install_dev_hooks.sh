@@ -319,8 +319,8 @@ install_python_pipx() {
 
   _log "[DBG-013] Installing Python tools with pipx"
   pipx install --force "pre-commit>=3.5.0"
-  pipx install --force "checkov==3.2.529"
-  pipx install --force "bandit==1.8.2"
+  pipx install --force "checkov==3.3.1"
+  pipx install --force "bandit==1.9.4"
 
   if [[ -d "${PIPX_BIN}" ]]; then
     export PATH="${PIPX_BIN}:${PATH}"

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # =============================================================================
 # FILE_NAME: test_commit_message_lib.sh
 # DESCRIPTION: Unit tests for commit_message_lib.sh validation and semver mapping.
