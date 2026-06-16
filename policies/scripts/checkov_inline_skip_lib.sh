@@ -115,13 +115,15 @@ spvs_filter_checkov_json() {
 
 # shellcheck disable=SC2329
 spvs_print_checkov_failures() {
-  # INTENT: Print human-readable Checkov failures excluding inline-skipped checks.
-  # INPUT: path to Checkov JSON output file.
+  # INTENT: Print compact Checkov failures (matches checkov --quiet --compact).
+  # INPUT: path to Checkov JSON; optional verbose flag (0|1).
   # OUTPUT: failure details on stdout.
   # SIDE_EFFECTS: none.
   local json_file="$1"
+  local verbose="${2:-0}"
   local failure_count=""
   local index=""
+  local unsuppressed=0
   local check_id=""
   local check_name=""
   local resource=""
@@ -139,6 +141,17 @@ spvs_print_checkov_failures() {
     if spvs_checkov_failure_suppressed "${json_file}" "${index}"; then
       continue
     fi
+    unsuppressed=$((unsuppressed + 1))
+  done
+
+  printf 'Passed checks: %s, Failed checks: %s, Skipped checks: 0\n\n' \
+    "$(yq -r '.summary.passed // "?"' "${json_file}")" \
+    "${unsuppressed}"
+
+  for ((index = 0; index < failure_count; index++)); do
+    if spvs_checkov_failure_suppressed "${json_file}" "${index}"; then
+      continue
+    fi
 
     check_id="$(yq -r ".results.failed_checks[${index}].check_id" "${json_file}")"
     check_name="$(yq -r ".results.failed_checks[${index}].check_name" "${json_file}")"
@@ -148,20 +161,22 @@ spvs_print_checkov_failures() {
     end_line="$(yq -r ".results.failed_checks[${index}].file_line_range[1]" "${json_file}")"
     guide="$(yq -r ".results.failed_checks[${index}].guideline // \"\"" "${json_file}")"
 
-    printf '\nCheck: %s: "%s"\n' "${check_id}" "${check_name}"
+    printf 'Check: %s: "%s"\n' "${check_id}" "${check_name}"
     printf '\tFAILED for resource: %s\n' "${resource}"
     printf '\tFile: %s:%s-%s\n' "${file_path}" "${start_line}" "${end_line}"
     if [[ -n "${guide}" ]] && [[ "${guide}" != "null" ]]; then
       printf '\tGuide: %s\n' "${guide}"
     fi
 
-    block_len="$(yq ".results.failed_checks[${index}].code_block | length" "${json_file}")"
-    for ((block_idx = 0; block_idx < block_len; block_idx++)); do
-      line_no="$(yq -r ".results.failed_checks[${index}].code_block[${block_idx}][0]" "${json_file}")"
-      line_text="$(yq -r ".results.failed_checks[${index}].code_block[${block_idx}][1]" "${json_file}")"
-      printf '\t\t%s | %s' "${line_no}" "${line_text}"
-    done
-    printf '\n'
+    if [[ "${verbose}" == "1" ]]; then
+      block_len="$(yq ".results.failed_checks[${index}].code_block | length" "${json_file}")"
+      for ((block_idx = 0; block_idx < block_len; block_idx++)); do
+        line_no="$(yq -r ".results.failed_checks[${index}].code_block[${block_idx}][0]" "${json_file}")"
+        line_text="$(yq -r ".results.failed_checks[${index}].code_block[${block_idx}][1]" "${json_file}")"
+        printf '\t\t%s | %s' "${line_no}" "${line_text}"
+      done
+      printf '\n'
+    fi
   done
 }
 
@@ -210,9 +225,8 @@ spvs_run_checkov_with_inline_skips() {
   fi
 
   {
-    spvs_print_checkov_failures "${json_file}"
-    printf '\nPassed checks: %s, Failed checks (after inline skips): see above\n' \
-      "$(yq -r '.summary.passed // "?"' "${json_file}")"
+    printf 'github_actions scan results:\n\n'
+    spvs_print_checkov_failures "${json_file}" "${verbose}"
   } >&2
   rm -f "${json_file}"
   return 1
