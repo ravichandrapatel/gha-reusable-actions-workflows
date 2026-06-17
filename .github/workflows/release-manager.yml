@@ -279,17 +279,33 @@ jobs:
       - name: Run SPVS GitHub Actions scan
         env:
           COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+          COMPONENT_TYPE: ${{ needs.validate.outputs.component_type }}
+          WF_FILE: ${{ needs.validate.outputs.workflow_file }}
         run: |
           set -euo pipefail
-          # [T-06] Running Conftest SPVS scan (CKV2_SPVS_* + CKV_GHA_*)
+          # [T-06] Running Conftest SPVS scan on the release component only (CKV2_SPVS_* + CKV_GHA_*)
           echo "[DBG-019] SPVS scan for component: $COMPONENT_PATH"
-          scan_args=(-d "$COMPONENT_PATH" -d ".github/workflows" -d ".github/actions")
-          if [[ "$COMPONENT_PATH" == actions/* ]]; then
-            scan_args=(-d "actions" -d ".github/actions" -d ".github/workflows")
-          elif [[ "$COMPONENT_PATH" == workflows/* ]]; then
-            scan_args=(-d "workflows" -d ".github/workflows")
+          if [[ "$COMPONENT_TYPE" == "action" ]]; then
+            scan_file=""
+            for candidate in action.yml action.yaml; do
+              if [[ -f "$COMPONENT_PATH/$candidate" ]]; then
+                scan_file="$COMPONENT_PATH/$candidate"
+                break
+              fi
+            done
+            if [[ -z "$scan_file" ]]; then
+              echo "[ERR-T-06] No action.yml or action.yaml in $COMPONENT_PATH" >&2
+              exit 1
+            fi
+          else
+            scan_file="$COMPONENT_PATH/$WF_FILE"
+            if [[ ! -f "$scan_file" ]]; then
+              echo "[ERR-T-06] Workflow file not found: $scan_file" >&2
+              exit 1
+            fi
           fi
-          bash policies/scripts/conftest-gha.sh "${scan_args[@]}"
+          echo "[DBG-019a] Scanning component file: $scan_file"
+          bash policies/scripts/conftest-gha.sh -f "$scan_file"
           echo "[DBG-020] SPVS GitHub Actions scan completed successfully"
 
       - name: Run Bandit

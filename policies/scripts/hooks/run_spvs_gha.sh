@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: run_spvs_gha.sh
 # DESCRIPTION: Pre-commit hook — Conftest SPVS scan on changed GHA paths.
-# VERSION: 2.0.0
+# VERSION: 2.1.0
 # EXIT_CODES/SIGNALS: 0 pass, 1 findings, 2 environment error
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -24,37 +24,42 @@ if ! command -v "${CONFTEST_BIN}" &>/dev/null; then
 fi
 
 declare -A scan_dirs=()
+declare -a scan_files=()
+
 for file in "$@"; do
     case "${file}" in
-        actions/*/*/* | actions/*/*)
-            scan_dirs["actions"]=1
-            ;;
-        workflows/*/*/* | workflows/*/*)
-            scan_dirs["workflows"]=1
-            ;;
-        .github/workflows/*)
-            scan_dirs[".github/workflows"]=1
-            ;;
-        .github/actions/*)
-            scan_dirs[".github/actions"]=1
-            ;;
         policies/conftest/*)
             scan_dirs["actions"]=1
             scan_dirs["workflows"]=1
             scan_dirs[".github/workflows"]=1
             scan_dirs[".github/actions"]=1
             ;;
+        actions/*/*/action.yml | actions/*/*/action.yaml)
+            scan_files+=("${file}")
+            ;;
+        workflows/*/*/workflow.yml | workflows/*/*/workflow.yaml)
+            scan_files+=("${file}")
+            ;;
+        .github/workflows/*.yml | .github/workflows/*.yaml)
+            scan_files+=("${file}")
+            ;;
+        .github/actions/*/action.yml | .github/actions/*/action.yaml)
+            scan_files+=("${file}")
+            ;;
     esac
 done
-
-if [[ ${#scan_dirs[@]} -eq 0 ]]; then
-    exit 0
-fi
 
 args=()
 for dir in "${!scan_dirs[@]}"; do
     args+=(-d "${dir}")
 done
+for file in "${scan_files[@]}"; do
+    args+=(-f "${file}")
+done
+
+if [[ ${#args[@]} -eq 0 ]]; then
+    exit 0
+fi
 
 export CONFTEST_BIN
 exec bash "${repo_root}/policies/scripts/conftest-gha.sh" "${args[@]}"

@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: conftest-gha.sh
 # DESCRIPTION: Conftest scanner for GHA workflows/composite actions with inline skips.
-# VERSION: 1.2.0
+# VERSION: 1.3.0
 # EXIT_CODES/SIGNALS: 0 pass, 1 policy failure, 2 usage/tool error
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -10,6 +10,7 @@
 # Usage:
 #   bash policies/scripts/conftest-gha.sh
 #   bash policies/scripts/conftest-gha.sh -d actions -d workflows
+#   bash policies/scripts/conftest-gha.sh -f workflows/common/dummy-workflow/workflow.yml
 #
 # Inline skips (YAML comments — parsed here; Rego never sees comments):
 #   # spvs:skip=CKV2_SPVS_5,CKV2_SPVS_5B: documented reason
@@ -234,11 +235,14 @@ print(item.get('failures', [])[int(sys.argv[3])].get('msg', ''))
 
 conftest_gha_usage() {
   cat <<EOF
-Usage: bash policies/scripts/conftest-gha.sh [-d DIR]...
+Usage: bash policies/scripts/conftest-gha.sh [-d DIR]... [-f FILE]...
 
 Runs Conftest Rego policies on:
   actions/*/*/action.yml, workflows/*/*/workflow.yml,
   .github/workflows/*.yml, .github/actions/**/action.yml
+
+  -d DIR   Discover scannable YAML under DIR (repeatable)
+  -f FILE  Scan one file exactly (repeatable; use for Release Manager component scans)
 
 Inline policy skips in YAML (honored by this script):
   # spvs:skip=CKV2_SPVS_5,CKV2_SPVS_5B: reason
@@ -247,6 +251,43 @@ Inline policy skips in YAML (honored by this script):
 Environment:
   CONFTEST_BIN  Path to conftest (default: conftest)
 EOF
+}
+
+# INTENT: Classify and queue one scannable file for Conftest.
+# INPUT: repo_root; absolute or relative file path.
+# OUTPUT: return 0 when queued, 1 when skipped (not scannable), 2 on missing file.
+# SIDE_EFFECTS: appends to workflow_files or composite_files arrays in caller scope.
+conftest_gha_queue_file() {
+  local repo_root="$1"
+  local file="$2"
+  local abs=""
+  local rel=""
+
+  if [[ ! -f "${file}" ]]; then
+    printf '%s ERROR: file not found: %s\n' "${PROJECT_PREFIX}" "${file}" >&2
+    return 2
+  fi
+
+  abs="$(cd "$(dirname "${file}")" && pwd)/$(basename "${file}")"
+  rel="${abs#"${repo_root}/"}"
+  if [[ "${rel}" == "${abs}" ]]; then
+    rel="${file#./}"
+  fi
+
+  if ! conftest_gha_is_scannable "${rel}"; then
+    printf '%s WARN: skipping non-scannable path: %s\n' "${PROJECT_PREFIX}" "${rel}" >&2
+    return 1
+  fi
+
+  case "${rel}" in
+    */action.yml | */action.yaml)
+      composite_files+=("${abs}")
+      ;;
+    *)
+      workflow_files+=("${abs}")
+      ;;
+  esac
+  return 0
 }
 
 conftest_gha_is_scannable() {
@@ -296,6 +337,7 @@ conftest_gha_main() {
   local policy_composite=""
   local -a default_roots=(actions workflows .github/workflows .github/actions)
   local -a scan_roots=()
+  local -a explicit_files=()
   local -a workflow_files=()
   local -a composite_files=()
   local root=""
@@ -315,6 +357,10 @@ conftest_gha_main() {
         scan_roots+=("${2:-}")
         shift 2
         ;;
+      -f | --file)
+        explicit_files+=("${2:-}")
+        shift 2
+        ;;
       -h | --help)
         conftest_gha_usage
         return 0
@@ -327,7 +373,7 @@ conftest_gha_main() {
     esac
   done
 
-  if [[ ${#scan_roots[@]} -eq 0 ]]; then
+  if [[ ${#scan_roots[@]} -eq 0 && ${#explicit_files[@]} -eq 0 ]]; then
     scan_roots=("${default_roots[@]}")
   fi
 
@@ -341,25 +387,27 @@ conftest_gha_main() {
     return 2
   fi
 
+  for file in "${explicit_files[@]}"; do
+    conftest_gha_queue_file "${repo_root}" "${file}" || {
+      rc=$?
+      if [[ "${rc}" -eq 2 ]]; then
+        return 2
+      fi
+    }
+  done
+
   for root in "${scan_roots[@]}"; do
     [[ -d "${root}" ]] || continue
     while IFS= read -r -d '' file; do
-      rel="${file#"${repo_root}"/}"
-      if ! conftest_gha_is_scannable "${rel}"; then
-        continue
-      fi
-      case "${rel}" in
-        */action.yml | */action.yaml)
-          composite_files+=("${file}")
-          ;;
-        *)
-          workflow_files+=("${file}")
-          ;;
-      esac
+      conftest_gha_queue_file "${repo_root}" "${file}" || true
     done < <(find "${root}" -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 2>/dev/null)
   done
 
   if [[ ${#workflow_files[@]} -eq 0 && ${#composite_files[@]} -eq 0 ]]; then
+    if [[ ${#explicit_files[@]} -gt 0 ]]; then
+      echo "${PROJECT_PREFIX} ERROR: no scannable GHA files in: ${explicit_files[*]}" >&2
+      return 2
+    fi
     echo "${PROJECT_PREFIX} No scannable GHA files under: ${scan_roots[*]}" >&2
     return 0
   fi
