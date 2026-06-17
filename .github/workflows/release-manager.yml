@@ -223,8 +223,8 @@ jobs:
         run: |
           set -euo pipefail
           # [T-04] Installing security tools (SPVS Build Environment Protection)
-          echo "[DBG-013] Installing Bandit, Checkov, and Shellcheck"
-          pip install --no-cache-dir bandit==1.9.4 checkov==3.3.1
+          echo "[DBG-013] Installing Bandit and Shellcheck"
+          pip install --no-cache-dir bandit==1.9.4
           
           echo "[DBG-014] Updating apt and installing Shellcheck"
           sudo apt-get install -y shellcheck
@@ -240,22 +240,19 @@ jobs:
           sudo install -m 755 actionlint /usr/local/bin/actionlint
           rm -f "${ACTIONLINT_ARCHIVE}" actionlint
           
-          echo "[DBG-016] Installing yq (mikefarah/yq v4) for stage_component.sh"
-          YQ_VERSION="4.44.5"
-          YQ_SHA256="cc9ee4d476717d2b90e4f20cf2bf31f9d6bfba830227960f6e0401db74270311"
-          curl -fsSL -o yq_linux_amd64.tar.gz \
-            "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64.tar.gz"
-          echo "${YQ_SHA256}  yq_linux_amd64.tar.gz" | sha256sum -c -
-          tar xzf yq_linux_amd64.tar.gz
-          sudo install -m 755 yq_linux_amd64 /usr/local/bin/yq
-          rm -f yq_linux_amd64.tar.gz yq_linux_amd64
+          echo "[DBG-016] Installing Conftest (pinned release)"
+          CONFTEST_VERSION="0.56.0"
+          curl -fsSL -o conftest.tar.gz \
+            "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
+          tar xzf conftest.tar.gz conftest
+          sudo install -m 755 conftest /usr/local/bin/conftest
+          rm -f conftest.tar.gz conftest
           
           echo "[DBG-016a] Verifying tool installations"
           bandit --version
-          checkov --version
+          conftest --version
           shellcheck --version
           actionlint --version
-          yq --version
           
           echo "[DBG-016b] Tool verification complete"
 
@@ -270,8 +267,8 @@ jobs:
           echo "[DBG-017] Starting Actionlint for $COMPONENT_TYPE at $COMPONENT_PATH"
           if [[ "$COMPONENT_TYPE" == "action" ]]; then
             # [DBG-017a] Skipping actionlint for actions (actionlint primarily targets workflows)
-            # Checkov and Shellcheck will cover action security.
-            echo "[DBG-017a] Action detected, skipping actionlint (covered by Checkov)"
+            # Conftest and Shellcheck cover composite action security.
+            echo "[DBG-017a] Action detected, skipping actionlint (covered by Conftest)"
           else
             # [DBG-017b] Running actionlint for workflow
             echo "[DBG-017b] Running actionlint on $COMPONENT_PATH/$WF_FILE"
@@ -279,25 +276,21 @@ jobs:
           fi
           echo "[DBG-018] Actionlint completed successfully"
 
-      - name: Run Checkov
+      - name: Run SPVS GitHub Actions scan
         env:
           COMPONENT_PATH: ${{ github.event.inputs.component_path }}
         run: |
           set -euo pipefail
-          # [T-06] Running checkov with OWASP SPVS YAML policies
-          echo "[DBG-019] Staging component for Checkov: $COMPONENT_PATH"
-          bash policies/scripts/stage_component.sh \
-            --component-path "$COMPONENT_PATH" \
-            --staging-root ".checkov-staging" \
-            --include-repo-workflows >/dev/null
-          echo "[DBG-019a] Running Checkov (github_actions + CKV2_SPVS_* YAML policies)"
-          mkdir -p .checkov.cache/ckv
-          CKV_CACHE_DIR="$(pwd)/.checkov.cache/ckv"
-          export CKV_CACHE_DIR
-          bash policies/scripts/run_checkov_spvs.sh \
-            --staging-root ".checkov-staging" \
-            --repo-root "$(pwd)"
-          echo "[DBG-020] Checkov scan completed successfully"
+          # [T-06] Running Conftest SPVS scan (CKV2_SPVS_* + CKV_GHA_*)
+          echo "[DBG-019] SPVS scan for component: $COMPONENT_PATH"
+          scan_args=(-d "$COMPONENT_PATH" -d ".github/workflows" -d ".github/actions")
+          if [[ "$COMPONENT_PATH" == actions/* ]]; then
+            scan_args=(-d "actions" -d ".github/actions" -d ".github/workflows")
+          elif [[ "$COMPONENT_PATH" == workflows/* ]]; then
+            scan_args=(-d "workflows" -d ".github/workflows")
+          fi
+          bash policies/scripts/conftest-gha.sh "${scan_args[@]}"
+          echo "[DBG-020] SPVS GitHub Actions scan completed successfully"
 
       - name: Run Bandit
         env:
@@ -414,25 +407,6 @@ jobs:
             
           elif [[ "$MODE" == "promote" ]]; then
             echo "[DBG-033] Starting promotion of $VERSION_TAG to $STABLE_TAG"
-
-            # [T-11a] Refresh and commit .checkov.cache on promote (gitignored locally; force-added here).
-            echo "[DBG-033c] Refreshing Checkov cache for promotion"
-            pip install --no-cache-dir checkov==3.3.1
-            bash policies/scripts/update_checkov_cache.sh \
-              --component-path "$COMPONENT_PATH" \
-              --include-repo-workflows
-            if git status --porcelain .checkov.cache | grep -q .; then
-              git add -f .checkov.cache
-              if git diff --cached --quiet; then
-                echo "[DBG-033d] Checkov cache unchanged after staging; skipping commit"
-              else
-                git commit -m "chore(checkov): refresh cache on promote ${VERSION_TAG}"
-                git push origin main
-                echo "[DBG-033e] Pushed refreshed .checkov.cache to main"
-              fi
-            else
-              echo "[DBG-033d] Checkov cache unchanged; skipping commit"
-            fi
             
             # [T-11] Promoting to stable tag: "$STABLE_TAG" (Point to versioned tag commit)
             echo "[DBG-033a] Updating stable tag $STABLE_TAG to point to $VERSION_TAG"

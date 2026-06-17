@@ -2,7 +2,7 @@
 
 > **Part III — Local development**
 
-This chapter describes how to run **unit tests**, **hook/security scans**, and **Checkov staging** locally before opening a PR or triggering Release Manager.
+This chapter describes how to run **unit tests**, **Conftest SPVS scans**, and **pre-commit hooks** locally before opening a PR or triggering Release Manager.
 
 For Release Manager E2E verification, see [Chapter 5 — Release checklist](05-release-checklist.md).
 
@@ -11,8 +11,7 @@ For Release Manager E2E verification, see [Chapter 5 — Release checklist](05-r
 ## Quick start
 
 ```bash
-bash policies/scripts/install_dev_hooks.sh
-source .env
+bash policies/scripts/install_hooks.sh
 bash policies/tests/run_tests.sh
 pre-commit run --all-files
 ```
@@ -29,17 +28,18 @@ bash policies/tests/run_tests.sh
 
 | Script | Covers |
 | :--- | :--- |
-| `test_pre_commit_spvs.sh` | Path resolution, policy-change detection, YAML/repo workflow detection |
+| `run_tests.sh` | `conftest verify` (workflow + composite), full repo scan, inline skip tests |
+| `test_conftest_inline_skip.sh` | `# spvs:skip=` / `# checkov:skip=` post-filtering |
 | `test_commit_message_lib.sh` | Ticket validation, commit formats, SemVer classification |
 
 Individual suites:
 
 ```bash
+bash policies/tests/test_conftest_inline_skip.sh
 bash policies/tests/test_commit_message_lib.sh
-bash policies/tests/test_pre_commit_spvs.sh
 ```
 
-Unit tests do **not** run Checkov, Actionlint, Bandit, or Shellcheck against project files.
+Unit tests do **not** run Actionlint, Bandit, or Shellcheck against project files (those run via pre-commit).
 
 ---
 
@@ -48,8 +48,8 @@ Unit tests do **not** run Checkov, Actionlint, Bandit, or Shellcheck against pro
 ### Prerequisites
 
 ```bash
-source .env
-command -v pre-commit checkov bandit shellcheck actionlint yq
+bash policies/scripts/install_hooks.sh
+command -v pre-commit conftest bandit shellcheck actionlint
 ```
 
 ### Option A — pre-commit framework
@@ -58,67 +58,51 @@ command -v pre-commit checkov bandit shellcheck actionlint yq
 pre-commit run --all-files
 ```
 
-### Option B — invoke scripts directly
+Hooks (from [`.pre-commit-config.yaml`](../.pre-commit-config.yaml)):
+
+| Hook | Entry |
+| :--- | :--- |
+| Shellcheck | `shellcheck` |
+| Bandit | `bandit` |
+| Actionlint | `policies/scripts/hooks/run_actionlint.sh` |
+| SPVS GHA | `policies/scripts/hooks/run_spvs_gha.sh` → `conftest-gha.sh` |
+
+### Option B — invoke Conftest directly
+
+Full repository scan (default roots):
 
 ```bash
-mapfile -d '' -t STAGED < <(git diff --cached --name-only -z --diff-filter=ACMR)
-bash policies/scripts/pre_commit_spvs_wrapper.sh "${STAGED[@]}"
-
-SPVS_HOOK_VERBOSE=1 bash policies/scripts/pre_commit_spvs_wrapper.sh policies/scripts/pre_commit_spvs.sh
-SPVS_HOOK_SKIP_CHECKOV=1 bash policies/scripts/pre_commit_spvs_wrapper.sh policies/scripts/stage_component.sh
+bash policies/scripts/conftest-gha.sh
 ```
 
-### Option C — real commit
+Scan specific paths:
 
 ```bash
-git commit -m "DCDT-1234 test(hooks): verify local hook pipeline"
+bash policies/scripts/conftest-gha.sh -d actions/common/semver -d workflows/common/dummy-workflow
+```
+
+Low-level Conftest (requires correct namespace):
+
+```bash
+conftest test --parser yaml -n workflow \
+  -p policies/conftest/github_actions/workflow \
+  workflows/common/dummy-workflow/workflow.yml
+
+conftest test --parser yaml -n composite \
+  -p policies/conftest/github_actions/composite \
+  actions/common/semver/action.yml
+```
+
+Policy Rego: `policies/conftest/github_actions/{workflow,composite}/`.
+
+### Option C — policy unit tests only
+
+```bash
+conftest verify -p policies/conftest/github_actions/workflow
+conftest verify -p policies/conftest/github_actions/composite
 ```
 
 See [Chapter 3 — Git hooks](03-dev-hooks.md) for installation.
-
----
-
-## Checkov staging and cache
-
-### Stage a component (shell)
-
-```bash
-STAGING=$(mktemp -d)
-bash policies/scripts/stage_component.sh \
-  --component-path actions/common/semver \
-  --staging-root "${STAGING}"
-```
-
-With repo workflows:
-
-```bash
-bash policies/scripts/stage_component.sh \
-  --component-path actions/common/semver \
-  --staging-root "${STAGING}" \
-  --include-repo-workflows
-```
-
-### Run Checkov manually
-
-```bash
-source .env
-export CKV_CACHE_DIR="${PWD}/.checkov.cache/ckv"
-mkdir -p "${CKV_CACHE_DIR}"
-
-checkov -d "${STAGING}" \
-  --config-file .checkov.yaml \
-  --framework github_actions
-```
-
-Policies: `policies/github_actions/*.yaml`. Config: [`.checkov.yaml`](../.checkov.yaml).
-
-### Refresh Checkov cache
-
-```bash
-bash policies/scripts/update_checkov_cache.sh \
-  --component-path actions/common/semver \
-  --include-repo-workflows
-```
 
 ---
 
@@ -127,9 +111,9 @@ bash policies/scripts/update_checkov_cache.sh \
 | You changed… | Run |
 | :--- | :--- |
 | `commit_message_lib.sh` | `test_commit_message_lib.sh` |
-| `pre_commit_spvs.sh`, staging scripts | `run_tests.sh` + hook scan |
-| `actions/*` or `workflows/*` YAML | `pre-commit run --all-files` |
-| `policies/github_actions/*` or `.checkov.yaml` | Full rescan (`pre-commit run --all-files`) |
+| `conftest-gha.sh`, Rego policies | `run_tests.sh` |
+| `actions/*` or `workflows/*` YAML | `pre-commit run --all-files` or `conftest-gha.sh -d …` |
+| `policies/conftest/*` | Full rescan (`pre-commit run --all-files`) |
 | Release Manager behavior | [Chapter 5](05-release-checklist.md) |
 
 ---
@@ -138,7 +122,7 @@ bash policies/scripts/update_checkov_cache.sh \
 
 Local hooks approximate Release Manager **Stage 2: Security**:
 
-- **Local:** changed paths only (unless policies/config changed).
+- **Local:** changed paths only (unless `policies/conftest/` changed).
 - **Release:** full security job on selected component (`mode: release`).
 - **Promote:** skips scans (assumes release passed).
 
@@ -149,8 +133,8 @@ Local hooks approximate Release Manager **Stage 2: Security**:
 | Failure | Action |
 | :--- | :--- |
 | Unit test `FAIL` | Check [commit format](../README.md#commit-message-format) |
-| `Required command not found` | `source .env`; re-run installer |
-| Checkov `CKV2_SPVS_*` | See [README policies](../README.md#security-policies-spvs--checkov) |
+| `conftest not found` | `bash policies/scripts/install_hooks.sh` |
+| Conftest `CKV2_SPVS_*` / `CKV_GHA_*` | See [README policies](../README.md#security-policies-spvs--conftest) |
 | Actionlint / Bandit / Shellcheck | Fix reported file; re-run hook |
 
 Hook install issues: [Chapter 3](03-dev-hooks.md).

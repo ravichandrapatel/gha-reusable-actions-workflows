@@ -7,7 +7,7 @@
 # =============================================================================
 
 name: 'Git Path Filter'
-description: 'Detects file changes between two refs (YAML glob groups, ** and ! last-match-wins); ref-agnostic, pull_request and push'
+description: 'Detects files changes between two refs (YAML glob groups, ** and ! last-match-wins); ref-agnostic, pull_request and push'
 inputs:
   source_branch:
     description: 'Source/head ref (branch, tag, or SHA; e.g. github.head_ref or github.sha)'

@@ -40,7 +40,7 @@ Read **Part I → Part IV** in order if you are new to the repository. Use indiv
 | First-time setup | [Chapter 3 — Git hooks](03-dev-hooks.md) |
 | Add a new action | [Chapter 2 — Writing components](02-writing-components.md) |
 | Fix a failed pre-commit scan | [Chapter 4 — Testing](04-local-testing.md#troubleshooting-test-failures) |
-| Understand a Checkov policy | [README — Security policies](../README.md#security-policies-spvs--checkov) |
+| Understand a Conftest policy | [README — Security policies](../README.md#security-policies-spvs--conftest) |
 | Ship a release | [Chapter 5 — Release checklist](05-release-checklist.md) |
 
 ---
@@ -58,8 +58,8 @@ docs/                          ← You are here (developer guide)
 
 README.md (repo root)          ← Architecture, policies, SemVer, CI prerequisites
 policies/
-├── github_actions/            ← Checkov policy YAML (CKV2_SPVS_*)
-├── scripts/                   ← Hooks, staging, install
+├── conftest/github_actions/   ← Conftest Rego (workflow/, composite/)
+├── scripts/                   ← conftest-gha.sh, install_hooks.sh, hooks/
 └── tests/                     ← Shell unit tests
 actions/{category}/{name}/     ← Composite actions
 workflows/{category}/{name}/   ← Reusable workflows

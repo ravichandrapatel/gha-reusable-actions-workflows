@@ -2,7 +2,7 @@
 
 > **Part III — Local development**
 
-Global git hooks are **shell-only** scripts installed to your `core.hooksPath`. They do **not** invoke the Python `pre-commit run` driver on commit. Hook definitions in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) mirror the same shell entrypoints for optional manual runs.
+This repository uses the [pre-commit](https://pre-commit.com/) framework. Hook definitions live in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
 
 ---
 
@@ -10,51 +10,31 @@ Global git hooks are **shell-only** scripts installed to your `core.hooksPath`. 
 
 ```mermaid
 flowchart TB
-  subgraph global [Global ~/.git-global-compliance/hooks]
-    PC[pre-commit shell]
-    CM[commit-msg shell]
-    TF[run_terraform_hooks.sh]
+  subgraph install [Install]
+    IH[install_hooks.sh]
   end
-  subgraph repo [Each cloned repository]
-    ENV[.env + .venv tools]
-    SPVS[pre_commit_spvs_wrapper.sh]
-    VAL[validate_commit_message.sh]
+  subgraph hooks [pre-commit hooks]
+    SC[Shellcheck]
+    BD[Bandit]
+    AL[run_actionlint.sh]
+    SPVS[run_spvs_gha.sh]
   end
-  PC --> TF
-  PC --> SPVS
-  CM --> VAL
-  SPVS --> ENV
-  VAL --> ENV
+  subgraph scan [SPVS scan]
+    CG[conftest-gha.sh]
+    CF[Conftest Rego policies]
+  end
+  IH --> hooks
+  SPVS --> CG --> CF
 ```
 
-| Global script | Runs |
-| :--- | :--- |
-| `pre-commit` | Terraform shell checks → SPVS wrapper (if `policies/` exists) |
-| `commit-msg` | Strip Cursor trailer → **`validate_commit_message.sh`** |
-| `run_terraform_hooks.sh` | `terraform fmt -check`, `validate`, `tflint` on staged `.tf` |
-
-Do **not** run `pre-commit install` in the repo when using global hooks (avoids duplicate `.git/hooks` entries).
-
----
-
-## What runs on commit
-
-### Pre-commit (shell)
-
-| Check | When | Script |
+| Hook | When | Script |
 | :--- | :--- | :--- |
-| **Terraform fmt/validate/tflint** | Staged `.tf` / `.tfvars` | `run_terraform_hooks.sh` (global) |
-| **SPVS** (Checkov, Shellcheck, Actionlint, Bandit) | Staged paths under `actions/`, `workflows/`, `policies/`, etc. | `pre_commit_spvs_wrapper.sh` |
+| **Shellcheck** | Staged `*.sh` | `shellcheck` |
+| **Bandit** | Staged `*.py` | `bandit` |
+| **Actionlint** | Workflow YAML under `workflows/`, `.github/workflows/` | `policies/scripts/hooks/run_actionlint.sh` |
+| **SPVS GHA** | Changed paths under `actions/`, `workflows/`, `.github/`, `policies/conftest/` | `policies/scripts/hooks/run_spvs_gha.sh` |
 
-Skip flags: `SPVS_HOOK_SKIP_CHECKOV=1`, `SPVS_HOOK_SKIP_TERRAFORM=1`.
-
-### Commit-msg (shell)
-
-| Check | Script |
-| :--- | :--- |
-| Ticket + conventional keyword | `policies/scripts/validate_commit_message.sh` |
-
-Runs on **every commit** in repos that ship `policies/scripts/validate_commit_message.sh`.
+The SPVS hook calls [`conftest-gha.sh`](../policies/scripts/conftest-gha.sh), which scans workflow YAML with `-n workflow` and composite `action.yml` with `-n composite`.
 
 ---
 
@@ -63,43 +43,42 @@ Runs on **every commit** in repos that ship `policies/scripts/validate_commit_me
 ### One-time (per machine)
 
 ```bash
-git config --global core.hooksPath ~/.git-global-compliance/hooks
-mkdir -p ~/.git-global-compliance/hooks
+bash policies/scripts/install_hooks.sh
 ```
+
+Installs into `~/.venv/bin` (pre-commit, bandit) and `~/.local/bin` (conftest v0.56.0, actionlint).
 
 ### Each clone
 
 ```bash
-bash policies/scripts/install_dev_hooks.sh
-source .env
+pre-commit install
+pre-commit install --hook-type commit-msg   # if commit-msg hook is configured
 ```
-
-Copies `policies/scripts/global_hooks/*` → global `core.hooksPath` (three shell scripts).
 
 ---
 
 ## Daily usage
 
 ```bash
-source .env
-git commit -m "DCDT-1234 feat(terraform): add vpc module"
+git add .
+pre-commit run
+git commit -m "DCDT-1234 feat(scope): describe change"
+```
+
+Or run all hooks against the full tree:
+
+```bash
+pre-commit run --all-files
 ```
 
 ---
 
-## Manual runs (shell)
+## Manual runs
 
 ```bash
-source .env
-bash policies/scripts/global_hooks/run_terraform_hooks.sh
-bash policies/scripts/pre_commit_spvs_wrapper.sh path/to/file.yml
-bash policies/scripts/validate_commit_message.sh /tmp/commit-msg.txt
-```
-
-Optional — same checks via pre-commit framework:
-
-```bash
-pre-commit run --all-files
+bash policies/scripts/conftest-gha.sh
+bash policies/scripts/hooks/run_actionlint.sh workflows/common/dummy-workflow/workflow.yml
+bash policies/tests/run_tests.sh
 ```
 
 ---
@@ -108,9 +87,7 @@ pre-commit run --all-files
 
 | Variable | Default | Effect |
 | :--- | :--- | :--- |
-| `SPVS_HOOK_VERBOSE` | `0` | Verbose hook output |
-| `SPVS_HOOK_SKIP_CHECKOV` | `0` | Skip Checkov in SPVS |
-| `SPVS_HOOK_SKIP_TERRAFORM` | `0` | Skip Terraform shell hooks |
+| `CONFTEST_BIN` | `conftest` | Path to Conftest binary |
 
 ---
 
@@ -118,9 +95,9 @@ pre-commit run --all-files
 
 | Symptom | Fix |
 | :--- | :--- |
-| Commit-msg not validated | Re-run installer; ensure global `commit-msg` exists |
-| `terraform: command not found` | Install Terraform or skip with `SPVS_HOOK_SKIP_TERRAFORM=1` |
-| SPVS tools missing | `source .env` |
+| `conftest not found` | Re-run `bash policies/scripts/install_hooks.sh`; ensure `~/.local/bin` is on `PATH` |
+| SPVS findings on unchanged files | Policy change under `policies/conftest/` triggers full rescan — expected |
+| Actionlint fails on workflow | Fix syntax; see [Chapter 4](04-local-testing.md) |
 
 ---
 

@@ -4,7 +4,7 @@ DESCRIPTION: Path-filter between two Git refs: YAML groups with glob patterns (i
   "!" negation with last-match-wins. Outputs GITHUB_OUTPUT (has_changes, files, every_file_matches)
   and optional change-type filtering. Ref-agnostic; zero-SHA guard for new branches.
 VERSION: 2.0.0
-EXIT_CODES: 0 = success, 1 = error (config, git, or I/O)
+EXIT_CODES: 0 = success, 1 = error (config,  git, or I/O)
 AUTHORS: Platform / DevOps
 """
 

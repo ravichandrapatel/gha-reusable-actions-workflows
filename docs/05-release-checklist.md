@@ -4,7 +4,7 @@
 
 Use this checklist to verify the [Release Manager](../.github/workflows/release-manager.yml) workflow after merging component changes to `main`.
 
-Policy reference: [README — Security policies](../README.md#security-policies-spvs--checkov). Local scans: [Chapter 4 — Testing](04-local-testing.md).
+Policy reference: [README — Security policies](../README.md#security-policies-spvs--conftest). Local scans: [Chapter 4 — Testing](04-local-testing.md).
 
 ---
 
@@ -57,10 +57,9 @@ Trigger: Release Manager → `mode: rollback`.
 Run during Release Manager `mode: release` (security job) and locally via [Chapter 4](04-local-testing.md).
 
 - [ ] **Actionlint:** syntax error in workflow YAML fails the security job.
-- [ ] **Checkov:** SPVS policies (`CKV2_SPVS_*`) enforced via [`.checkov.yaml`](../.checkov.yaml) and `policies/github_actions/`.
-  - Actions scanned via **synthetic workflow** from composite steps.
-  - Workflows scanned via **direct copy** of `workflow.yml`.
-  - Stage locally: `bash policies/scripts/stage_component.sh --include-repo-workflows`.
+- [ ] **Conftest:** SPVS policies (`CKV2_SPVS_*`, `CKV_GHA_*`, `CKV2_GHA_1`) enforced via Rego under `policies/conftest/github_actions/`.
+  - Workflows scanned with `-n workflow`; composite actions with `-n composite`.
+  - Scan locally: `bash policies/scripts/conftest-gha.sh -d <component-path>`.
   - Full policy catalog: [README — Custom policies](../README.md#custom-policies-ckv2_spvs_1--ckv2_spvs_15).
 - [ ] **Bandit:** security issue in `.py` fails the security job.
 - [ ] **Shellcheck:** issue in `.sh` fails the security job.
@@ -74,7 +73,7 @@ Repository/branch controls (PR reviews, signed commits, force-push, CODEOWNERS) 
 | `actions/common/semver` | Passes all SPVS checks — `action.yml` + `readme.md` |
 | `workflows/common/dummy-workflow` | Passes all SPVS checks — `workflow.yml` + `readme.md` |
 
-Other components may have open remediation items; run Checkov locally before release.
+Other components may have open remediation items; run Conftest locally before release.
 
 ---
 

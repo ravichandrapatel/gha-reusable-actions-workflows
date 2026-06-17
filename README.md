@@ -105,13 +105,13 @@ Scope is optional in all patterns (`keyword:` and `keyword()` are valid).
 
 ## Repository structure
 
-Reusable components are organized so Release Manager, Checkov staging, and pre-commit hooks can resolve paths consistently.
+Reusable components are organized so Release Manager, Conftest scans, and pre-commit hooks can resolve paths consistently.
 
 | Path | Type | Required files |
 | :--- | :--- | :--- |
 | `actions/{category}/{name}/` | Composite GitHub Action | `action.yml` (or `action.yaml`), **`readme.md`**, optional `.sh` / `.py` helpers |
 | `workflows/{category}/{name}/` | Reusable workflow | **One** `workflow.yml` (or `.yaml`), **`readme.md`** |
-| `policies/github_actions/` | Checkov custom policies | One YAML file per rule (`CKV2_SPVS_*`) |
+| `policies/conftest/github_actions/` | Conftest Rego policies | `workflow/` and `composite/` packages (`CKV2_SPVS_*`, `CKV_GHA_*`) |
 | `.github/workflows/` | Repository CI + synced workflows | e.g. `release-manager.yml`; workflow releases sync to `{name}.yml` |
 
 Naming conventions and `readme.md` template: [Chapter 2 — Writing components](docs/02-writing-components.md#naming-standards).
@@ -120,13 +120,13 @@ To author a new action or workflow and test it locally, see the **[SPVS Develope
 
 ---
 
-## Security policies (SPVS + Checkov)
+## Security policies (SPVS + Conftest)
 
-This repository enforces **OWASP SPVS (Secure Pipeline Verification Standard) 1.0** at the **Integrate** and **Release** lifecycle stages through automated YAML and code analysis. Policies are expressed as [Checkov](https://www.checkov.io/) custom checks and run locally (pre-commit), in Release Manager (`mode: release`), and via manual staging scripts.
+This repository enforces **OWASP SPVS (Secure Pipeline Verification Standard) 1.0** at the **Integrate** and **Release** lifecycle stages through automated YAML and code analysis. Policies are expressed as [Conftest](https://www.conftest.dev/) Rego under `policies/conftest/github_actions/` and run locally (pre-commit), in Release Manager (`mode: release`), and via `policies/scripts/conftest-gha.sh`.
 
 ### What is enforced where
 
-| Control area | Enforced in workflow YAML (Checkov) | Enforced elsewhere |
+| Control area | Enforced in GHA YAML (Conftest) | Enforced elsewhere |
 | :--- | :---: | :--- |
 | Job permissions, shell hardening, action pinning | Yes | — |
 | Commit message format / SemVer | — | `commit-msg` hook, Release Manager validate stage |
@@ -134,98 +134,95 @@ This repository enforces **OWASP SPVS (Secure Pipeline Verification Standard) 1.
 | Python/shell code quality | — | Bandit / Shellcheck (pre-commit + Release Manager) |
 | Workflow syntax | — | Actionlint |
 
-Configuration: [`.checkov.yaml`](.checkov.yaml) enables the `github_actions` framework, loads custom policies from `policies/github_actions/`, and selects built-in `CKV_GHA_*` checks plus all `CKV2_SPVS_*` rules. **`soft-fail: false`** — any finding fails the scan.
+**21 rules** are enabled: `CKV2_SPVS_1`–`15`, `CKV_GHA_1`–`4`, and `CKV2_GHA_1`. Any finding fails the scan (no soft-fail).
 
 ### How components are scanned
 
-Checkov evaluates **workflow graph entities** (`on`, `permissions`, `jobs`, `steps`). Composite actions are not scanned as `action.yml` directly; staging **synthesizes a temporary workflow** from `runs.steps` so the same rules apply to actions and reusable workflows.
+Conftest scans YAML **in place** — no filesystem staging. Workflows use namespace `-n workflow`; composite actions use `-n composite`. The wrapper [`policies/scripts/conftest-gha.sh`](policies/scripts/conftest-gha.sh) discovers files under `actions/`, `workflows/`, `.github/workflows/`, and `.github/actions/`.
 
 ```mermaid
 flowchart TB
   subgraph sources [Sources]
-    A[action.yml composite steps]
+    A[action.yml runs.steps]
     W[workflows/.../workflow.yml]
     R[.github/workflows/*.yml]
   end
-  subgraph stage [Staging scripts]
-    S[stage_component.sh]
+  subgraph scan [Conftest]
+    CW[workflow package -n workflow]
+    CC[composite package -n composite]
   end
-  subgraph scan [Checkov]
-    C[github_actions framework]
-    P[CKV2_SPVS_1–15]
-    B[CKV_GHA_1–4 / CKV2_GHA_1]
-  end
-  A --> S
-  W --> S
-  R --> S
-  S --> C
-  C --> P
-  C --> B
+  A --> CC
+  W --> CW
+  R --> CW
+  CW --> P[CKV2_SPVS_* + CKV_GHA_* + CKV2_GHA_1]
+  CC --> P
 ```
 
 ### Scan tooling (Release Manager Stage 2 + local hooks)
 
 | Tool | Scope | Purpose |
 | :--- | :--- | :--- |
-| **Checkov** | Staged workflow YAML (actions via synthesis, workflows via copy) | SPVS custom policies + selected built-in GHA checks |
+| **Conftest** | Workflow and composite YAML in repo paths | SPVS Rego policies + selected GHA checks |
 | **Actionlint** | Workflow YAML syntax and semantics | Invalid workflows, deprecated expressions, runner issues |
 | **Bandit** | Changed `*.py` in components and `policies/scripts/` | Python security anti-patterns (`eval`, `shell=True`, etc.) |
 | **Shellcheck** | Changed `*.sh` | Shell bugs, quoting, portability, common injection patterns |
 
-Local runs are **change-scoped** (only touched components/files) unless policy or `.checkov.yaml` changes trigger a full rescan. Release **`mode: release`** always runs the full security job on the selected component.
+Local runs are **change-scoped** (only touched paths) unless a change under `policies/conftest/` triggers a full rescan. Release **`mode: release`** always runs the full security job on the selected component.
+
+Install tooling: `bash policies/scripts/install_hooks.sh`
 
 ---
 
 ### Custom policies (`CKV2_SPVS_1` – `CKV2_SPVS_15`)
 
-Each rule lives in [`policies/github_actions/`](policies/github_actions/). Below: ID, intent, and how to comply.
+Each rule is implemented in Rego under [`policies/conftest/github_actions/`](policies/conftest/github_actions/). Below: ID, Rego location, intent, and how to comply.
 
 #### IAM and permissions
 
-| ID | Policy | What it enforces | How to comply |
+| ID | Rego | What it enforces | How to comply |
 | :--- | :--- | :--- | :--- |
-| **CKV2_SPVS_1** | [ExplicitJobPermissions](policies/github_actions/ExplicitJobPermissions.yaml) | Every **job** must declare an explicit `permissions:` block. | Add least-privilege permissions per job; do not rely on implicit `GITHUB_TOKEN` defaults. |
-| **CKV2_SPVS_8** | [OidcForCloudActions](policies/github_actions/OidcForCloudActions.yaml) | Jobs using AWS/Azure/GCP OIDC login actions must grant `id-token: write`. | Set `permissions.id-token: write` on jobs that use `configure-aws-credentials`, `azure/login`, or `google-github-actions/auth`. |
-| **CKV2_SPVS_9** | [NoWorkflowLevelWritePermissions](policies/github_actions/NoWorkflowLevelWritePermissions.yaml) | Workflow-level `permissions` must not grant **write** on `contents`, `packages`, `id-token`, `security-events`, or `deployments`. | Default to read-only at workflow root; grant write only on specific jobs that need it. |
-| **CKV2_SPVS_10** | [NoWriteAllPermissions](policies/github_actions/NoWriteAllPermissions.yaml) | Workflow-level `permissions` must not be `write-all`. | Never use `permissions: write-all`; enumerate scopes explicitly. |
-| **CKV2_SPVS_11** | [EnvironmentForSensitiveDeploy](policies/github_actions/EnvironmentForSensitiveDeploy.yaml) | Jobs with `permissions.contents: write` must declare a GitHub **`environment:`**. | Add `environment: sandbox` (or production env) to jobs that push, tag, or mutate repo content. |
-| **CKV2_SPVS_15** | [NoPullRequestTarget](policies/github_actions/NoPullRequestTarget.yaml) | Workflows must not use the `pull_request_target` trigger. | Use `pull_request` with explicit permissions; avoid fork PR secret exposure patterns. |
+| **CKV2_SPVS_1** | `workflow/permissions.rego` | Every **job** must declare an explicit `permissions:` block. | Add least-privilege permissions per job; do not rely on implicit `GITHUB_TOKEN` defaults. |
+| **CKV2_SPVS_8** | `workflow/permissions.rego` | Jobs using AWS/Azure/GCP OIDC login actions must grant `id-token: write`. | Set `permissions.id-token: write` on jobs that use `configure-aws-credentials`, `azure/login`, or `google-github-actions/auth`. |
+| **CKV2_SPVS_9** | `workflow/permissions.rego` | Workflow must declare top-level `permissions`; must not grant **write** on `contents`, `packages`, `id-token`, `security-events`, or `deployments` at workflow level. | Default to read-only at workflow root; grant write only on specific jobs that need it. |
+| **CKV2_SPVS_10** | `workflow/permissions.rego` | No `write-all` at workflow or job level (scalar or per-scope). | Never use `permissions: write-all` or `contents: write-all`; enumerate scopes explicitly. |
+| **CKV2_SPVS_11** | `workflow/permissions.rego` | Jobs with `permissions.contents: write` must declare a GitHub **`environment:`**. | Add `environment: sandbox` (or production env) to jobs that push, tag, or mutate repo content. |
+| **CKV2_SPVS_15** | `workflow/permissions.rego` | Workflows must not use the `pull_request_target` trigger. | Use `pull_request` with explicit permissions; avoid fork PR secret exposure patterns. |
 
 #### Supply chain and shell execution
 
-| ID | Policy | What it enforces | How to comply |
+| ID | Rego | What it enforces | How to comply |
 | :--- | :--- | :--- | :--- |
-| **CKV2_SPVS_2** | [SetEuoPipefail](policies/github_actions/SetEuoPipefail.yaml) | Every bash `run:` block must contain `set -euo pipefail`. | First line of each shell script block; applies to composite action steps when staged. |
-| **CKV2_SPVS_3** | [NoSetXtrace](policies/github_actions/NoSetXtrace.yaml) | No `set -x`, `set -o xtrace`, or xtrace in `run:` blocks. | Use structured logging (`echo "::notice::"`, prefixed helpers) instead of xtrace. |
-| **CKV2_SPVS_4** | [PythonUnbuffered](policies/github_actions/PythonUnbuffered.yaml) | Any step that invokes `python`/`python3` must use `-u` or `PYTHONUNBUFFERED=1`. | `python -u script.py` or step-level `env: PYTHONUNBUFFERED: "1"`. |
-| **CKV2_SPVS_5** | [PinActionsToSha](policies/github_actions/PinActionsToSha.yaml) | Third-party `uses:` refs must pin to a **40-character commit SHA**, use `./` same-repo paths, `docker://`, or approved **internal** `/actions/` tags. | `actions/checkout@<sha> # v6.0.2`; monorepo refs like `org/repo/actions/name@v1` per regex in policy. |
-| **CKV2_SPVS_5B** | [BlockParentPathLocalActions](policies/github_actions/BlockParentPathLocalActions.yaml) | Local action refs must not start with `../`. | Use `./.github/actions/name` or pinned remote refs; skip with `# checkov:skip=CKV2_SPVS_5,CKV2_SPVS_5B: reason` (both IDs — see note below). |
-| **CKV2_SPVS_6** | [InputsViaEnvNotRun](policies/github_actions/InputsViaEnvNotRun.yaml) | `${{ inputs.* }}` and `${{ github.event.inputs.* }}` must not appear inside `run:` strings. | Map to `env:` (e.g. `INPUT_FOO: ${{ inputs.foo }}`) and reference `"${INPUT_FOO}"` in shell. |
-| **CKV2_SPVS_13** | [NoCurlPipeBash](policies/github_actions/NoCurlPipeBash.yaml) | No `curl\|bash`, `wget\|sh`, or `bash <(curl …)` installers. | Download to file, verify checksum, or use apt/brew/cached binaries (see `install_dev_hooks.sh`). |
-| **CKV2_SPVS_14** | [ContextExpressionsViaEnvNotRun](policies/github_actions/ContextExpressionsViaEnvNotRun.yaml) | `${{ github.* }}` and `${{ steps.* }}` must not appear inside `run:` strings. | Map context values to `env:` before the `run:` block (prevents injection and audit gaps). |
+| **CKV2_SPVS_2** | `workflow/steps.rego`, `composite/steps.rego` | Every bash `run:` block must contain `set -euo pipefail`. | First line of each shell script block; applies to composite action steps. |
+| **CKV2_SPVS_3** | `workflow/steps.rego`, `composite/steps.rego` | No `set -x`, `set -o xtrace`, or xtrace in `run:` blocks. | Use structured logging (`echo "::notice::"`, prefixed helpers) instead of xtrace. |
+| **CKV2_SPVS_4** | `workflow/steps.rego`, `composite/steps.rego` | Any step that invokes `python`/`python3` must use `-u` or `PYTHONUNBUFFERED=1`. | `python -u script.py` or step-level `env: PYTHONUNBUFFERED: "1"`. |
+| **CKV2_SPVS_5** | `workflow/steps.rego`, `composite/steps.rego` | Third-party `uses:` refs must pin to a **40-character commit SHA**, use `./` same-repo paths, `docker://`, or approved **internal** `/actions/` tags. | `actions/checkout@<sha> # v6.0.2`; monorepo refs like `org/repo/actions/name@v1` per regex in policy. |
+| **CKV2_SPVS_5B** | `workflow/steps.rego`, `composite/steps.rego` | Local action refs must not start with `../`. | Use `./.github/actions/name` or pinned remote refs; skip with `# spvs:skip=CKV2_SPVS_5,CKV2_SPVS_5B: reason` (both IDs — see note below). |
+| **CKV2_SPVS_6** | `workflow/steps.rego`, `composite/steps.rego` | `${{ inputs.* }}`, `${{ github.event.inputs.* }}`, and mistaken `inputs.*` shell refs must not appear inside `run:` strings. | Map to `env:` (e.g. `MESSAGE: ${{ inputs.message }}`) and reference `"${MESSAGE}"` in shell. |
+| **CKV2_SPVS_13** | `workflow/steps.rego`, `composite/steps.rego` | No `curl\|bash`, `wget\|sh`, or `bash <(curl …)` installers. | Download to file, verify checksum, or use apt/brew/cached binaries (see `install_hooks.sh`). |
+| **CKV2_SPVS_14** | `workflow/steps.rego`, `composite/steps.rego` | `${{ github.* }}` and `${{ steps.* }}` must not appear inside `run:` strings. | Map context values to `env:` before the `run:` block (prevents injection and audit gaps). |
 
 #### Credentials and runners
 
-| ID | Policy | What it enforces | How to comply |
+| ID | Rego | What it enforces | How to comply |
 | :--- | :--- | :--- | :--- |
-| **CKV2_SPVS_7** | [NoStaticCloudCredentials](policies/github_actions/NoStaticCloudCredentials.yaml) | Step `env` must not contain static cloud credential variables. | Blocked keys include `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `GCP_SERVICE_ACCOUNT_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `AZURE_CLIENT_SECRET`, `ARM_CLIENT_SECRET`. Use OIDC federation instead. |
-| **CKV2_SPVS_12** | [EphemeralRunners](policies/github_actions/EphemeralRunners.yaml) | `runs-on: self-hosted` (bare label) is prohibited. | Use `ubuntu-latest` or self-hosted labels that indicate ephemeral runners (not the bare string `self-hosted`). |
+| **CKV2_SPVS_7** | `workflow/steps.rego`, `composite/steps.rego` | Step `env` must not contain static cloud credential variables. | Blocked keys include `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `GCP_SERVICE_ACCOUNT_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `AZURE_CLIENT_SECRET`, `ARM_CLIENT_SECRET`. Use OIDC federation instead. |
+| **CKV2_SPVS_12** | `workflow/permissions.rego` | `runs-on: self-hosted` (bare label) is prohibited. | Use `ubuntu-latest` or self-hosted labels that indicate ephemeral runners (not the bare string `self-hosted`). |
 
 ---
 
-### Built-in Checkov GitHub Actions checks (selected)
+### Official GHA checks (Rego port)
 
-[`.checkov.yaml`](.checkov.yaml) also enables these upstream checks alongside custom SPVS rules:
+These upstream Checkov rules are ported to Rego alongside custom SPVS rules:
 
-| ID | Typical focus |
-| :--- | :--- |
-| **CKV_GHA_1** | Workflow permissions should be least privilege |
-| **CKV_GHA_2** | Third-party actions should be pinned to full-length commit SHA |
-| **CKV_GHA_3** | Suspicious use of curl with secrets |
-| **CKV_GHA_4** | Suspicious container image references |
-| **CKV2_GHA_1** | Workflow should not have admin privileges (`write-all` at workflow level) |
+| ID | Rego | Typical focus |
+| :--- | :--- | :--- |
+| **CKV_GHA_1** | `workflow/steps.rego`, `composite/steps.rego` | Do not set `ACTIONS_ALLOW_UNSECURE_COMMANDS` |
+| **CKV_GHA_2** | `workflow/steps.rego`, `composite/steps.rego` | User-controlled GitHub context must not appear in `run:` (shell injection) |
+| **CKV_GHA_3** | `workflow/steps.rego`, `composite/steps.rego` | Suspicious use of curl with secrets |
+| **CKV_GHA_4** | `workflow/steps.rego`, `composite/steps.rego` | Suspicious netcat reverse-shell patterns |
+| **CKV2_GHA_1** | `workflow/permissions.rego` | Top-level `permissions` must not be `write-all` |
 
-Custom `CKV2_SPVS_*` policies extend and specialize these rules for this monorepo (ticket commits, internal action tag patterns, env-mapping for inputs/context, etc.).
+Custom `CKV2_SPVS_*` policies extend and specialize these rules for this monorepo (internal action tag patterns, env-mapping for inputs/context, etc.).
 
 ---
 
@@ -234,24 +231,27 @@ Custom `CKV2_SPVS_*` policies extend and specialize these rules for this monorep
 | SPVS stage | This repository |
 | :--- | :--- |
 | **Plan / Develop** | Commit-msg hook; conventional commits with ticket IDs; SemVer derivation |
-| **Integrate** | Pre-commit Checkov, Actionlint, Bandit, Shellcheck on changed paths |
+| **Integrate** | Pre-commit Conftest, Actionlint, Bandit, Shellcheck on changed paths |
 | **Release** | Release Manager `security` job; versioned tags; workflow sync to `.github/workflows/` |
 | **Operate** | Promote / rollback modes; stable `v1` tags; branch protection and GitHub App bypass documented in prerequisites |
 
-Repository and branch controls called out in [`.checkov.yaml`](.checkov.yaml) (PR reviews, signed commits, force-push blocks, CODEOWNERS) are **not** expressed in workflow YAML—they must be configured in GitHub settings.
+Repository and branch controls (PR reviews, signed commits, force-push blocks, CODEOWNERS) are **not** expressed in workflow YAML—they must be configured in GitHub settings.
 
 #### Inline policy skips (workflow YAML)
 
-Checkov **does not honor** `# checkov:skip=` comments for the `github_actions` framework when you run `checkov` directly. This repo applies skips via `policies/scripts/run_checkov_spvs.sh` (used by pre-commit hooks and Release Manager).
+Conftest does not natively honor inline skip comments. This repo post-filters findings in [`conftest-gha.sh`](policies/scripts/conftest-gha.sh) (pre-commit hook and Release Manager).
 
 ```yaml
-uses: ../other-action  # checkov:skip=CKV2_SPVS_5,CKV2_SPVS_5B: monorepo layout; see readme.md
+uses: ../other-action  # spvs:skip=CKV2_SPVS_5,CKV2_SPVS_5B: monorepo layout; see readme.md
+# spvs:skip=CKV_GHA_1: file-level exception
 ```
+
+Legacy `# checkov:skip=` prefix is also accepted.
 
 | Requirement | Detail |
 | :--- | :--- |
-| **Scan command** | `bash policies/scripts/run_checkov_spvs.sh --staging-root "$STAGING" --repo-root "$(pwd)"` — not raw `checkov` |
-| **Tooling** | Requires **yq** (`bash policies/scripts/install_dev_hooks.sh`) |
+| **Scan command** | `bash policies/scripts/conftest-gha.sh` or `bash policies/scripts/conftest-gha.sh -d actions/common/semver` |
+| **Tooling** | Conftest v0.56.0 via `bash policies/scripts/install_hooks.sh` |
 | **Multiple checks** | List every check ID that fires on that line, comma-separated |
 | **Justification** | Document the reason in the component `readme.md` |
 
@@ -261,9 +261,10 @@ uses: ../other-action  # checkov:skip=CKV2_SPVS_5,CKV2_SPVS_5B: monorepo layout;
 
 | Task | Location |
 | :--- | :--- |
-| Add or change a rule | New YAML under `policies/github_actions/` with unique `metadata.id` |
-| Enable/disable a check | Edit `check:` list in [`.checkov.yaml`](.checkov.yaml) |
-| Validate policy change impact | Edit triggers **full rescan** in pre-commit; run `pre-commit run --all-files` |
+| Add or change a rule | Edit Rego under `policies/conftest/github_actions/{workflow,composite}/` |
+| Add unit test | `workflow_test.rego` or `composite_test.rego` — run `conftest verify -p …` |
+| Validate policy change impact | Changes under `policies/conftest/` trigger **full rescan** in pre-commit; run `pre-commit run --all-files` |
+| Run all policy tests | `bash policies/tests/run_tests.sh` |
 | Reference compliant YAML | [`actions/common/semver/action.yml`](actions/common/semver/action.yml), [`workflows/common/dummy-workflow/workflow.yml`](workflows/common/dummy-workflow/workflow.yml) |
 
 Known gaps and remediation tracking: [Chapter 5 — Release checklist](docs/05-release-checklist.md#4-security-tool-verification).
@@ -285,5 +286,5 @@ Known gaps and remediation tracking: [Chapter 5 — Release checklist](docs/05-r
 | [1. Introduction](docs/01-introduction.md) | Repository map and reading order |
 | [2. Writing components](docs/02-writing-components.md) | Author actions and workflows |
 | [3. Git hooks](docs/03-dev-hooks.md) | Install and use local hooks |
-| [4. Local testing](docs/04-local-testing.md) | Unit tests, scans, Checkov staging |
+| [4. Local testing](docs/04-local-testing.md) | Unit tests, Conftest scans, pre-commit |
 | [5. Release checklist](docs/05-release-checklist.md) | Release Manager E2E verification |

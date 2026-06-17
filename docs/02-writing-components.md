@@ -4,13 +4,13 @@
 
 This chapter explains how to add a **composite action** or **reusable workflow**, comply with SPVS policies, and test your component before release.
 
-Policy definitions: [README — Security policies](../README.md#security-policies-spvs--checkov). Local scans: [Chapter 4 — Testing](04-local-testing.md).
+Policy definitions: [README — Security policies](../README.md#security-policies-spvs--conftest). Local scans: [Chapter 4 — Testing](04-local-testing.md).
 
 ---
 
 ## Repository layout
 
-Components live under predictable paths so Release Manager, Checkov staging, and pre-commit hooks can find them.
+Components live under predictable paths so Release Manager, Conftest scans, and pre-commit hooks can find them.
 
 ```text
 gha-reusable-actions-workflows/
@@ -27,7 +27,7 @@ gha-reusable-actions-workflows/
 │           ├── workflow.yml # required — exactly one YAML per directory
 │           └── readme.md    # required — usage guide for this workflow
 ├── policies/
-│   └── github_actions/      # Checkov custom policies (CKV2_SPVS_*)
+│   └── conftest/github_actions/  # Conftest Rego policies (CKV2_SPVS_*, CKV_GHA_*)
 └── .github/workflows/       # repo CI + synced workflow deploy copies
 ```
 
@@ -109,7 +109,7 @@ uses: my-org/gha-reusable-actions-workflows/actions/common/semver@v1
 uses: my-org/gha-reusable-actions-workflows/.github/workflows/dummy-workflow.yml@v1
 ```
 
-Pin third-party actions in YAML to **40-character SHAs**; internal `/actions/` paths may use stable or semver tags as defined in [CKV2_SPVS_5](../policies/github_actions/PinActionsToSha.yaml).
+Pin third-party actions in YAML to **40-character SHAs**; internal `/actions/` paths may use stable or semver tags as defined in **CKV2_SPVS_5** (see [README](../README.md#security-policies-spvs--conftest)).
 
 ---
 
@@ -308,50 +308,41 @@ jobs:
 
 | Topic | Guidance |
 | :--- | :--- |
-| **Top-level `permissions`** | Use read-only defaults (`contents: read`). Never `write-all` or workflow-level write scopes ([CKV2_SPVS_9](../policies/github_actions/NoWorkflowLevelWritePermissions.yaml), [CKV2_SPVS_10](../policies/github_actions/NoWriteAllPermissions.yaml)). |
-| **Job `permissions`** | Every job must declare its own block ([CKV2_SPVS_1](../policies/github_actions/ExplicitJobPermissions.yaml)). |
-| **Write operations** | Jobs with `permissions.contents: write` must set `environment:` ([CKV2_SPVS_11](../policies/github_actions/EnvironmentForSensitiveDeploy.yaml)). |
-| **Runners** | Prefer `ubuntu-latest`. Bare `runs-on: self-hosted` is blocked ([CKV2_SPVS_12](../policies/github_actions/EphemeralRunners.yaml)). |
-| **Triggers** | Do not use `pull_request_target` ([CKV2_SPVS_15](../policies/github_actions/NoPullRequestTarget.yaml)). |
-| **Cloud deploy** | Use OIDC actions + `permissions.id-token: write` ([CKV2_SPVS_8](../policies/github_actions/OidcForCloudActions.yaml)). |
+| **Top-level `permissions`** | Use read-only defaults (`contents: read`). Never `write-all` or workflow-level write scopes (**CKV2_SPVS_9**, **CKV2_SPVS_10**). |
+| **Job `permissions`** | Every job must declare its own block (**CKV2_SPVS_1**). |
+| **Write operations** | Jobs with `permissions.contents: write` must set `environment:` (**CKV2_SPVS_11**). |
+| **Runners** | Prefer `ubuntu-latest`. Bare `runs-on: self-hosted` is blocked (**CKV2_SPVS_12**). |
+| **Triggers** | Do not use `pull_request_target` (**CKV2_SPVS_15**). |
+| **Cloud deploy** | Use OIDC actions + `permissions.id-token: write` (**CKV2_SPVS_8**). |
 
 ---
 
-## How Checkov sees your component
+## How Conftest scans your component
 
-Checkov does not scan `action.yml` directly. Staging converts components into workflow YAML under a temp `.github/workflows/` tree:
+Conftest evaluates YAML **in place** — no staging step. Workflows and composite actions use separate Rego packages:
 
 ```mermaid
 flowchart LR
   subgraph action [Composite action]
-    A[action.yml runs.steps] --> B[Synthetic workflow YAML]
+    A[action.yml runs.steps] --> CC[composite package -n composite]
   end
   subgraph workflow [Reusable workflow]
-    W[workflow.yml] --> C[Copied workflow YAML]
+    W[workflow.yml] --> CW[workflow package -n workflow]
   end
-  B --> D[Checkov github_actions framework]
-  C --> D
-  D --> E[CKV2_SPVS_* + CKV_GHA_*]
+  CC --> E[CKV2_SPVS_* + CKV_GHA_*]
+  CW --> E
 ```
 
-| Component | Staging command | Result |
+| Component | Scan command | Namespace |
 | :--- | :--- | :--- |
-| Action | `stage_component.sh --component-path actions/common/semver` | Synthesized workflow from `runs.steps` |
-| Workflow | `stage_component.sh --component-path workflows/common/dummy-workflow` | Copy of `workflow.yml` |
-| + repo CI | add `--include-repo-workflows` | Also copies `.github/workflows/*` |
+| Action | `conftest test --parser yaml -n composite -p policies/conftest/github_actions/composite actions/.../action.yml` | `composite` |
+| Workflow | `conftest test --parser yaml -n workflow -p policies/conftest/github_actions/workflow workflows/.../workflow.yml` | `workflow` |
 
-Stage and scan locally:
+Use the wrapper for discovery and inline skip support:
 
 ```bash
-source .env
-STAGING=$(mktemp -d)
-bash policies/scripts/stage_component.sh \
-  --component-path actions/common/semver \
-  --staging-root "${STAGING}"
-
-checkov -d "${STAGING}" \
-  --config-file .checkov.yaml \
-  --framework github_actions
+bash policies/scripts/conftest-gha.sh -d actions/common/semver
+bash policies/scripts/conftest-gha.sh -d workflows/common/dummy-workflow
 ```
 
 ---
@@ -363,18 +354,16 @@ Follow this order before opening a PR or running Release Manager.
 | Step | Action | Chapter |
 | :---: | :--- | :--- |
 | 0 | Add `readme.md` + follow naming standards | [Chapter 2 — Naming & readme](02-writing-components.md#naming-standards) |
-| 1 | `install_dev_hooks.sh` + `source .env` | [Chapter 3](03-dev-hooks.md) |
+| 1 | `install_hooks.sh` + `pre-commit install` | [Chapter 3](03-dev-hooks.md) |
 | 2 | `bash policies/tests/run_tests.sh` (if touching shared libs) | [Chapter 4](04-local-testing.md) |
-| 3 | `pre-commit run --all-files` or targeted wrapper | [Chapter 4](04-local-testing.md) |
+| 3 | `pre-commit run --all-files` or targeted `conftest-gha.sh` | [Chapter 4](04-local-testing.md) |
 | 4 | Commit with ticket-prefixed subject | [README — Commit format](../README.md#commit-message-format) |
 | 5 | Release Manager `mode: release` on `main` | [Chapter 5](05-release-checklist.md) |
 
-Targeted pre-commit scan:
+Targeted Conftest scan:
 
 ```bash
-bash policies/scripts/pre_commit_spvs_wrapper.sh \
-  actions/common/my-action/action.yml \
-  actions/common/my-action/run.sh
+bash policies/scripts/conftest-gha.sh -d actions/common/my-action
 ```
 
 ---
@@ -391,7 +380,7 @@ bash policies/scripts/pre_commit_spvs_wrapper.sh \
 | CKV2_SPVS_11 | Job writes without `environment:` | Add `environment: sandbox` (or appropriate env) |
 | CKV2_SPVS_13 | `curl \| bash` installer | Use pinned download + checksum or package manager |
 
-Documented exceptions may use Checkov skip comments **only** with justification (e.g. `CKV2_SPVS_5B` for `../` paths — strongly discouraged).
+Documented exceptions may use `# spvs:skip=` comments **only** with justification (e.g. `CKV2_SPVS_5B` for `../` paths — strongly discouraged). Legacy `# checkov:skip=` is also accepted.
 
 ---
 
