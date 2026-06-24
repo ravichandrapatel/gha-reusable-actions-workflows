@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: run_spvs_gha.sh
 # DESCRIPTION: Pre-commit hook — Conftest SPVS scan on changed GHA paths.
-# VERSION: 2.1.0
+# VERSION: 3.1.0
 # EXIT_CODES/SIGNALS: 0 pass, 1 findings, 2 environment error
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -18,13 +18,39 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
 
 CONFTEST_BIN="${CONFTEST_BIN:-conftest}"
+POLICY_LIB="${repo_root}/policies/conftest/github_actions/lib"
+POLICY_WORKFLOW="${repo_root}/policies/conftest/github_actions/workflow"
+POLICY_COMPOSITE="${repo_root}/policies/conftest/github_actions/composite"
+RUNNER="${repo_root}/policies/scripts/spvs_conftest_run.sh"
+
 if ! command -v "${CONFTEST_BIN}" &>/dev/null; then
     echo "${PROJECT_PREFIX} ERROR: conftest not found. Run: bash policies/scripts/install_hooks.sh" >&2
     exit 2
 fi
 
+if [[ ! -f "${RUNNER}" ]]; then
+    echo "${PROJECT_PREFIX} ERROR: missing ${RUNNER}" >&2
+    exit 2
+fi
+
+# shellcheck disable=SC1090,SC1091
+source "${RUNNER}"
+
 declare -A scan_dirs=()
-declare -a scan_files=()
+declare -a workflow_files=()
+declare -a composite_files=()
+
+spvs_queue_file() {
+    local file="$1"
+    case "${file}" in
+        */action.yml | */action.yaml)
+            composite_files+=("${file}")
+            ;;
+        *)
+            workflow_files+=("${file}")
+            ;;
+    esac
+}
 
 for file in "$@"; do
     case "${file}" in
@@ -35,31 +61,51 @@ for file in "$@"; do
             scan_dirs[".github/actions"]=1
             ;;
         actions/*/*/action.yml | actions/*/*/action.yaml)
-            scan_files+=("${file}")
+            spvs_queue_file "${file}"
             ;;
         workflows/*/*/workflow.yml | workflows/*/*/workflow.yaml)
-            scan_files+=("${file}")
+            spvs_queue_file "${file}"
             ;;
         .github/workflows/*.yml | .github/workflows/*.yaml)
-            scan_files+=("${file}")
+            spvs_queue_file "${file}"
             ;;
         .github/actions/*/action.yml | .github/actions/*/action.yaml)
-            scan_files+=("${file}")
+            spvs_queue_file "${file}"
             ;;
     esac
 done
 
-args=()
 for dir in "${!scan_dirs[@]}"; do
-    args+=(-d "${dir}")
-done
-for file in "${scan_files[@]}"; do
-    args+=(-f "${file}")
+    [[ -d "${dir}" ]] || continue
+    while IFS= read -r -d '' file; do
+        rel="${file#./}"
+        case "${rel}" in
+            actions/*/*/action.y*ml | .github/actions/*/action.y*ml)
+                composite_files+=("${file}")
+                ;;
+            workflows/*/*/workflow.y*ml | .github/workflows/*.y*ml)
+                workflow_files+=("${file}")
+                ;;
+        esac
+    done < <(find "${dir}" -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 2>/dev/null)
 done
 
-if [[ ${#args[@]} -eq 0 ]]; then
+status=0
+
+if [[ ${#workflow_files[@]} -gt 0 ]]; then
+    if ! spvs_conftest_test workflow "${POLICY_WORKFLOW}" "${POLICY_LIB}" "${workflow_files[@]}"; then
+        status=1
+    fi
+fi
+
+if [[ ${#composite_files[@]} -gt 0 ]]; then
+    if ! spvs_conftest_test composite "${POLICY_COMPOSITE}" "${POLICY_LIB}" "${composite_files[@]}"; then
+        status=1
+    fi
+fi
+
+if [[ ${#workflow_files[@]} -eq 0 && ${#composite_files[@]} -eq 0 ]]; then
     exit 0
 fi
 
-export CONFTEST_BIN
-exec bash "${repo_root}/policies/scripts/conftest-gha.sh" "${args[@]}"
+exit "${status}"

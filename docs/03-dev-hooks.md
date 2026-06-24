@@ -20,11 +20,11 @@ flowchart TB
     SPVS[run_spvs_gha.sh]
   end
   subgraph scan [SPVS scan]
-    CG[conftest-gha.sh]
-    CF[Conftest Rego policies]
+    CF[Conftest CLI]
+    RG[Rego policies]
   end
   IH --> hooks
-  SPVS --> CG --> CF
+  SPVS --> CF --> RG
 ```
 
 | Hook | When | Script |
@@ -34,7 +34,7 @@ flowchart TB
 | **Actionlint** | Workflow YAML under `workflows/`, `.github/workflows/` | `policies/scripts/hooks/run_actionlint.sh` |
 | **SPVS GHA** | Changed paths under `actions/`, `workflows/`, `.github/`, `policies/conftest/` | `policies/scripts/hooks/run_spvs_gha.sh` |
 
-The SPVS hook calls [`conftest-gha.sh`](../policies/scripts/conftest-gha.sh), which scans workflow YAML with `-n workflow` and composite `action.yml` with `-n composite`.
+The SPVS hook invokes the **Conftest CLI** directly — workflow YAML with `-n workflow`, composite `action.yml` / `action.yaml` with `-n composite` (both policy dirs plus `lib/`).
 
 ---
 
@@ -76,9 +76,8 @@ pre-commit run --all-files
 ## Manual runs
 
 ```bash
-bash policies/scripts/conftest-gha.sh
-bash policies/scripts/hooks/run_actionlint.sh workflows/common/dummy-workflow/workflow.yml
 bash policies/tests/run_tests.sh
+bash policies/scripts/hooks/run_actionlint.sh workflows/common/dummy-workflow/workflow.yml
 ```
 
 ---

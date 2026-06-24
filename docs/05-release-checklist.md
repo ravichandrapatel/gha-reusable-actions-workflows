@@ -58,9 +58,17 @@ Run during Release Manager `mode: release` (security job) and locally via [Chapt
 
 - [ ] **Actionlint:** syntax error in workflow YAML fails the security job.
 - [ ] **Conftest:** SPVS policies (`CKV2_SPVS_*`, `CKV_GHA_*`, `CKV2_GHA_1`) enforced via Rego under `policies/conftest/github_actions/`.
-  - Workflows scanned with `-n workflow`; composite actions with `-n composite`.
-  - Release Manager scans **only the component file** (`-f`), matching Actionlint scope.
-  - Scan locally: `bash policies/scripts/conftest-gha.sh -f workflows/common/dummy-workflow/workflow.yml`.
+  - Workflows scanned with `-n workflow`; composite actions with `-n composite` (both include `-p …/lib`).
+  - Release Manager runs **Conftest CLI** on the component file only (same as local targeted scan).
+  - Scan locally:
+
+    ```bash
+    conftest test --parser yaml -n workflow \
+      -p policies/conftest/github_actions/workflow \
+      -p policies/conftest/github_actions/lib \
+      workflows/common/dummy-workflow/workflow.yml
+    ```
+
   - Full policy catalog: [README — Custom policies](../README.md#custom-policies-ckv2_spvs_1--ckv2_spvs_15).
 - [ ] **Bandit:** security issue in `.py` fails the security job.
 - [ ] **Shellcheck:** issue in `.sh` fails the security job.

@@ -1,11 +1,13 @@
 # FILE_NAME: lib.rego
 # DESCRIPTION: Shared helpers for composite action policy checks.
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 # AUTHORS: DevOps Team
 
 package composite
 
 import rego.v1
+
+import data.lib
 
 forbidden_env_keys := {
 	"AWS_ACCESS_KEY_ID",
@@ -90,4 +92,44 @@ env_truthy(val) if {
 python_unbuffered_env(step) if {
 	is_object(step.env)
 	step.env.PYTHONUNBUFFERED
+}
+
+composite_steps contains step if {
+	input.runs.using == "composite"
+	step := input.runs.steps[_]
+}
+
+all_steps contains entry if {
+	input.runs.using == "composite"
+	some idx
+	step := input.runs.steps[idx]
+	entry := {"step_index": idx, "step": step}
+}
+
+step_yaml_path(entry) := path if {
+	path := sprintf("runs.steps[%d]", [entry.step_index])
+}
+
+# INTENT: Build composite root + step skip scope chain (union inheritance).
+# INPUT: step object from runs.steps.
+# OUTPUT: array of scope objects.
+# SIDE_EFFECTS: none.
+skip_scopes_for_composite_step(step) := scopes if {
+	scopes := [input, step]
+}
+
+# INTENT: Build composite root-only skip scope chain.
+# INPUT: none (uses input document).
+# OUTPUT: array of scope objects.
+# SIDE_EFFECTS: none.
+skip_scopes_composite := scopes if {
+	scopes := [input]
+}
+
+# INTENT: Guard deny rules — true when check_id is not skipped in any scope.
+# INPUT: check_id string; scopes array.
+# OUTPUT: defined when policy must still fire.
+# SIDE_EFFECTS: none.
+policy_active(check_id, scopes) if {
+	not lib.policy_skipped(check_id, scopes)
 }

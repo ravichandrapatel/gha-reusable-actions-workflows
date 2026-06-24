@@ -227,8 +227,11 @@ configure_repo_hooks() {
         if [[ -f "${repo_root}/policies/scripts/hooks/run_spvs_gha.sh" ]]; then
             chmod +x "${repo_root}/policies/scripts/hooks/run_spvs_gha.sh"
         fi
-        if [[ -f "${repo_root}/policies/scripts/conftest-gha.sh" ]]; then
-            chmod +x "${repo_root}/policies/scripts/conftest-gha.sh"
+        if [[ -f "${repo_root}/policies/scripts/spvs_conftest_run.sh" ]]; then
+            chmod +x "${repo_root}/policies/scripts/spvs_conftest_run.sh"
+        fi
+        if [[ -f "${repo_root}/policies/scripts/spvs_conftest_report.py" ]]; then
+            chmod +x "${repo_root}/policies/scripts/spvs_conftest_report.py"
         fi
         _log "Installing pre-commit hooks from ${repo_root}/.pre-commit-config.yaml"
         pre-commit install

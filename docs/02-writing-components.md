@@ -335,15 +335,24 @@ flowchart LR
 
 | Component | Scan command | Namespace |
 | :--- | :--- | :--- |
-| Action | `conftest test --parser yaml -n composite -p policies/conftest/github_actions/composite actions/.../action.yml` | `composite` |
-| Workflow | `conftest test --parser yaml -n workflow -p policies/conftest/github_actions/workflow workflows/.../workflow.yml` | `workflow` |
+| Action | `conftest test --parser yaml -n composite -p policies/conftest/github_actions/composite -p policies/conftest/github_actions/lib actions/.../action.yml` | `composite` |
+| Workflow | `conftest test --parser yaml -n workflow -p policies/conftest/github_actions/workflow -p policies/conftest/github_actions/lib workflows/.../workflow.yml` | `workflow` |
 
-Use the wrapper for discovery and inline skip support:
+Use the Conftest CLI for targeted scans (same commands as Release Manager):
 
 ```bash
-bash policies/scripts/conftest-gha.sh -d actions/common/semver
-bash policies/scripts/conftest-gha.sh -d workflows/common/dummy-workflow
+conftest test --parser yaml -n composite \
+  -p policies/conftest/github_actions/composite \
+  -p policies/conftest/github_actions/lib \
+  actions/common/semver/action.yml
+
+conftest test --parser yaml -n workflow \
+  -p policies/conftest/github_actions/workflow \
+  -p policies/conftest/github_actions/lib \
+  workflows/common/dummy-workflow/workflow.yml
 ```
+
+Full repo: `bash policies/tests/run_tests.sh`
 
 ---
 
@@ -356,14 +365,17 @@ Follow this order before opening a PR or running Release Manager.
 | 0 | Add `readme.md` + follow naming standards | [Chapter 2 — Naming & readme](02-writing-components.md#naming-standards) |
 | 1 | `install_hooks.sh` + `pre-commit install` | [Chapter 3](03-dev-hooks.md) |
 | 2 | `bash policies/tests/run_tests.sh` (if touching shared libs) | [Chapter 4](04-local-testing.md) |
-| 3 | `pre-commit run --all-files` or targeted `conftest-gha.sh` | [Chapter 4](04-local-testing.md) |
+| 3 | `pre-commit run --all-files` or targeted `conftest test` | [Chapter 4](04-local-testing.md) |
 | 4 | Commit with ticket-prefixed subject | [README — Commit format](../README.md#commit-message-format) |
 | 5 | Release Manager `mode: release` on `main` | [Chapter 5](05-release-checklist.md) |
 
 Targeted Conftest scan:
 
 ```bash
-bash policies/scripts/conftest-gha.sh -d actions/common/my-action
+conftest test --parser yaml -n composite \
+  -p policies/conftest/github_actions/composite \
+  -p policies/conftest/github_actions/lib \
+  actions/common/my-action/action.yml
 ```
 
 ---
@@ -380,7 +392,7 @@ bash policies/scripts/conftest-gha.sh -d actions/common/my-action
 | CKV2_SPVS_11 | Job writes without `environment:` | Add `environment: sandbox` (or appropriate env) |
 | CKV2_SPVS_13 | `curl \| bash` installer | Use pinned download + checksum or package manager |
 
-Documented exceptions may use `# spvs:skip=` comments **only** with justification (e.g. `CKV2_SPVS_5B` for `../` paths — strongly discouraged). Legacy `# checkov:skip=` is also accepted.
+Documented exceptions use `SPVS_SKIP_POLICY` / `SPVS_SKIP_REASON` per [Chapter 6 — Policy skips](06-inline-policy-skips.md).
 
 ---
 

@@ -129,3 +129,63 @@ test_ckv2_spvs_15_pull_request_target if {
 		"jobs": {},
 	}
 }
+
+test_workflow_env_skip_suppresses_ckv2_spvs_5b if {
+	count({msg | some msg in deny; contains(msg, "CKV2_SPVS_5B")}) == 0 with input as {
+		"env": {
+			"SPVS_SKIP_POLICY": "CKV2_SPVS_5B",
+			"SPVS_SKIP_REASON": "monorepo layout exception",
+		},
+		"permissions": {"contents": "read"},
+		"on": {"workflow_call": {}},
+		"jobs": {
+			"build": {
+				"runs-on": "ubuntu-latest",
+				"permissions": {"contents": "read"},
+				"steps": [{"uses": "../other-action"}],
+			},
+		},
+	}
+}
+
+test_workflow_skip_pairing_5_suppresses_5b if {
+	count({msg | some msg in deny; contains(msg, "CKV2_SPVS_5B")}) == 0 with input as {
+		"env": {
+			"SPVS_SKIP_POLICY": "CKV2_SPVS_5",
+			"SPVS_SKIP_REASON": "paired skip",
+		},
+		"permissions": {"contents": "read"},
+		"jobs": {
+			"build": {
+				"runs-on": "ubuntu-latest",
+				"permissions": {"contents": "read"},
+				"steps": [{"uses": "../other-action"}],
+			},
+		},
+	}
+}
+
+test_workflow_multi_policy_skip if {
+	count(deny) == 0 with input as {
+		"permissions": {"contents": "read"},
+		"jobs": {
+			"build": {
+				"runs-on": "ubuntu-latest",
+				"permissions": {"contents": "read"},
+				"env": {
+					"SPVS_SKIP_POLICY": "CKV2_SPVS_6, CKV2_SPVS_14",
+					"SPVS_SKIP_REASON": "legacy mapping; SEC-1234",
+				},
+				"steps": [{"run": "set -euo pipefail\necho ${inputs.message} ${{ github.ref }}"}],
+			},
+		},
+	}
+}
+
+test_spvs_meta_1_missing_reason if {
+	count({msg | some msg in deny; contains(msg, "SPVS_META_1")}) > 0 with input as {
+		"env": {"SPVS_SKIP_POLICY": "CKV2_SPVS_9"},
+		"permissions": {"contents": "read"},
+		"jobs": {},
+	}
+}

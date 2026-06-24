@@ -2,7 +2,7 @@
 # FILE_NAME: release-manager.yml
 # DESCRIPTION: Release, Promote, and Rollback manager for actions and workflows.
 # ALIGNMENT: OWASP SPVS (Secure Pipeline Verification Standard) 1.0
-# VERSION: 1.7.0
+# VERSION: 1.8.0
 # EXIT_CODES/SIGNALS: 0 on success, 1 on failure.
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -285,6 +285,9 @@ jobs:
           set -euo pipefail
           # [T-06] Running Conftest SPVS scan on the release component only (CKV2_SPVS_* + CKV_GHA_*)
           echo "[DBG-019] SPVS scan for component: $COMPONENT_PATH"
+          POLICY_LIB="policies/conftest/github_actions/lib"
+          # shellcheck disable=SC1091
+          source policies/scripts/spvs_conftest_run.sh
           if [[ "$COMPONENT_TYPE" == "action" ]]; then
             scan_file=""
             for candidate in action.yml action.yaml; do
@@ -297,15 +300,23 @@ jobs:
               echo "[ERR-T-06] No action.yml or action.yaml in $COMPONENT_PATH" >&2
               exit 1
             fi
+            echo "[DBG-019a] Scanning composite action: $scan_file"
+            spvs_conftest_test composite \
+              policies/conftest/github_actions/composite \
+              "${POLICY_LIB}" \
+              "$scan_file"
           else
             scan_file="$COMPONENT_PATH/$WF_FILE"
             if [[ ! -f "$scan_file" ]]; then
               echo "[ERR-T-06] Workflow file not found: $scan_file" >&2
               exit 1
             fi
+            echo "[DBG-019a] Scanning workflow: $scan_file"
+            spvs_conftest_test workflow \
+              policies/conftest/github_actions/workflow \
+              "${POLICY_LIB}" \
+              "$scan_file"
           fi
-          echo "[DBG-019a] Scanning component file: $scan_file"
-          bash policies/scripts/conftest-gha.sh -f "$scan_file"
           echo "[DBG-020] SPVS GitHub Actions scan completed successfully"
 
       - name: Run Bandit

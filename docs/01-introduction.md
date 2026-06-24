@@ -41,7 +41,7 @@ For the full pipeline diagram and stage descriptions, see [README — Architectu
 | `.github/workflows/dummy-workflow.yml` | Synced copy produced by Release Manager on workflow release |
 | `.github/workflows/release-manager.yml` | Validate → Security → Release / Promote / Rollback |
 | `policies/conftest/github_actions/` | Conftest Rego policies (`workflow/`, `composite/`) |
-| `policies/scripts/` | `conftest-gha.sh`, `install_hooks.sh`, pre-commit hook entrypoints |
+| `policies/scripts/` | `install_hooks.sh`, pre-commit hook entrypoints (`run_spvs_gha.sh` → Conftest CLI) |
 | `policies/tests/` | Shell unit tests for policy runner and commit-msg helpers |
 | `requirements-dev.txt` | Python tools for local hooks (`pre-commit`, `bandit`) |
 

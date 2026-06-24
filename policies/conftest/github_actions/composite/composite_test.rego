@@ -37,3 +37,28 @@ test_composite_ckv2_spvs_5b if {
 		},
 	}
 }
+
+test_composite_env_skip_suppresses_ckv2_spvs_5b if {
+	count({msg | some msg in deny; contains(msg, "CKV2_SPVS_5B")}) == 0 with input as {
+		"env": {
+			"SPVS_SKIP_POLICY": "CKV2_SPVS_5B",
+			"SPVS_SKIP_REASON": "monorepo layout",
+		},
+		"runs": {
+			"using": "composite",
+			"steps": [{"uses": "../other-action"}],
+		},
+	}
+}
+
+test_composite_spvs_meta_1_missing_reason if {
+	count({msg | some msg in deny; contains(msg, "SPVS_META_1")}) > 0 with input as {
+		"runs": {
+			"using": "composite",
+			"steps": [{
+				"run": "set -euo pipefail\necho ok",
+				"env": {"SPVS_SKIP_POLICY": "CKV2_SPVS_2"},
+			}],
+		},
+	}
+}

@@ -28,14 +28,14 @@ bash policies/tests/run_tests.sh
 
 | Script | Covers |
 | :--- | :--- |
-| `run_tests.sh` | `conftest verify` (workflow + composite), full repo scan, inline skip tests |
-| `test_conftest_inline_skip.sh` | `# spvs:skip=` / `# checkov:skip=` post-filtering |
+| `run_tests.sh` | `conftest verify`, full repo `conftest test`, env skip tests |
+| `test_conftest_env_skip.sh` | `SPVS_SKIP_POLICY` / `SPVS_SKIP_REASON` — see [Chapter 6](06-inline-policy-skips.md) |
 | `test_commit_message_lib.sh` | Ticket validation, commit formats, SemVer classification |
 
 Individual suites:
 
 ```bash
-bash policies/tests/test_conftest_inline_skip.sh
+bash policies/tests/test_conftest_env_skip.sh
 bash policies/tests/test_commit_message_lib.sh
 ```
 
@@ -65,41 +65,53 @@ Hooks (from [`.pre-commit-config.yaml`](../.pre-commit-config.yaml)):
 | Shellcheck | `shellcheck` |
 | Bandit | `bandit` |
 | Actionlint | `policies/scripts/hooks/run_actionlint.sh` |
-| SPVS GHA | `policies/scripts/hooks/run_spvs_gha.sh` → `conftest-gha.sh` |
+| SPVS GHA | `policies/scripts/hooks/run_spvs_gha.sh` → **Conftest CLI** |
 
-### Option B — invoke Conftest directly
+### Option B — Conftest CLI (recommended)
 
-Full repository scan (default roots):
+Policy paths (always include `lib` for skip helpers):
+
+| Variable | Path |
+| :--- | :--- |
+| Workflow policies | `policies/conftest/github_actions/workflow` |
+| Composite policies | `policies/conftest/github_actions/composite` |
+| Shared skip lib | `policies/conftest/github_actions/lib` |
+
+**Full repository scan:**
 
 ```bash
-bash policies/scripts/conftest-gha.sh
+bash policies/tests/run_tests.sh
 ```
 
-Scan specific paths:
-
-```bash
-bash policies/scripts/conftest-gha.sh -d actions/common/semver -d workflows/common/dummy-workflow
-```
-
-Low-level Conftest (requires correct namespace):
+**Single workflow:**
 
 ```bash
 conftest test --parser yaml -n workflow \
   -p policies/conftest/github_actions/workflow \
+  -p policies/conftest/github_actions/lib \
   workflows/common/dummy-workflow/workflow.yml
+```
 
+**Single composite action** (`action.yml` or `action.yaml`):
+
+```bash
 conftest test --parser yaml -n composite \
   -p policies/conftest/github_actions/composite \
+  -p policies/conftest/github_actions/lib \
   actions/common/semver/action.yml
 ```
 
-Policy Rego: `policies/conftest/github_actions/{workflow,composite}/`.
+**Release Manager parity** — same commands as the security job (one component file, correct namespace).
+
+Policy Rego: `policies/conftest/github_actions/{workflow,composite,lib}/`.
 
 ### Option C — policy unit tests only
 
 ```bash
-conftest verify -p policies/conftest/github_actions/workflow
-conftest verify -p policies/conftest/github_actions/composite
+conftest verify -p policies/conftest/github_actions/workflow \
+  -p policies/conftest/github_actions/lib
+conftest verify -p policies/conftest/github_actions/composite \
+  -p policies/conftest/github_actions/lib
 ```
 
 See [Chapter 3 — Git hooks](03-dev-hooks.md) for installation.
@@ -111,8 +123,8 @@ See [Chapter 3 — Git hooks](03-dev-hooks.md) for installation.
 | You changed… | Run |
 | :--- | :--- |
 | `commit_message_lib.sh` | `test_commit_message_lib.sh` |
-| `conftest-gha.sh`, Rego policies | `run_tests.sh` |
-| `actions/*` or `workflows/*` YAML | `pre-commit run --all-files` or `conftest-gha.sh -d …` |
+| Rego policies or hooks | `run_tests.sh` |
+| `actions/*` or `workflows/*` YAML | `pre-commit run --all-files` or targeted `conftest test` (Option B) |
 | `policies/conftest/*` | Full rescan (`pre-commit run --all-files`) |
 | Release Manager behavior | [Chapter 5](05-release-checklist.md) |
 
@@ -123,7 +135,7 @@ See [Chapter 3 — Git hooks](03-dev-hooks.md) for installation.
 Local hooks approximate Release Manager **Stage 2: Security**:
 
 - **Local:** changed paths only (unless `policies/conftest/` changed).
-- **Release:** full security job on selected component (`mode: release`).
+- **Release:** Conftest CLI on the selected component file only (`mode: release`).
 - **Promote:** skips scans (assumes release passed).
 
 ---

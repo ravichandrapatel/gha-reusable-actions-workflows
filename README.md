@@ -122,7 +122,7 @@ To author a new action or workflow and test it locally, see the **[SPVS Develope
 
 ## Security policies (SPVS + Conftest)
 
-This repository enforces **OWASP SPVS (Secure Pipeline Verification Standard) 1.0** at the **Integrate** and **Release** lifecycle stages through automated YAML and code analysis. Policies are expressed as [Conftest](https://www.conftest.dev/) Rego under `policies/conftest/github_actions/` and run locally (pre-commit), in Release Manager (`mode: release`), and via `policies/scripts/conftest-gha.sh`.
+This repository enforces **OWASP SPVS (Secure Pipeline Verification Standard) 1.0** at the **Integrate** and **Release** lifecycle stages through automated YAML and code analysis. Policies are expressed as [Conftest](https://www.conftest.dev/) Rego under `policies/conftest/github_actions/` and run via the **Conftest CLI** locally (pre-commit), in Release Manager (`mode: release`), and in `policies/tests/run_tests.sh`.
 
 ### What is enforced where
 
@@ -138,7 +138,23 @@ This repository enforces **OWASP SPVS (Secure Pipeline Verification Standard) 1.
 
 ### How components are scanned
 
-Conftest scans YAML **in place** — no filesystem staging. Workflows use namespace `-n workflow`; composite actions use `-n composite`. The wrapper [`policies/scripts/conftest-gha.sh`](policies/scripts/conftest-gha.sh) discovers files under `actions/`, `workflows/`, `.github/workflows/`, and `.github/actions/`.
+Conftest scans YAML **in place** — no filesystem staging. Workflows use namespace `-n workflow`; composite actions (`action.yml` / `action.yaml`) use `-n composite`. Always pass **both** the package policy dir and `policies/conftest/github_actions/lib` (shared skip helpers).
+
+```bash
+# Single workflow
+conftest test --parser yaml -n workflow \
+  -p policies/conftest/github_actions/workflow \
+  -p policies/conftest/github_actions/lib \
+  workflows/common/dummy-workflow/workflow.yml
+
+# Single composite action
+conftest test --parser yaml -n composite \
+  -p policies/conftest/github_actions/composite \
+  -p policies/conftest/github_actions/lib \
+  actions/common/semver/action.yml
+```
+
+Full repository scan: `bash policies/tests/run_tests.sh`
 
 ```mermaid
 flowchart TB
@@ -196,7 +212,7 @@ Each rule is implemented in Rego under [`policies/conftest/github_actions/`](pol
 | **CKV2_SPVS_3** | `workflow/steps.rego`, `composite/steps.rego` | No `set -x`, `set -o xtrace`, or xtrace in `run:` blocks. | Use structured logging (`echo "::notice::"`, prefixed helpers) instead of xtrace. |
 | **CKV2_SPVS_4** | `workflow/steps.rego`, `composite/steps.rego` | Any step that invokes `python`/`python3` must use `-u` or `PYTHONUNBUFFERED=1`. | `python -u script.py` or step-level `env: PYTHONUNBUFFERED: "1"`. |
 | **CKV2_SPVS_5** | `workflow/steps.rego`, `composite/steps.rego` | Third-party `uses:` refs must pin to a **40-character commit SHA**, use `./` same-repo paths, `docker://`, or approved **internal** `/actions/` tags. | `actions/checkout@<sha> # v6.0.2`; monorepo refs like `org/repo/actions/name@v1` per regex in policy. |
-| **CKV2_SPVS_5B** | `workflow/steps.rego`, `composite/steps.rego` | Local action refs must not start with `../`. | Use `./.github/actions/name` or pinned remote refs; skip with `# spvs:skip=CKV2_SPVS_5,CKV2_SPVS_5B: reason` (both IDs — see note below). |
+| **CKV2_SPVS_5B** | `workflow/steps.rego`, `composite/steps.rego` | Local action refs must not start with `../`. | Use `./.github/actions/name` or pinned remote refs; skip via `SPVS_SKIP_POLICY` ([skip guide](docs/06-inline-policy-skips.md)). |
 | **CKV2_SPVS_6** | `workflow/steps.rego`, `composite/steps.rego` | `${{ inputs.* }}`, `${{ github.event.inputs.* }}`, and mistaken `inputs.*` shell refs must not appear inside `run:` strings. | Map to `env:` (e.g. `MESSAGE: ${{ inputs.message }}`) and reference `"${MESSAGE}"` in shell. |
 | **CKV2_SPVS_13** | `workflow/steps.rego`, `composite/steps.rego` | No `curl\|bash`, `wget\|sh`, or `bash <(curl …)` installers. | Download to file, verify checksum, or use apt/brew/cached binaries (see `install_hooks.sh`). |
 | **CKV2_SPVS_14** | `workflow/steps.rego`, `composite/steps.rego` | `${{ github.* }}` and `${{ steps.* }}` must not appear inside `run:` strings. | Map context values to `env:` before the `run:` block (prevents injection and audit gaps). |
@@ -237,23 +253,21 @@ Custom `CKV2_SPVS_*` policies extend and specialize these rules for this monorep
 
 Repository and branch controls (PR reviews, signed commits, force-push blocks, CODEOWNERS) are **not** expressed in workflow YAML—they must be configured in GitHub settings.
 
-#### Inline policy skips (workflow YAML)
+#### Policy skips (SPVS_SKIP_POLICY)
 
-Conftest does not natively honor inline skip comments. This repo post-filters findings in [`conftest-gha.sh`](policies/scripts/conftest-gha.sh) (pre-commit hook and Release Manager). **Do not use raw `conftest test`** if you rely on skips — always scan through `conftest-gha.sh`.
+Skips are enforced **in Rego** via `SPVS_SKIP_POLICY` and `SPVS_SKIP_REASON` env variables — the Conftest CLI reads them directly; no bash wrapper is required.
+
+**Full guide:** [Chapter 6 — Policy skips](docs/06-inline-policy-skips.md)
+
+Quick reference:
 
 ```yaml
-uses: ../other-action  # spvs:skip=CKV2_SPVS_5,CKV2_SPVS_5B: monorepo layout; see readme.md
-# spvs:skip=CKV_GHA_1: file-level exception
+env:
+  SPVS_SKIP_POLICY: CKV2_SPVS_5, CKV2_SPVS_5B
+  SPVS_SKIP_REASON: monorepo layout; documented in readme.md
 ```
 
-Legacy `# checkov:skip=` prefix is also accepted.
-
-| Requirement | Detail |
-| :--- | :--- |
-| **Scan command** | `bash policies/scripts/conftest-gha.sh` or `bash policies/scripts/conftest-gha.sh -d actions/common/semver` |
-| **Tooling** | Conftest v0.56.0 via `bash policies/scripts/install_hooks.sh` |
-| **Multiple checks** | List every check ID that fires on that line, comma-separated |
-| **Justification** | Document the reason in the component `readme.md` |
+Job-level skips apply to all steps in that job. See the guide for scope and composite actions.
 
 ---
 
@@ -262,7 +276,7 @@ Legacy `# checkov:skip=` prefix is also accepted.
 | Task | Location |
 | :--- | :--- |
 | Add or change a rule | Edit Rego under `policies/conftest/github_actions/{workflow,composite}/` |
-| Add unit test | `workflow_test.rego` or `composite_test.rego` — run `conftest verify -p …` |
+| Add unit test | `workflow_test.rego` or `composite_test.rego` — run `conftest verify -p … -p policies/conftest/github_actions/lib` |
 | Validate policy change impact | Changes under `policies/conftest/` trigger **full rescan** in pre-commit; run `pre-commit run --all-files` |
 | Run all policy tests | `bash policies/tests/run_tests.sh` |
 | Reference compliant YAML | [`actions/common/semver/action.yml`](actions/common/semver/action.yml), [`workflows/common/dummy-workflow/workflow.yml`](workflows/common/dummy-workflow/workflow.yml) |

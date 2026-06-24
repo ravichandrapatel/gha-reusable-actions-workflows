@@ -3,7 +3,7 @@
 Use this checklist after policy changes, hook/CI wiring changes, or before a release promotion.
 Mark each item `[x]` when verified. Record date, tester, and notes in the **Sign-off** section.
 
-**Scope:** Conftest Rego policies, `conftest-gha.sh`, pre-commit hooks, Release Manager security job, and regression against all in-repo workflows/actions.
+**Scope:** Conftest Rego policies, Conftest CLI, pre-commit hooks, Release Manager security job, and regression against all in-repo workflows/actions.
 
 ---
 
@@ -31,50 +31,34 @@ Mark each item `[x]` when verified. Record date, tester, and notes in the **Sign
 | 1.1 | [ ] Full policy test runner | `bash policies/tests/run_tests.sh` | Exit 0; message `All SPVS policy tests passed` |
 | 1.2 | [ ] Workflow `conftest verify` | `conftest verify -p policies/conftest/github_actions/workflow` | 5 tests, 5 passed |
 | 1.3 | [ ] Composite `conftest verify` | `conftest verify -p policies/conftest/github_actions/composite` | 3 tests, 3 passed |
-| 1.4 | [ ] Full repo scan | `bash policies/scripts/conftest-gha.sh` | Exit 0; 2 workflows + 7 composites, 0 failures |
+| 1.4 | [ ] Full repo scan | `bash policies/tests/run_tests.sh` | Exit 0; workflows + composites, 0 failures |
 
 ---
 
-## 2. `conftest-gha.sh` — scanner behavior
+## 2. Conftest CLI — scan behavior
 
-### 2.1 CLI and exit codes
+### 2.1 Full repo and single-file scans
 
 | # | Check | Command | Expected |
 |---|-------|---------|----------|
-| 2.1.1 | [ ] Help | `bash policies/scripts/conftest-gha.sh --help` | Usage text; exit 0 |
-| 2.1.2 | [ ] Missing conftest | `CONFTEST_BIN=/nonexistent bash policies/scripts/conftest-gha.sh` | Exit 2; `[CONFTEST-GHA] ERROR: conftest not found` |
-| 2.1.3 | [ ] Unknown argument | `bash policies/scripts/conftest-gha.sh --bogus` | Exit 2; usage shown |
-| 2.1.4 | [ ] Empty directory | `bash policies/scripts/conftest-gha.sh -d /tmp/empty-gha-test-$$` | Exit 0; “No scannable GHA files” (mkdir first) |
+| 2.1.1 | [ ] Full repo scan | `bash policies/tests/run_tests.sh` | Exit 0; workflows + composites, 0 failures |
+| 2.1.2 | [ ] Missing conftest | `CONFTEST_BIN=/nonexistent bash policies/tests/run_tests.sh` | Exit 1; conftest not found message |
+| 2.1.3 | [ ] Single workflow | `conftest test --parser yaml -n workflow -p policies/conftest/github_actions/workflow -p policies/conftest/github_actions/lib workflows/common/dummy-workflow/workflow.yml` | Pass |
+| 2.1.4 | [ ] Single composite action | `conftest test --parser yaml -n composite -p policies/conftest/github_actions/composite -p policies/conftest/github_actions/lib actions/common/semver/action.yml` | Pass |
 | 2.1.5 | [ ] Policy failure exit code | Scan a known-bad fixture (see §4) | Exit 1 |
 
-### 2.2 Path discovery (`is_scannable`)
+### 2.2 Scannable path patterns
 
-Create temporary fixtures under `/tmp/conftest-path-test-$$/` or use a scratch branch.
+| # | Path pattern | Namespace | Package |
+|---|--------------|-----------|---------|
+| 2.2.1 | [ ] `actions/common/foo/action.yml` | composite | `-n composite` |
+| 2.2.2 | [ ] `actions/common/foo/action.yaml` | composite | `-n composite` |
+| 2.2.3 | [ ] `workflows/common/foo/workflow.yml` | workflow | `-n workflow` |
+| 2.2.4 | [ ] `workflows/common/foo/workflow.yaml` | workflow | `-n workflow` |
+| 2.2.5 | [ ] `.github/workflows/release-manager.yml` | workflow | `-n workflow` |
+| 2.2.6 | [ ] `.github/actions/my-action/action.yml` | composite | `-n composite` |
 
-| # | Path pattern | Should scan? | Package |
-|---|--------------|--------------|---------|
-| 2.2.1 | [ ] `actions/common/foo/action.yml` | Yes | composite |
-| 2.2.2 | [ ] `actions/common/foo/action.yaml` | Yes | composite |
-| 2.2.3 | [ ] `workflows/common/foo/workflow.yml` | Yes | workflow |
-| 2.2.4 | [ ] `workflows/common/foo/workflow.yaml` | Yes | workflow |
-| 2.2.5 | [ ] `.github/workflows/release-manager.yml` | Yes | workflow |
-| 2.2.6 | [ ] `.github/actions/my-action/action.yml` | Yes | composite |
-| 2.2.7 | [ ] `actions/common/foo/README.yml` | No | — |
-| 2.2.8 | [ ] `actions/common/action.yml` (missing component dir) | No | — |
-| 2.2.9 | [ ] `workflows/foo.yml` (flat, wrong layout) | No | — |
-| 2.2.10 | [ ] `actions/common/foo/extra/nested/action.yml` | No | — |
-
-### 2.3 Directory scoping (`-d`)
-
-| # | Check | Command | Expected |
-|---|-------|---------|----------|
-| 2.3.1 | [ ] Single component action | `bash policies/scripts/conftest-gha.sh -d actions/common/git-path-filter` | Only that `action.yml` in composite batch |
-| 2.3.2 | [ ] Single workflow component | `bash policies/scripts/conftest-gha.sh -d workflows/common/dummy-workflow` | Only `workflow.yml` |
-| 2.3.3 | [ ] `.github/workflows` only | `bash policies/scripts/conftest-gha.sh -d .github/workflows` | `release-manager.yml` only |
-| 2.3.4 | [ ] Multiple `-d` flags | `bash policies/scripts/conftest-gha.sh -d actions -d workflows` | All 9 scannable files |
-| 2.3.5 | [ ] Default roots (no `-d`) | `bash policies/scripts/conftest-gha.sh` | Same as 2.3.4 + `.github/*` |
-
-### 2.4 Namespace isolation
+### 2.3 Namespace isolation
 
 | # | Check | Action | Expected |
 |---|-------|--------|----------|
@@ -131,13 +115,13 @@ Install hooks: `pre-commit install` (from repo root).
 | # | Check | Action | Expected |
 |---|-------|--------|----------|
 | 3.4.1 | [ ] Python in actions scanned | `pre-commit run bandit --files actions/common/git-path-filter/main.py` | Pass (or real findings) |
-| 3.4.2 | [ ] Non-Python skipped | `pre-commit run bandit --files policies/scripts/conftest-gha.sh` | Skipped |
+| 3.4.2 | [ ] Non-Python skipped | `pre-commit run bandit --files policies/scripts/hooks/run_spvs_gha.sh` | Skipped |
 
 ### 3.5 `shellcheck` hook
 
 | # | Check | Action | Expected |
 |---|-------|--------|----------|
-| 3.5.1 | [ ] Shell scripts scanned | `pre-commit run shellcheck --files policies/scripts/conftest-gha.sh` | Pass |
+| 3.5.1 | [ ] Shell scripts scanned | `pre-commit run shellcheck --files policies/scripts/hooks/run_spvs_gha.sh` | Pass |
 | 3.5.2 | [ ] `set -euo pipefail` present in hook scripts | Manual review of `policies/scripts/**/*.sh` | All entry scripts use defensive bash |
 
 ### 3.6 Full pre-commit run
@@ -271,11 +255,11 @@ Run via `workflow_dispatch` on `.github/workflows/release-manager.yml` (or dry-r
 
 Test each row with a real component path:
 
-| Component path | Actionlint | Conftest (`conftest-gha.sh`) | Bandit | Shellcheck |
-|----------------|------------|------------------------------|--------|------------|
-| 7.2.1 [ ] `actions/common/git-path-filter` | Skipped (action) | `-d actions -d .github/...` | If `*.py` | If `*.sh` |
-| 7.2.2 [ ] `actions/common/semver` | Skipped | Same pattern | | |
-| 7.2.3 [ ] `workflows/common/dummy-workflow` | Runs on `workflow.yml` | `-d workflows -d .github/workflows` | N/A | N/A |
+| Component path | Actionlint | Conftest CLI | Bandit | Shellcheck |
+|----------------|------------|--------------|--------|------------|
+| 7.2.1 [ ] `actions/common/git-path-filter` | Skipped (action) | `conftest test -n composite … action.yml` | If `*.py` | If `*.sh` |
+| 7.2.2 [ ] `actions/common/semver` | Skipped | Single `action.yml` scan | | |
+| 7.2.3 [ ] `workflows/common/dummy-workflow` | Runs on `workflow.yml` | `conftest test -n workflow … workflow.yml` | N/A | N/A |
 | 7.2.4 [ ] `actions/security/owasp-dependency-check` | Skipped | Pass | | |
 
 ### 7.3 Security job — failure propagation
@@ -338,9 +322,10 @@ After adding tests: `conftest verify -p policies/conftest/github_actions/{workfl
 | 10.2 | [ ] `policies/scripts/checkov-gha.sh` absent | Deleted |
 | 10.3 | [ ] `.checkov.yaml` absent | Deleted |
 | 10.4 | [ ] `requirements-dev.txt` has no checkov/pytest | bandit + pre-commit only |
-| 10.5 | [ ] `release-manager.yml` calls `conftest-gha.sh` | No `checkov_cli` / `CKV_CACHE_DIR` |
-| 10.6 | [ ] Pre-commit hook name | `SPVS GitHub Actions (Conftest)` |
-| 10.7 | [ ] `.checkov.cache` not committed on promote | Promote block removed |
+| 10.5 | [ ] `release-manager.yml` runs Conftest CLI directly | `conftest test` with `-n workflow` or `-n composite` and `-p …/lib` |
+| 10.6 | [ ] `policies/scripts/conftest-gha.sh` absent | Deleted; use Conftest CLI or `run_tests.sh` |
+| 10.7 | [ ] Pre-commit hook name | `SPVS GitHub Actions (Conftest)` |
+| 10.8 | [ ] `.checkov.cache` not committed on promote | Promote block removed |
 
 ---
 
@@ -348,10 +333,10 @@ After adding tests: `conftest verify -p policies/conftest/github_actions/{workfl
 
 | # | Check | Command | Expected |
 |---|-------|---------|----------|
-| 11.1 | [ ] Full scan duration | `time bash policies/scripts/conftest-gha.sh` | < 30s on dev machine (9 files) |
-| 11.2 | [ ] Single-component scan | `time bash policies/scripts/conftest-gha.sh -d actions/common/semver` | Faster than full scan |
+| 11.1 | [ ] Full scan duration | `time bash policies/tests/run_tests.sh` | < 30s on dev machine (9 files) |
+| 11.2 | [ ] Single-component scan | `conftest test … actions/common/semver/action.yml` | Faster than full scan |
 | 11.3 | [ ] Output readable | Manual | Check IDs (CKV_*) in messages |
-| 11.4 | [ ] `CONFTEST_BIN` override | `CONFTEST_BIN=/path/to/conftest bash policies/scripts/conftest-gha.sh` | Uses override |
+| 11.4 | [ ] `CONFTEST_BIN` override | `CONFTEST_BIN=/path/to/conftest bash policies/tests/run_tests.sh` | Uses override |
 
 ---
 
@@ -362,19 +347,21 @@ After adding tests: `conftest verify -p policies/conftest/github_actions/{workfl
 bash policies/tests/run_tests.sh
 
 # Policy unit tests only
-conftest verify -p policies/conftest/github_actions/workflow
-conftest verify -p policies/conftest/github_actions/composite
+conftest verify -p policies/conftest/github_actions/workflow \
+  -p policies/conftest/github_actions/lib
+conftest verify -p policies/conftest/github_actions/composite \
+  -p policies/conftest/github_actions/lib
 
-# Full repo scan
-bash policies/scripts/conftest-gha.sh
-
-# Single file
+# Single workflow
 conftest test --parser yaml -n workflow \
   -p policies/conftest/github_actions/workflow \
+  -p policies/conftest/github_actions/lib \
   workflows/common/dummy-workflow/workflow.yml
 
+# Single composite action
 conftest test --parser yaml -n composite \
   -p policies/conftest/github_actions/composite \
+  -p policies/conftest/github_actions/lib \
   actions/common/git-path-filter/action.yml
 
 # Pre-commit (all hooks)
@@ -449,5 +436,5 @@ jobs: {}
 | `policies/conftest/github_actions/composite/lib.rego` | Composite helpers |
 | `policies/conftest/github_actions/composite/steps.rego` | Step-level rules |
 | `policies/conftest/github_actions/composite/composite_test.rego` | Unit tests |
-| `policies/scripts/conftest-gha.sh` | Discovery + scan orchestration |
-| `policies/scripts/hooks/run_spvs_gha.sh` | Pre-commit entry |
+| `policies/conftest/github_actions/lib/spvs_skip.rego` | SPVS_SKIP_POLICY skip helpers |
+| `policies/scripts/hooks/run_spvs_gha.sh` | Pre-commit entry (Conftest CLI) |
