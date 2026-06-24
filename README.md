@@ -239,7 +239,7 @@ Repository and branch controls (PR reviews, signed commits, force-push blocks, C
 
 #### Inline policy skips (workflow YAML)
 
-Conftest does not natively honor inline skip comments. This repo post-filters findings in [`conftest-gha.sh`](policies/scripts/conftest-gha.sh) (pre-commit hook and Release Manager).
+Conftest does not natively honor inline skip comments. This repo post-filters findings in [`conftest-gha.sh`](policies/scripts/conftest-gha.sh) (pre-commit hook and Release Manager). **Do not use raw `conftest test`** if you rely on skips — always scan through `conftest-gha.sh`.
 
 ```yaml
 uses: ../other-action  # spvs:skip=CKV2_SPVS_5,CKV2_SPVS_5B: monorepo layout; see readme.md

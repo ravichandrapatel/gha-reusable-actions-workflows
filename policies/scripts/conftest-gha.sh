@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: conftest-gha.sh
 # DESCRIPTION: Conftest scanner for GHA workflows/composite actions with inline skips.
-# VERSION: 1.3.0
+# VERSION: 1.4.0
 # EXIT_CODES/SIGNALS: 0 pass, 1 policy failure, 2 usage/tool error
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -28,7 +28,8 @@ CONFTEST_BIN="${CONFTEST_BIN:-conftest}"
 spvs_inline_line_skips_check() {
   local check_id="$1"
   local line="$2"
-  local skip_specs=""
+  local skip_body=""
+  local ids_part=""
   local spec=""
   local id=""
 
@@ -36,16 +37,29 @@ spvs_inline_line_skips_check() {
     return 1
   fi
 
-  skip_specs="${BASH_REMATCH[2]}"
-  skip_specs="${skip_specs%%[[:space:]]*}"
+  skip_body="${BASH_REMATCH[2]}"
+  skip_body="${skip_body%%#*}"
+  ids_part="${skip_body%%:*}"
+  ids_part="${ids_part// /}"
 
   local IFS=','
-  for spec in ${skip_specs}; do
-    id="${spec%%:*}"
-    id="${id// /}"
+  for spec in ${ids_part}; do
+    id="${spec}"
+    if [[ -z "${id}" ]]; then
+      continue
+    fi
     if [[ "${id}" == "${check_id}" ]]; then
       return 0
     fi
+    case "${check_id}" in
+      CKV2_SPVS_5 | CKV2_SPVS_5B)
+        if [[ "${id}" == "CKV2_SPVS_5" || "${id}" == "CKV2_SPVS_5B" ]]; then
+          if [[ "${line}" == *"../"* ]] || [[ "${line}" =~ uses:[[:space:]]*(\.\./|\./) ]]; then
+            return 0
+          fi
+        fi
+        ;;
+    esac
   done
   return 1
 }
@@ -76,14 +90,32 @@ spvs_extract_uses_from_line() {
 # INPUT: absolute file path; check_id; failure message.
 # OUTPUT: return 0 when suppressed, 1 otherwise.
 # SIDE_EFFECTS: reads YAML file from disk.
+spvs_resolve_yaml_path() {
+  local repo_root="$1"
+  local file_path="$2"
+
+  if [[ -f "${file_path}" ]]; then
+    printf '%s\n' "$(cd "$(dirname "${file_path}")" && pwd)/$(basename "${file_path}")"
+    return 0
+  fi
+  if [[ "${file_path}" != /* && -f "${repo_root}/${file_path}" ]]; then
+    printf '%s\n' "$(cd "${repo_root}/$(dirname "${file_path}")" && pwd)/$(basename "${file_path}")"
+    return 0
+  fi
+  printf '%s\n' "${file_path}"
+}
+
 spvs_conftest_failure_suppressed() {
-  local file_path="$1"
-  local check_id="$2"
-  local msg="$3"
+  local repo_root="$1"
+  local file_path="$2"
+  local check_id="$3"
+  local msg="$4"
   local line=""
   local uses_val=""
+  local resolved=""
 
-  if [[ ! -f "${file_path}" ]]; then
+  resolved="$(spvs_resolve_yaml_path "${repo_root}" "${file_path}")"
+  if [[ ! -f "${resolved}" ]]; then
     return 1
   fi
 
@@ -112,7 +144,7 @@ spvs_conftest_failure_suppressed() {
         fi
         ;;
     esac
-  done <"${file_path}"
+  done <"${resolved}"
 
   return 1
 }
@@ -165,7 +197,7 @@ print(item.get('failures', [])[int(sys.argv[3])].get('msg', ''))
         continue
       fi
 
-      if spvs_conftest_failure_suppressed "${filename}" "${check_id}" "${msg}"; then
+      if spvs_conftest_failure_suppressed "${repo_root}" "${filename}" "${check_id}" "${msg}"; then
         rel="${filename#"${repo_root}/"}"
         printf '%s SUPPRESSED %s in %s (inline skip)\n' "${PROJECT_PREFIX}" "${check_id}" "${rel}" >&2
         continue
@@ -223,7 +255,7 @@ print(item.get('failures', [])[int(sys.argv[3])].get('msg', ''))
 " "${json_file}" "${file_idx}" "${failure_idx}")"
 
       check_id="$(spvs_extract_check_id_from_msg "${msg}")"
-      if spvs_conftest_failure_suppressed "${filename}" "${check_id}" "${msg}"; then
+      if spvs_conftest_failure_suppressed "${repo_root}" "${filename}" "${check_id}" "${msg}"; then
         continue
       fi
 

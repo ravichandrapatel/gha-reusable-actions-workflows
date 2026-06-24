@@ -29,6 +29,10 @@ echo "${PROJECT_PREFIX} Running conftest verify (composite policies)..."
 echo "${PROJECT_PREFIX} Running repository SPVS scan..."
 bash "${ROOT}/policies/scripts/conftest-gha.sh"
 
+if [[ -f "${ROOT}/policies/tests/test_conftest_inline_skip.sh" ]]; then
+    bash "${ROOT}/policies/tests/test_conftest_inline_skip.sh"
+fi
+
 if [[ -f "${ROOT}/policies/tests/test_commit_message_lib.sh" && -f "${ROOT}/policies/scripts/commit_message_lib.sh" ]]; then
     bash "${ROOT}/policies/tests/test_commit_message_lib.sh"
 fi
