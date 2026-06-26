@@ -177,7 +177,6 @@ Use `conftest test --parser yaml -n workflow -p policies/conftest/github_actions
 | 4.4.6 | [ ] **CKV2_SPVS_6** | `run: echo "${{ inputs.foo }}"` | `env: INPUT_FOO: ${{ inputs.foo }}` |
 | 4.4.7 | [ ] **CKV2_SPVS_7** | Step `env: AWS_ACCESS_KEY_ID: …` | OIDC / secrets manager |
 | 4.4.8 | [ ] **CKV2_SPVS_13** | `curl … \| bash` or `wget … \| sh` | Download + checksum (see release-manager) |
-| 4.4.9 | [ ] **CKV2_SPVS_14** | `run: echo "${{ github.actor }}"` | Map `github.*` / `steps.*` to env |
 
 ### 4.5 Rego / YAML edge cases (workflow)
 
@@ -185,7 +184,7 @@ Use `conftest test --parser yaml -n workflow -p policies/conftest/github_actions
 |---|----------|----------|
 | 4.5.1 | [ ] Multiline `run: \|` with leading whitespace before `set -euo pipefail` | PASS (matches after newline) |
 | 4.5.2 | [ ] `run` on line 2+ of step (after `name:`, `shell:`) | PASS if pipefail present |
-| 4.5.3 | [ ] Step with only `uses:` (no `run:`) | SPVS_2/3/4/6/13/14 not applied |
+| 4.5.3 | [ ] Step with only `uses:` (no `run:`) | SPVS_2/3/4/6/13 not applied |
 | 4.5.4 | [ ] `curl` + `\| sha256sum` (not `\| sh`) | PASS — not CKV2_SPVS_13 |
 | 4.5.5 | [ ] `permissions["id-token"]` OIDC check | Uses bracket key, not `id-token` identifier |
 | 4.5.6 | [ ] Multiple jobs; one bad | Only bad job reported in message |

@@ -173,10 +173,24 @@ test_workflow_multi_policy_skip if {
 				"runs-on": "ubuntu-latest",
 				"permissions": {"contents": "read"},
 				"env": {
-					"SPVS_SKIP_POLICY": "CKV2_SPVS_6, CKV2_SPVS_14",
+					"SPVS_SKIP_POLICY": "CKV2_SPVS_6",
 					"SPVS_SKIP_REASON": "legacy mapping; SEC-1234",
 				},
 				"steps": [{"run": "set -euo pipefail\necho ${inputs.message} ${{ github.ref }}"}],
+			},
+		},
+	}
+}
+
+test_github_ref_in_run_allowed if {
+	count({msg | some msg in deny; contains(msg, "CKV2_SPVS_")}) == 0 with input as {
+		"permissions": {"contents": "read"},
+		"on": {"workflow_call": {}},
+		"jobs": {
+			"build": {
+				"runs-on": "ubuntu-latest",
+				"permissions": {"contents": "read"},
+				"steps": [{"run": "set -euo pipefail\necho ref=${{ github.ref }}"}],
 			},
 		},
 	}

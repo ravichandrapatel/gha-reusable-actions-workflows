@@ -101,7 +101,7 @@ Use a **comma-separated list** on one line:
 
 ```yaml
 env:
-  SPVS_SKIP_POLICY: CKV2_SPVS_5, CKV2_SPVS_5B, CKV2_SPVS_6, CKV2_SPVS_14
+  SPVS_SKIP_POLICY: CKV2_SPVS_5, CKV2_SPVS_5B, CKV2_SPVS_6
   SPVS_SKIP_REASON: bundled legacy exception; SEC-1234
 ```
 
@@ -123,9 +123,9 @@ Whenever `SPVS_SKIP_POLICY` is set, **`SPVS_SKIP_REASON` must be non-empty in th
 
 ## Rego implementation reference
 
-Shared helper: [`policies/conftest/github_actions/lib/spvs_skip.rego`](../policies/conftest/github_actions/lib/spvs_skip.rego)
+Shared helpers: [`lib/spvs_skip.rego`](../policies/conftest/github_actions/lib/spvs_skip.rego), [`lib/gha_common.rego`](../policies/conftest/github_actions/lib/gha_common.rego)
 
-Each `deny` rule calls `policy_active(check_id, scopes)` before emitting a failure. Meta-policy: [`workflow/skip_meta.rego`](../policies/conftest/github_actions/workflow/skip_meta.rego).
+Each `deny` rule calls `lib.policy_active(check_id, scopes)` before emitting a failure. Meta-policy: [`workflow/skip_meta.rego`](../policies/conftest/github_actions/workflow/skip_meta.rego) (uses `lib.skip_reason_missing`).
 
 ---
 

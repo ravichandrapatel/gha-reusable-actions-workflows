@@ -215,7 +215,8 @@ Each rule is implemented in Rego under [`policies/conftest/github_actions/`](pol
 | **CKV2_SPVS_5B** | `workflow/steps.rego`, `composite/steps.rego` | Local action refs must not start with `../`. | Use `./.github/actions/name` or pinned remote refs; skip via `SPVS_SKIP_POLICY` ([skip guide](docs/06-inline-policy-skips.md)). |
 | **CKV2_SPVS_6** | `workflow/steps.rego`, `composite/steps.rego` | `${{ inputs.* }}`, `${{ github.event.inputs.* }}`, and mistaken `inputs.*` shell refs must not appear inside `run:` strings. | Map to `env:` (e.g. `MESSAGE: ${{ inputs.message }}`) and reference `"${MESSAGE}"` in shell. |
 | **CKV2_SPVS_13** | `workflow/steps.rego`, `composite/steps.rego` | No `curl\|bash`, `wget\|sh`, or `bash <(curl …)` installers. | Download to file, verify checksum, or use apt/brew/cached binaries (see `install_hooks.sh`). |
-| **CKV2_SPVS_14** | `workflow/steps.rego`, `composite/steps.rego` | `${{ github.* }}` and `${{ steps.* }}` must not appear inside `run:` strings. | Map context values to `env:` before the `run:` block (prevents injection and audit gaps). |
+
+**Note:** `${{ github.ref }}`, `${{ steps.*.outputs.* }}`, and other non–user-controlled context in `run:` is allowed. **CKV2_SPVS_6** still requires mapping **`inputs.*`** to `env`. **CKV_GHA_2** blocks user-controlled `github.event.*` fields in `run:` (shell injection).
 
 #### Credentials and runners
 

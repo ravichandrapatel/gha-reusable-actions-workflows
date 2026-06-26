@@ -7,10 +7,12 @@ package workflow
 
 import rego.v1
 
+import data.lib
+
 # CKV2_GHA_1: top-level permissions must not be write-all (scalar or any scope)
 deny contains msg if {
 	permissions_is_write_all(input.permissions)
-	policy_active("CKV2_GHA_1", skip_scopes_workflow)
+	lib.policy_active("CKV2_GHA_1", skip_scopes_workflow)
 	msg := "CKV2_GHA_1 [permissions]: top-level permissions must not be write-all"
 }
 
@@ -22,7 +24,7 @@ deny contains msg if {
 	value == "write-all"
 	loc := permissions_location(path)
 	scopes := permissions_skip_scopes(path)
-	policy_active("CKV2_SPVS_10", scopes)
+	lib.policy_active("CKV2_SPVS_10", scopes)
 	msg := sprintf("CKV2_SPVS_10: %s permissions must not be write-all", [loc])
 }
 
@@ -35,14 +37,14 @@ deny contains msg if {
 	value[scope] == "write-all"
 	loc := permissions_location(path)
 	scopes := permissions_skip_scopes(path)
-	policy_active("CKV2_SPVS_10", scopes)
+	lib.policy_active("CKV2_SPVS_10", scopes)
 	msg := sprintf("CKV2_SPVS_10: %s permissions.%s must not be write-all", [loc, scope])
 }
 
 # CKV2_SPVS_9: workflow must declare explicit top-level permissions
 deny contains msg if {
 	not input.permissions
-	policy_active("CKV2_SPVS_9", skip_scopes_workflow)
+	lib.policy_active("CKV2_SPVS_9", skip_scopes_workflow)
 	msg := "CKV2_SPVS_9 [permissions]: workflow must declare explicit top-level permissions"
 }
 
@@ -51,7 +53,7 @@ deny contains msg if {
 	is_object(input.permissions)
 	some key in write_permission_keys
 	input.permissions[key] == "write"
-	policy_active("CKV2_SPVS_9", skip_scopes_workflow)
+	lib.policy_active("CKV2_SPVS_9", skip_scopes_workflow)
 	msg := sprintf("CKV2_SPVS_9 [permissions.%s]: workflow permissions.%s must not be write", [key, key])
 }
 
@@ -59,7 +61,7 @@ deny contains msg if {
 deny contains msg if {
 	on := input["on"]
 	regex.match(`pull_request_target`, json.marshal(on))
-	policy_active("CKV2_SPVS_15", skip_scopes_workflow)
+	lib.policy_active("CKV2_SPVS_15", skip_scopes_workflow)
 	msg := "CKV2_SPVS_15 [on]: pull_request_target trigger is prohibited"
 }
 
@@ -68,7 +70,7 @@ deny contains msg if {
 	some job_name
 	job := input.jobs[job_name]
 	not job.permissions
-	policy_active("CKV2_SPVS_1", skip_scopes_for_job(job_name))
+	lib.policy_active("CKV2_SPVS_1", skip_scopes_for_job(job_name))
 	msg := sprintf("CKV2_SPVS_1 [jobs.%s.permissions]: job %s must declare explicit permissions", [job_name, job_name])
 }
 
@@ -78,7 +80,7 @@ deny contains msg if {
 	job := input.jobs[job_name]
 	regex.match(oidc_action_pattern, json.marshal(job.steps))
 	not job.permissions["id-token"] == "write"
-	policy_active("CKV2_SPVS_8", skip_scopes_for_job(job_name))
+	lib.policy_active("CKV2_SPVS_8", skip_scopes_for_job(job_name))
 	msg := sprintf("CKV2_SPVS_8: job %s using cloud OIDC action requires permissions.id-token: write", [job_name])
 }
 
@@ -88,7 +90,7 @@ deny contains msg if {
 	job := input.jobs[job_name]
 	job.permissions.contents == "write"
 	not job.environment
-	policy_active("CKV2_SPVS_11", skip_scopes_for_job(job_name))
+	lib.policy_active("CKV2_SPVS_11", skip_scopes_for_job(job_name))
 	msg := sprintf("CKV2_SPVS_11: job %s with contents:write must declare environment", [job_name])
 }
 
@@ -97,6 +99,6 @@ deny contains msg if {
 	some job_name
 	job := input.jobs[job_name]
 	job["runs-on"] == "self-hosted"
-	policy_active("CKV2_SPVS_12", skip_scopes_for_job(job_name))
+	lib.policy_active("CKV2_SPVS_12", skip_scopes_for_job(job_name))
 	msg := sprintf("CKV2_SPVS_12: job %s must not use bare self-hosted runner", [job_name])
 }
