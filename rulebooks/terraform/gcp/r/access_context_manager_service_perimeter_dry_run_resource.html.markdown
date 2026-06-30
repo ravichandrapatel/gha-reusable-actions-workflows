@@ -1,0 +1,137 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_access_context_manager_service_perimeter_dry_run_resource
+
+Allows configuring a single GCP resource that should be inside of the `spec` block of a dry run service perimeter.
+This resource is intended to be used in cases where it is not possible to compile a full list
+of projects to include in a `google_access_context_manager_service_perimeter` resource,
+to enable them to be added separately.
+If your perimeter is NOT in dry-run mode use `google_access_context_manager_service_perimeter_resource` instead.
+
+~> **Note:** If this resource is used alongside a `google_access_context_manager_service_perimeter` resource,
+the service perimeter resource must have a `lifecycle` block with `ignore_changes = [spec[0].resources]` so
+they don't fight over which resources should be in the policy.
+
+
+To get more information about ServicePerimeterDryRunResource, see:
+
+* [API documentation](https://cloud.google.com/access-context-manager/docs/reference/rest/v1/accessPolicies.servicePerimeters)
+* How-to Guides
+    * [Service Perimeter Quickstart](https://cloud.google.com/vpc-service-controls/docs/quickstart)
+
+~> **Warning:** If you are using User ADCs (Application Default Credentials) with this resource,
+you must specify a `billing_project` and set `user_project_override` to true
+in the provider configuration. Otherwise the ACM API will return a 403 error.
+Your account must have the `serviceusage.services.use` permission on the
+`billing_project` you defined.
+
+## Example Usage - Access Context Manager Service Perimeter Dry Run Resource Basic
+
+
+```hcl
+resource "google_access_context_manager_service_perimeter_dry_run_resource" "service-perimeter-dry-run-resource" {
+  perimeter_name = google_access_context_manager_service_perimeter.service-perimeter-dry-run-resource.name
+  resource = "projects/987654321"
+}
+
+resource "google_access_context_manager_service_perimeter" "service-perimeter-dry-run-resource" {
+  parent = "accessPolicies/${google_access_context_manager_access_policy.access-policy.name}"
+  name   = "accessPolicies/${google_access_context_manager_access_policy.access-policy.name}/servicePerimeters/restrict_all"
+  title  = "restrict_all"
+  spec {
+    restricted_services = ["storage.googleapis.com"]
+  }
+  use_explicit_dry_run_spec = true
+  lifecycle {
+    ignore_changes = [spec[0].resources]
+  }
+}
+
+resource "google_access_context_manager_access_policy" "access-policy" {
+  parent = "organizations/123456789"
+  title  = "my policy"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `resource` -
+  (Required)
+  A GCP resource that is inside of the service perimeter.
+  Currently only projects are allowed.
+  Format: projects/{project_number}
+
+* `perimeter_name` -
+  (Required)
+  The name of the Service Perimeter to add this resource to.
+
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `{{perimeter_name}}/{{resource}}`
+
+* `access_policy_id` -
+  The name of the Access Policy this resource belongs to.
+
+* `etag` -
+  The perimeter etag is internally used to prevent overwriting the list of perimeter resources on PATCH calls. It is retrieved from the same GET perimeter API call that's used to get the current list of resources. The resource to add or remove is merged into that list and then this etag is sent with the PATCH call along with the updated resource list.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+ServicePerimeterDryRunResource can be imported using any of these accepted formats:
+
+* `{{perimeter_name}}/{{resource}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import ServicePerimeterDryRunResource using identity values. For example:
+
+```tf
+import {
+  identity = {
+    resource = "<-required value->"
+    perimeterName = "<-required value->"
+  }
+  to = google_access_context_manager_service_perimeter_dry_run_resource.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import ServicePerimeterDryRunResource using one of the formats above. For example:
+
+```tf
+import {
+  id = "{{perimeter_name}}/{{resource}}"
+  to = google_access_context_manager_service_perimeter_dry_run_resource.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), ServicePerimeterDryRunResource can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_access_context_manager_service_perimeter_dry_run_resource.default {{perimeter_name}}/{{resource}}
+```

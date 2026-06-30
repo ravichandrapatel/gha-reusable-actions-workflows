@@ -1,0 +1,148 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_scc_management_organization_event_threat_detection_custom_module
+
+Represents an instance of an Event Threat Detection custom module, including
+its full module name, display name, enablement state, and last updated time.
+You can create a custom module at the organization level only.
+
+
+To get more information about OrganizationEventThreatDetectionCustomModule, see:
+
+* [API documentation](https://cloud.google.com/security-command-center/docs/reference/security-center-management/rest/v1/organizations.locations.eventThreatDetectionCustomModules)
+* How-to Guides
+    * [Overview of custom modules for Event Threat Detection](https://cloud.google.com/security-command-center/docs/custom-modules-etd-overview)
+
+## Example Usage - Scc Management Organization Event Threat Detection Custom Module
+
+
+```hcl
+resource "google_scc_management_organization_event_threat_detection_custom_module" "example" {
+  organization = "123456789"
+  location = "global"
+  display_name = "basic_custom_module"
+  enablement_state = "ENABLED"
+  type = "CONFIGURABLE_BAD_IP"
+  description = "My Event Threat Detection Custom Module"
+  config = jsonencode({
+    "metadata": {
+      "severity": "LOW",
+      "description": "Flagged by Forcepoint as malicious",
+      "recommendation": "Contact the owner of the relevant project."
+    },
+    "ips": [
+      "192.0.2.1",
+      "192.0.2.0/24"
+    ]
+  })
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `organization` -
+  (Required)
+  Numerical ID of the parent organization.
+
+
+* `config` -
+  (Optional)
+  Config for the module. For the resident module, its config value is defined at this level.
+  For the inherited module, its config value is inherited from the ancestor module.
+
+* `enablement_state` -
+  (Optional)
+  The state of enablement for the module at the given level of the hierarchy.
+  Possible values are: `ENABLED`, `DISABLED`.
+
+* `type` -
+  (Optional)
+  Immutable. Type for the module. e.g. CONFIGURABLE_BAD_IP.
+
+* `display_name` -
+  (Optional)
+  The human readable name to be displayed for the module.
+
+* `location` -
+  (Optional)
+  Location ID of the parent organization. Only global is supported at the moment.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `organizations/{{organization}}/locations/{{location}}/eventThreatDetectionCustomModules/{{name}}`
+
+* `name` -
+  The resource name of the Event Threat Detection custom module.
+  Its format is "organizations/{organization}/locations/{location}/eventThreatDetectionCustomModules/{eventThreatDetectionCustomModule}".
+
+* `update_time` -
+  The time at which the custom module was last updated.
+  A timestamp in RFC3339 UTC "Zulu" format, with nanosecond resolution and
+  up to nine fractional digits. Examples: "2014-10-02T15:01:23Z" and "2014-10-02T15:01:23.045123456Z".
+
+* `last_editor` -
+  The editor that last updated the custom module
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+OrganizationEventThreatDetectionCustomModule can be imported using any of these accepted formats:
+
+* `organizations/{{organization}}/locations/{{location}}/eventThreatDetectionCustomModules/{{name}}`
+* `{{organization}}/{{location}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import OrganizationEventThreatDetectionCustomModule using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-optional value->"
+    organization = "<-required value->"
+    location = "<-optional value->"
+  }
+  to = google_scc_management_organization_event_threat_detection_custom_module.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import OrganizationEventThreatDetectionCustomModule using one of the formats above. For example:
+
+```tf
+import {
+  id = "organizations/{{organization}}/locations/{{location}}/eventThreatDetectionCustomModules/{{name}}"
+  to = google_scc_management_organization_event_threat_detection_custom_module.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), OrganizationEventThreatDetectionCustomModule can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_scc_management_organization_event_threat_detection_custom_module.default organizations/{{organization}}/locations/{{location}}/eventThreatDetectionCustomModules/{{name}}
+$ terraform import google_scc_management_organization_event_threat_detection_custom_module.default {{organization}}/{{location}}/{{name}}
+```

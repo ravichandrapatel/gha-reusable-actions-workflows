@@ -1,0 +1,58 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_digital_twins_instance
+
+Use this data source to access information about an existing Digital Twins instance.
+
+## Example Usage
+
+```hcl
+provider "azurerm" {
+  features {}
+}
+
+data "azurerm_digital_twins_instance" "example" {
+  name                = "existing-digital-twins"
+  resource_group_name = "existing-resgroup"
+}
+
+output "id" {
+  value = data.azurerm_digital_twins_instance.example.id
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - (Required) The name of this Digital Twins instance.
+
+* `resource_group_name` - (Required) The name of the Resource Group where the Digital Twins instance exists.
+
+## Attributes Reference
+
+In addition to the Arguments listed above - the following Attributes are exported:
+
+* `id` - The ID of the Digital Twins instance.
+
+* `host_name` - The API endpoint to work with this Digital Twins instance.
+
+* `location` - The Azure Region where the Digital Twins instance exists.
+
+* `tags` - A mapping of tags assigned to the Digital Twins instance.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the Digital Twins instance.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.DigitalTwins` - 2023-01-31

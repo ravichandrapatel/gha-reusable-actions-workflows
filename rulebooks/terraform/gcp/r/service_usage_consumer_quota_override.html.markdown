@@ -1,0 +1,200 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_service_usage_consumer_quota_override
+
+A consumer override is applied to the consumer on its own authority to limit its own quota usage.
+Consumer overrides cannot be used to grant more quota than would be allowed by admin overrides,
+producer overrides, or the default limit of the service.
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about ConsumerQuotaOverride, see:
+* How-to Guides
+    * [Managing Service Quota](https://cloud.google.com/service-usage/docs/manage-quota )
+    * [REST API documentation](https://cloud.google.com/service-usage/docs/reference/rest/v1beta1/services.consumerQuotaMetrics.limits.consumerOverrides)
+
+## Example Usage - Consumer Quota Override
+
+
+```hcl
+resource "google_project" "my_project" {
+  provider   = google-beta
+  name       = "tf-test-project"
+  project_id = "quota"
+  org_id     = "123456789"
+  deletion_policy = "DELETE"
+}
+
+resource "google_service_usage_consumer_quota_override" "override" {
+  provider       = google-beta
+  project        = google_project.my_project.project_id
+  service        = "servicemanagement.googleapis.com"
+  metric         = urlencode("servicemanagement.googleapis.com/default_requests")
+  limit          = urlencode("/min/project")
+  override_value = "95"
+  force          = true
+}
+```
+## Example Usage - Region Consumer Quota Override
+
+
+```hcl
+resource "google_project" "my_project" {
+  provider   = google-beta
+  name       = "tf-test-project"
+  project_id = "quota"
+  org_id     = "123456789"
+  deletion_policy = "DELETE"
+}
+
+resource "google_service_usage_consumer_quota_override" "override" {
+  provider       = google-beta
+  dimensions = {
+    region = "us-central1"
+  }
+  project        = google_project.my_project.project_id
+  service        = "compute.googleapis.com"
+  metric         = urlencode("compute.googleapis.com/n2_cpus")
+  limit          = urlencode("/project/region")
+  override_value = "8"
+  force          = true
+}
+```
+## Example Usage - Consumer Quota Override Custom Dimension
+
+
+```hcl
+resource "google_project" "my_project" {
+  provider   = google-beta
+  name       = "tf-test-project"
+  project_id = "quota"
+  org_id     = "123456789"
+  deletion_policy = "DELETE"
+}
+
+resource "google_service_usage_consumer_quota_override" "override" {
+  provider       = google-beta
+  project        = google_project.my_project.project_id
+  service        = "libraryagent.googleapis.com"
+  metric         = urlencode("libraryagent.googleapis.com/borrows")
+  limit          = urlencode("/author/project")
+  override_value = "1"
+  force          = true
+  dimensions = {
+    author = "larry"
+  }
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `override_value` -
+  (Required)
+  The overriding quota limit value. Can be any nonnegative integer, or -1 (unlimited quota).
+
+* `service` -
+  (Required)
+  The service that the metrics belong to, e.g. `compute.googleapis.com`.
+
+* `metric` -
+  (Required)
+  The metric that should be limited, e.g. `compute.googleapis.com/cpus`.
+
+* `limit` -
+  (Required)
+  The limit on the metric, e.g. `/project/region`.
+  ~> Make sure that `limit` is in a format that doesn't start with `1/` or contain curly braces.
+  E.g. use `/project/user` instead of `1/{project}/{user}`.
+
+
+* `dimensions` -
+  (Optional)
+  If this map is nonempty, then this override applies only to specific values for dimensions defined in the limit unit.
+
+* `force` -
+  (Optional)
+  If the new quota would decrease the existing quota by more than 10%, the request is rejected.
+  If `force` is `true`, that safety check is ignored.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/services/{{service}}/consumerQuotaMetrics/{{metric}}/limits/{{limit}}/consumerOverrides/{{name}}`
+
+* `name` -
+  The server-generated name of the quota override.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+ConsumerQuotaOverride can be imported using any of these accepted formats:
+
+* `projects/{{project}}/services/{{service}}/consumerQuotaMetrics/{{metric}}/limits/{{limit}}/consumerOverrides/{{name}}`
+* `services/{{service}}/consumerQuotaMetrics/{{metric}}/limits/{{limit}}/consumerOverrides/{{name}}`
+* `{{service}}/{{metric}}/{{limit}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import ConsumerQuotaOverride using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-optional value->"
+    service = "<-required value->"
+    metric = "<-required value->"
+    limit = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_service_usage_consumer_quota_override.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import ConsumerQuotaOverride using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/services/{{service}}/consumerQuotaMetrics/{{metric}}/limits/{{limit}}/consumerOverrides/{{name}}"
+  to = google_service_usage_consumer_quota_override.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), ConsumerQuotaOverride can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_service_usage_consumer_quota_override.default projects/{{project}}/services/{{service}}/consumerQuotaMetrics/{{metric}}/limits/{{limit}}/consumerOverrides/{{name}}
+$ terraform import google_service_usage_consumer_quota_override.default services/{{service}}/consumerQuotaMetrics/{{metric}}/limits/{{limit}}/consumerOverrides/{{name}}
+$ terraform import google_service_usage_consumer_quota_override.default {{service}}/{{metric}}/{{limit}}/{{name}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

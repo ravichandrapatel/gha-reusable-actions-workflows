@@ -1,0 +1,129 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_resource_manager_lien
+
+A Lien represents an encumbrance on the actions that can be performed on a resource.
+
+
+To get more information about Lien, see:
+
+* [API documentation](https://docs.cloud.google.com/resource-manager/reference/rest)
+* How-to Guides
+    * [Create a Lien](https://docs.cloud.google.com/resource-manager/docs/project-liens)
+
+## Example Usage - Resource Manager Lien
+
+
+```hcl
+resource "google_resource_manager_lien" "lien" {
+  parent       = "projects/${google_project.project.number}"
+  restrictions = ["resourcemanager.projects.delete"]
+  origin       = "machine-readable-explanation"
+  reason       = "This project is an important environment"
+}
+
+resource "google_project" "project" {
+  project_id = "staging-project"
+  name       = "A very important project!"
+  deletion_policy = "DELETE"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `reason` -
+  (Required)
+  Concise user-visible strings indicating why an action cannot be performed
+  on a resource. Maximum length of 200 characters.
+
+* `origin` -
+  (Required)
+  A stable, user-visible/meaningful string identifying the origin
+  of the Lien, intended to be inspected programmatically. Maximum length of
+  200 characters.
+
+* `parent` -
+  (Required)
+  A reference to the resource this Lien is attached to.
+  The server will validate the parent against those for which Liens are supported.
+  Since a variety of objects can have Liens against them, you must provide the type
+  prefix (e.g. "projects/my-project-name").
+
+* `restrictions` -
+  (Required)
+  The types of operations which should be blocked as a result of this Lien.
+  Each value should correspond to an IAM permission. The server will validate
+  the permissions against those for which Liens are supported.  An empty
+  list is meaningless and will be rejected.
+  e.g. ['resourcemanager.projects.delete']
+
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `{{name}}`
+
+* `name` -
+  A system-generated unique identifier for this Lien.
+
+* `create_time` -
+  Time of creation
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Lien can be imported using any of these accepted formats:
+
+* `{{parent}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Lien using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-optional value->"
+    parent = "<-required value->"
+  }
+  to = google_resource_manager_lien.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Lien using one of the formats above. For example:
+
+```tf
+import {
+  id = "{{parent}}/{{name}}"
+  to = google_resource_manager_lien.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Lien can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_resource_manager_lien.default {{parent}}/{{name}}
+```

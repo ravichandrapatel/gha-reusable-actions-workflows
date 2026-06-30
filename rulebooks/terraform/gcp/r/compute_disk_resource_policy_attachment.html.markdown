@@ -1,0 +1,147 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_compute_disk_resource_policy_attachment
+
+Adds existing resource policies to a disk. You can only add one policy
+which will be applied to this disk for scheduling snapshot creation.
+
+~> **Note:** This resource does not support regional disks (`google_compute_region_disk`). For regional disks, please refer to [`google_compute_region_disk_resource_policy_attachment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_region_disk_resource_policy_attachment)
+
+
+
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=disk_resource_policy_attachment_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Disk Resource Policy Attachment Basic
+
+
+```hcl
+resource "google_compute_disk_resource_policy_attachment" "attachment" {
+  name = google_compute_resource_policy.policy.name
+  disk = google_compute_disk.ssd.name
+  zone = "us-central1-a"
+}
+
+resource "google_compute_disk" "ssd" {
+  name  = "my-disk"
+  image = data.google_compute_image.my_image.self_link
+  size  = 50
+  type  = "pd-ssd"
+  zone  = "us-central1-a"
+}
+
+resource "google_compute_resource_policy" "policy" {
+  name = "my-resource-policy"
+  region = "us-central1"
+  snapshot_schedule_policy {
+    schedule {
+      daily_schedule {
+        days_in_cycle = 1
+        start_time = "04:00"
+      }
+    }
+  }
+}
+
+data "google_compute_image" "my_image" {
+  family  = "debian-11"
+  project = "debian-cloud"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `name` -
+  (Required)
+  The resource policy to be attached to the disk for scheduling snapshot
+  creation. Do not specify the self link.
+
+* `disk` -
+  (Required)
+  The name of the disk in which the resource policies are attached to.
+
+
+* `zone` -
+  (Optional)
+  A reference to the zone where the disk resides.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `{{project}}/{{zone}}/{{disk}}/{{name}}`
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+DiskResourcePolicyAttachment can be imported using any of these accepted formats:
+
+* `projects/{{project}}/zones/{{zone}}/disks/{{disk}}/{{name}}`
+* `{{project}}/{{zone}}/{{disk}}/{{name}}`
+* `{{zone}}/{{disk}}/{{name}}`
+* `{{disk}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import DiskResourcePolicyAttachment using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-required value->"
+    disk = "<-required value->"
+    zone = "<-optional value->"
+    project = "<-optional value->"
+  }
+  to = google_compute_disk_resource_policy_attachment.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import DiskResourcePolicyAttachment using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/zones/{{zone}}/disks/{{disk}}/{{name}}"
+  to = google_compute_disk_resource_policy_attachment.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), DiskResourcePolicyAttachment can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_compute_disk_resource_policy_attachment.default projects/{{project}}/zones/{{zone}}/disks/{{disk}}/{{name}}
+$ terraform import google_compute_disk_resource_policy_attachment.default {{project}}/{{zone}}/{{disk}}/{{name}}
+$ terraform import google_compute_disk_resource_policy_attachment.default {{zone}}/{{disk}}/{{name}}
+$ terraform import google_compute_disk_resource_policy_attachment.default {{disk}}/{{name}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

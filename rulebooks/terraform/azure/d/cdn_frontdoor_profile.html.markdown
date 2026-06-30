@@ -1,0 +1,78 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_cdn_frontdoor_profile
+
+Use this data source to access information about an existing Front Door (standard/premium) Profile.
+
+## Example Usage
+
+```hcl
+data "azurerm_cdn_frontdoor_profile" "example" {
+  name                = "existing-cdn-profile"
+  resource_group_name = "existing-resources"
+}
+
+output "front_door_id" {
+  value = data.azurerm_cdn_frontdoor_profile.example.id
+}
+
+output "log_scrubbing_match_variable" {
+  value = data.azurerm_cdn_frontdoor_profile.example.log_scrubbing_rule.0.match_variable
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - (Required) Specifies the name of the Front Door Profile.
+
+* `resource_group_name` - (Required) The name of the Resource Group where this Front Door Profile exists.
+
+## Attributes Reference
+
+In addition to the Arguments listed above - the following attributes are exported:
+
+* `id` - The ID of this Front Door Profile.
+
+* `identity` - An `identity` block as defined below.
+
+* `resource_guid` - The UUID of the Front Door Profile which will be sent in the HTTP Header as the `X-Azure-FDID` attribute.
+
+* `sku_name` - Specifies the SKU for this Front Door Profile.
+
+* `log_scrubbing_rule` - One or more `log_scrubbing_rule` blocks as defined below.
+
+* `response_timeout_seconds` - Specifies the maximum response timeout in seconds.
+
+* `tags` - Specifies a mapping of Tags assigned to this Front Door Profile.
+
+---
+
+An `identity` block exports the following:
+
+* `type` - The type of Managed Service Identity that is configured on this Front Door Profile.
+
+* `identity_ids` - The list of User Assigned Managed Identity IDs assigned to this Front Door Profile.
+
+---
+
+A `log_scrubbing_rule` block exports the following:
+
+* `match_variable` - The variable that is scrubbed from the logs.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the Front Door Profile.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.Cdn` - 2024-02-01

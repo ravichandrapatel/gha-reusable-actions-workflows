@@ -1,0 +1,141 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_api_gateway_api
+
+A consumable API that can be used by multiple Gateways.
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about Api, see:
+
+* [API documentation](https://cloud.google.com/api-gateway/docs/reference/rest/v1beta/projects.locations.apis)
+* How-to Guides
+    * [Official Documentation](https://cloud.google.com/api-gateway/docs/quickstart)
+
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=apigateway_api_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Apigateway Api Basic
+
+
+```hcl
+resource "google_api_gateway_api" "api" {
+  provider = google-beta
+  api_id = "my-api"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `api_id` -
+  (Required)
+  Identifier to assign to the API. Must be unique within scope of the parent resource(project)
+
+
+* `display_name` -
+  (Optional)
+  A user-visible name for the API.
+
+* `managed_service` -
+  (Optional)
+  Immutable. The name of a Google Managed Service ( https://cloud.google.com/service-infrastructure/docs/glossary#managed).
+  If not specified, a new Service will automatically be created in the same project as this API.
+
+* `labels` -
+  (Optional)
+  Resource labels to represent user-provided metadata.
+
+  **Note**: This field is non-authoritative, and will only manage the labels present in your configuration.
+  Please refer to the field `effective_labels` for all of the labels present on the resource.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/global/apis/{{api_id}}`
+
+* `name` -
+  The resource name of the API. Format `projects/{{project}}/locations/global/apis/{{apiId}}`
+
+* `create_time` -
+  Creation timestamp in RFC3339 text format.
+
+* `terraform_labels` -
+  The combination of labels configured directly on the resource
+   and default labels configured on the provider.
+
+* `effective_labels` -
+  All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Api can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/global/apis/{{api_id}}`
+* `{{project}}/{{api_id}}`
+* `{{api_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Api using identity values. For example:
+
+```tf
+import {
+  identity = {
+    apiId = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_api_gateway_api.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Api using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/global/apis/{{api_id}}"
+  to = google_api_gateway_api.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Api can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_api_gateway_api.default projects/{{project}}/locations/global/apis/{{api_id}}
+$ terraform import google_api_gateway_api.default {{project}}/{{api_id}}
+$ terraform import google_api_gateway_api.default {{api_id}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

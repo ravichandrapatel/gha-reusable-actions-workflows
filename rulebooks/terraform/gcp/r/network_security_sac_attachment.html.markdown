@@ -1,0 +1,172 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_network_security_sac_attachment
+
+Represents a Secure Access Connect (SAC) attachment resource
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about SacAttachment, see:
+
+* [API documentation](https://cloud.google.com/secure-access-connect/docs/reference/network-security/rest/v1beta1/projects.locations.sacAttachments)
+* How-to Guides
+    * [QUICKSTART_TITLE](https://cloud.google.com/secure-access-connect/docs/overview)
+
+## Example Usage - Sac Attachment Prisma Access
+
+
+```hcl
+resource "google_network_security_sac_attachment" "default" {
+    provider = google-beta
+    name = "sac-attachment-name"
+    location = "us-central1"
+    labels = {
+        label-one = "value-one"
+    }
+    ncc_gateway = "ncc_gateway_spoke_name"
+    sac_realm = "sac_realm_name"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `name` -
+  (Required)
+  Identifier. Resource name
+
+* `sac_realm` -
+  (Required)
+  SAC Realm which owns the attachment. This can be input as an ID or a full resource name.
+
+* `ncc_gateway` -
+  (Required)
+  NCC Gateway associated with the attachment. This can be input as an ID or a full resource name.
+
+* `location` -
+  (Required)
+  The location of the SACAttachment resource. eg us-central1
+
+
+* `labels` -
+  (Optional)
+  Optional labels in key:value format. For more information about labels, see [Requirements for labels](https://docs.cloud.google.com/resource-manager/docs/creating-managing-labels#requirements).
+
+  **Note**: This field is non-authoritative, and will only manage the labels present in your configuration.
+  Please refer to the field `effective_labels` for all of the labels present on the resource.
+
+* `country` -
+  (Optional)
+  Case-insensitive ISO-3166 alpha-2 country code used for localization. Only valid for Symantec attachments.
+
+* `time_zone` -
+  (Optional)
+  Case-sensitive tzinfo identifier used for localization. Only valid for Symantec attachments.
+
+* `symantec_options` -
+  (Optional)
+  Configuration required for Symantec attachments.
+  Structure is [documented below](#nested_symantec_options).
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+<a name="nested_symantec_options"></a>The `symantec_options` block supports:
+
+* `symantec_site` -
+  (Optional)
+  Symantec data center identifier that this attachment will connect to.
+
+* `symantec_location_name` -
+  (Optional)
+  Name to be used when creating a location on the customer's behalf in Symantec's Location API. Not to be confused with Google Cloud locations.
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{location}}/sacAttachments/{{name}}`
+
+* `create_time` -
+  Timestamp when the realm was created.
+
+* `update_time` -
+  Timestamp when the realm was last updated.
+
+* `state` -
+  State of the attachment.
+
+* `terraform_labels` -
+  The combination of labels configured directly on the resource
+   and default labels configured on the provider.
+
+* `effective_labels` -
+  All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+SacAttachment can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{location}}/sacAttachments/{{name}}`
+* `{{project}}/{{location}}/{{name}}`
+* `{{location}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import SacAttachment using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-required value->"
+    location = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_network_security_sac_attachment.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import SacAttachment using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{location}}/sacAttachments/{{name}}"
+  to = google_network_security_sac_attachment.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), SacAttachment can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_network_security_sac_attachment.default projects/{{project}}/locations/{{location}}/sacAttachments/{{name}}
+$ terraform import google_network_security_sac_attachment.default {{project}}/{{location}}/{{name}}
+$ terraform import google_network_security_sac_attachment.default {{location}}/{{name}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

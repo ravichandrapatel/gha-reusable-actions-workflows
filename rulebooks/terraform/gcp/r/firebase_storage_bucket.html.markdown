@@ -1,0 +1,118 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_firebase_storage_bucket
+
+An association between a Firebase project and a Google Cloud Storage bucket.
+This association enables integration of Cloud Storage buckets with Firebase such as Firebase SDKS, Authentication, and Security Rules.
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about Bucket, see:
+
+* [API documentation](https://firebase.google.com/docs/reference/rest/storage/rest/v1beta/projects.buckets)
+* How-to Guides
+    * [Official Documentation](https://firebase.google.com/docs/storage/)
+
+## Example Usage - Firebasestorage Bucket Basic
+
+
+```hcl
+resource "google_storage_bucket" "default" {
+  provider                    = google-beta
+  name                        = "test_bucket"
+  location                    = "US"
+  uniform_bucket_level_access = true
+}
+
+resource "google_firebase_storage_bucket" "default" {
+  provider  = google-beta
+  project   = "my-project-name"
+  bucket_id = google_storage_bucket.default.name
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+
+* `bucket_id` -
+  (Optional)
+  Required. Immutable. The ID of the underlying Google Cloud Storage bucket
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/buckets/{{bucket_id}}`
+
+* `name` -
+  Resource name of the bucket in the format projects/PROJECT_IDENTIFIER/buckets/BUCKET_ID
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Bucket can be imported using any of these accepted formats:
+
+* `projects/{{project}}/buckets/{{bucket_id}}`
+* `{{project}}/{{bucket_id}}`
+* `{{bucket_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Bucket using identity values. For example:
+
+```tf
+import {
+  identity = {
+    bucket_id = "<-optional value->"
+    project = "<-optional value->"
+  }
+  to = google_firebase_storage_bucket.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Bucket using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/buckets/{{bucket_id}}"
+  to = google_firebase_storage_bucket.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Bucket can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_firebase_storage_bucket.default projects/{{project}}/buckets/{{bucket_id}}
+$ terraform import google_firebase_storage_bucket.default {{project}}/{{bucket_id}}
+$ terraform import google_firebase_storage_bucket.default {{bucket_id}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

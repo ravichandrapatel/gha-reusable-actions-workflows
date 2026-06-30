@@ -1,0 +1,63 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_database_migration_project
+
+Use this data source to access information about an existing Database Migration Project.
+
+## Example Usage
+
+```hcl
+provider "azurerm" {
+  features {}
+}
+
+data "azurerm_database_migration_project" "example" {
+  name                = "example-dbms-project"
+  resource_group_name = "example-rg"
+  service_name        = "example-dbms"
+}
+
+output "name" {
+  value = data.azurerm_database_migration_project.example.name
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - (Required) Name of the database migration project.
+
+* `resource_group_name` - (Required) Name of the resource group where resource belongs to.
+
+* `service_name` - (Required) Name of the database migration service where resource belongs to.
+
+## Attributes Reference
+
+The following attributes are exported:
+
+* `id` - The ID of Database Migration Project.
+
+* `location` - Azure location where the resource exists.
+
+* `source_platform` - The platform type of the migration source.
+
+* `target_platform` - The platform type of the migration target.
+
+* `tags` - A mapping of tags to assigned to the resource.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the API Management API.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.DataMigration` - 2021-06-30

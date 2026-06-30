@@ -1,0 +1,159 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_firebase_hosting_site
+
+A `Site` represents a Firebase Hosting site.
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about Site, see:
+
+* [API documentation](https://firebase.google.com/docs/reference/hosting/rest/v1beta1/projects.sites)
+* How-to Guides
+    * [Official Documentation](https://firebase.google.com/docs/hosting)
+
+## Example Usage - Firebasehosting Site Basic
+
+
+```hcl
+resource "google_firebase_hosting_site" "default" {
+  provider = google-beta
+  project  = "my-project-name"
+  site_id = "site-no-app"
+}
+```
+## Example Usage - Firebasehosting Site Full
+
+
+```hcl
+resource "google_firebase_web_app" "default" {
+  provider = google-beta
+  project  = "my-project-name"
+  display_name = "Test web app for Firebase Hosting"
+}
+
+resource "google_firebase_hosting_site" "full" {
+  provider = google-beta
+  project  = "my-project-name"
+  site_id = "site-with-app"
+  app_id = google_firebase_web_app.default.app_id
+}
+```
+## Example Usage - Firebasehosting Site Default
+
+
+```hcl
+resource "google_firebase_hosting_site" "default" {
+  provider = google-beta
+  project  = "my-project-name"
+  site_id  = "my-project-name"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+
+* `app_id` -
+  (Optional)
+  Optional. The [ID of a Web App](https://firebase.google.com/docs/reference/firebase-management/rest/v1beta1/projects.webApps#WebApp.FIELDS.app_id)
+  associated with the Hosting site.
+
+* `site_id` -
+  (Optional)
+  Required. Immutable. A globally unique identifier for the Hosting site. This identifier is
+  used to construct the Firebase-provisioned subdomains for the site, so it must also be a valid
+  domain name label.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/sites/{{site_id}}`
+
+* `name` -
+  Output only. The fully-qualified resource name of the Hosting site, in
+  the format: projects/PROJECT_IDENTIFIER/sites/SITE_ID PROJECT_IDENTIFIER: the
+  Firebase project's
+  [`ProjectNumber`](https://firebase.google.com/docs/reference/firebase-management/rest/v1beta1/projects#FirebaseProject.FIELDS.project_number) ***(recommended)*** or its
+  [`ProjectId`](https://firebase.google.com/docs/reference/firebase-management/rest/v1beta1/projects#FirebaseProject.FIELDS.project_id).
+  Learn more about using project identifiers in Google's
+  [AIP 2510 standard](https://google.aip.dev/cloud/2510).
+
+* `default_url` -
+  The default URL for the site in the form of https://{name}.web.app
+
+* `type` -
+  The type of Hosting site, either 'DEFAULT_SITE' or `USER_SITE`
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Site can be imported using any of these accepted formats:
+
+* `projects/{{project}}/sites/{{site_id}}`
+* `{{project}}/{{site_id}}`
+* `sites/{{site_id}}`
+* `{{site_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Site using identity values. For example:
+
+```tf
+import {
+  identity = {
+    site_id = "<-optional value->"
+    project = "<-optional value->"
+  }
+  to = google_firebase_hosting_site.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Site using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/sites/{{site_id}}"
+  to = google_firebase_hosting_site.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Site can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_firebase_hosting_site.default projects/{{project}}/sites/{{site_id}}
+$ terraform import google_firebase_hosting_site.default {{project}}/{{site_id}}
+$ terraform import google_firebase_hosting_site.default sites/{{site_id}}
+$ terraform import google_firebase_hosting_site.default {{site_id}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

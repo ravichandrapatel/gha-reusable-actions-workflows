@@ -1,0 +1,88 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# azurerm_subnet_route_table_association
+
+Associates a [Route Table](route_table.html) with a [Subnet](subnet.html) within a [Virtual Network](virtual_network.html).
+
+## Example Usage
+
+```hcl
+resource "azurerm_resource_group" "example" {
+  name     = "example-resources"
+  location = "West Europe"
+}
+
+resource "azurerm_virtual_network" "example" {
+  name                = "example-network"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+}
+
+resource "azurerm_subnet" "example" {
+  name                 = "frontend"
+  resource_group_name  = azurerm_resource_group.example.name
+  virtual_network_name = azurerm_virtual_network.example.name
+  address_prefixes     = ["10.0.2.0/24"]
+}
+
+resource "azurerm_route_table" "example" {
+  name                = "example-routetable"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+
+  route {
+    name                   = "example"
+    address_prefix         = "10.100.0.0/14"
+    next_hop_type          = "VirtualAppliance"
+    next_hop_in_ip_address = "10.10.1.1"
+  }
+}
+
+resource "azurerm_subnet_route_table_association" "example" {
+  subnet_id      = azurerm_subnet.example.id
+  route_table_id = azurerm_route_table.example.id
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `route_table_id` - (Required) The ID of the Route Table which should be associated with the Subnet. Changing this forces a new resource to be created.
+
+-> **Note:** Use this resource only when the subnet is managed as a standalone `azurerm_subnet`. If the subnet is declared inline inside `azurerm_virtual_network`, set `route_table_id` in the inline `subnet` block and do not create this association for the same subnet.
+
+* `subnet_id` - (Required) The ID of the Subnet. Changing this forces a new resource to be created.
+
+## Attributes Reference
+
+In addition to the Arguments listed above - the following Attributes are exported:
+
+* `id` - The ID of the Subnet.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `create` - (Defaults to 30 minutes) Used when creating the Subnet Route Table Association.
+* `read` - (Defaults to 5 minutes) Used when retrieving the Subnet Route Table Association.
+* `delete` - (Defaults to 30 minutes) Used when deleting the Subnet Route Table Association.
+
+## Import
+
+Subnet Route Table Associations can be imported using the `resource id` of the Subnet, e.g.
+
+```shell
+terraform import azurerm_subnet_route_table_association.association1 /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mygroup1/providers/Microsoft.Network/virtualNetworks/myvnet1/subnets/mysubnet1
+```
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This resource uses the following Azure API Providers:
+
+* `Microsoft.Network` - 2025-01-01

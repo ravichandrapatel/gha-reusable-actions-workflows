@@ -1,0 +1,202 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_compute_region_ssl_policy
+
+Represents a Regional SSL policy. SSL policies give you the ability to control the
+features of SSL that your SSL proxy or HTTPS load balancer negotiates.
+
+
+To get more information about RegionSslPolicy, see:
+
+* [API documentation](https://cloud.google.com/compute/docs/reference/rest/v1/regionSslPolicies)
+* How-to Guides
+    * [Using SSL Policies](https://cloud.google.com/compute/docs/load-balancing/ssl-policies)
+
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=region_ssl_policy_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Region Ssl Policy Basic
+
+
+```hcl
+resource "google_compute_region_ssl_policy" "region-ssl-policy" {
+  name    = "region-ssl-policy"
+  region  = "us-central1"
+  profile = "MODERN"
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=region_ssl_policy_post_quantum&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Region Ssl Policy Post Quantum
+
+
+```hcl
+resource "google_compute_region_ssl_policy" "post-quantum-region-ssl-policy" {
+  name                         = "post-quantum-region-ssl-policy"
+  region                       = "us-central1"
+  profile                      = "MODERN"
+  min_tls_version              = "TLS_1_2"
+  post_quantum_key_exchange    = "ENABLED"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `name` -
+  (Required)
+  Name of the resource. Provided by the client when the resource is
+  created. The name must be 1-63 characters long, and comply with
+  RFC1035. Specifically, the name must be 1-63 characters long and match
+  the regular expression `[a-z]([-a-z0-9]*[a-z0-9])?` which means the
+  first character must be a lowercase letter, and all following
+  characters must be a dash, lowercase letter, or digit, except the last
+  character, which cannot be a dash.
+
+
+* `description` -
+  (Optional)
+  An optional description of this resource.
+
+* `profile` -
+  (Optional)
+  Profile specifies the set of SSL features that can be used by the
+  load balancer when negotiating SSL with clients. If using `CUSTOM`,
+  the set of SSL features to enable must be specified in the
+  `customFeatures` field.
+  See the [official documentation](https://cloud.google.com/compute/docs/load-balancing/ssl-policies#profilefeaturesupport)
+  for information on what cipher suites each profile provides. If
+  `CUSTOM` is used, the `custom_features` attribute **must be set**.
+  If set to `FIPS_202205`, `minTlsVersion` must also be set to
+  `TLS_1_2`.
+  Default value is `COMPATIBLE`.
+  Possible values are: `COMPATIBLE`, `MODERN`, `RESTRICTED`, `CUSTOM`, `FIPS_202205`.
+
+* `min_tls_version` -
+  (Optional)
+  The minimum version of SSL protocol that can be used by the clients
+  to establish a connection with the load balancer. When set to
+  `TLS_1_3`, the profile field must be set to `RESTRICTED`.
+  Default value is `TLS_1_0`.
+  Possible values are: `TLS_1_0`, `TLS_1_1`, `TLS_1_2`, `TLS_1_3`.
+
+* `custom_features` -
+  (Optional)
+  A list of features enabled when the selected profile is CUSTOM. The
+  method returns the set of features that can be specified in this
+  list. This field must be empty if the profile is not CUSTOM.
+  See the [official documentation](https://cloud.google.com/compute/docs/load-balancing/ssl-policies#profilefeaturesupport)
+  for which ciphers are available to use. **Note**: this argument
+  *must* be present when using the `CUSTOM` profile. This argument
+  *must not* be present when using any other profile.
+
+* `post_quantum_key_exchange` -
+  (Optional)
+  One of `DEFAULT`, `ENABLED`, or `DEFERRED`. Controls whether the load balancer negotiates
+  X25519MLKEM768 key exchange when clients advertise support for it.
+  When set to `DEFAULT`, or if no SSL Policy is attached to
+  the target proxy, the load balancer disallows X25519MLKEM768 key
+  exchange before October 2026, and allows it afterward. When set to
+  `ENABLED`, the load balancer allows X25519MLKEM768 key
+  exchange. When set to `DEFERRED`, the load balancer
+  disallows X25519MLKEM768 key exchange until October 2027, and allows
+  it afterward.
+  Possible values are: `DEFAULT`, `ENABLED`, `DEFERRED`.
+
+* `region` -
+  (Optional)
+  The region where the regional SSL policy resides.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/regions/{{region}}/sslPolicies/{{name}}`
+
+* `creation_timestamp` -
+  Creation timestamp in RFC3339 text format.
+
+* `enabled_features` -
+  The list of features enabled in the SSL policy.
+
+* `fingerprint` -
+  Fingerprint of this resource. A hash of the contents stored in this
+  object. This field is used in optimistic locking.
+* `self_link` - The URI of the created resource.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+RegionSslPolicy can be imported using any of these accepted formats:
+
+* `projects/{{project}}/regions/{{region}}/sslPolicies/{{name}}`
+* `{{project}}/{{region}}/{{name}}`
+* `{{region}}/{{name}}`
+* `{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import RegionSslPolicy using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-required value->"
+    region = "<-optional value->"
+    project = "<-optional value->"
+  }
+  to = google_compute_region_ssl_policy.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import RegionSslPolicy using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/regions/{{region}}/sslPolicies/{{name}}"
+  to = google_compute_region_ssl_policy.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), RegionSslPolicy can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_compute_region_ssl_policy.default projects/{{project}}/regions/{{region}}/sslPolicies/{{name}}
+$ terraform import google_compute_region_ssl_policy.default {{project}}/{{region}}/{{name}}
+$ terraform import google_compute_region_ssl_policy.default {{region}}/{{name}}
+$ terraform import google_compute_region_ssl_policy.default {{name}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

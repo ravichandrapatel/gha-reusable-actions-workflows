@@ -1,0 +1,154 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_bigtable_logical_view
+
+A logical view object that can be referenced in SQL queries.
+
+
+To get more information about LogicalView, see:
+
+* [API documentation](https://cloud.google.com/bigtable/docs/reference/admin/rest/v2/projects.instances.logicalViews)
+
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=bigtable_logical_view&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Bigtable Logical View
+
+
+```hcl
+resource "google_bigtable_instance" "instance" {
+  name = "bt-instance"
+  cluster {
+    cluster_id   = "cluster-1"
+    zone         = "us-east1-b"
+    num_nodes    = 3
+    storage_type = "HDD"
+  }
+
+  deletion_protection  = false
+}
+
+resource "google_bigtable_table" "table" {
+  name          = "bt-table"
+  instance_name = google_bigtable_instance.instance.name
+
+  column_family {
+	family = "CF"
+  }
+}
+
+resource "google_bigtable_logical_view" "logical_view" {
+  logical_view_id = "bt-logical-view"
+  instance        = google_bigtable_instance.instance.name
+  deletion_protection  = false
+  query = <<EOT
+SELECT _key, CF
+FROM ` + "`bt-table`" + `
+EOT
+
+  depends_on = [
+    google_bigtable_table.table
+  ]
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `query` -
+  (Required)
+  The logical view's select query.
+
+* `logical_view_id` -
+  (Required)
+  The unique name of the logical view in the form `[_a-zA-Z0-9][-_.a-zA-Z0-9]*`.
+
+
+* `deletion_protection` -
+  (Optional)
+  Set to true to make the logical view protected against deletion.
+
+* `instance` -
+  (Optional)
+  The name of the instance to create the logical view within.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/instances/{{instance}}/logicalViews/{{logical_view_id}}`
+
+* `name` -
+  The unique name of the requested logical view. Values are of the form `projects/<project>/instances/<instance>/logicalViews/<logicalViewId>`.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 120 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+LogicalView can be imported using any of these accepted formats:
+
+* `projects/{{project}}/instances/{{instance}}/logicalViews/{{logical_view_id}}`
+* `{{project}}/{{instance}}/{{logical_view_id}}`
+* `{{instance}}/{{logical_view_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import LogicalView using identity values. For example:
+
+```tf
+import {
+  identity = {
+    logicalViewId = "<-required value->"
+    instance = "<-optional value->"
+    project = "<-optional value->"
+  }
+  to = google_bigtable_logical_view.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import LogicalView using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/instances/{{instance}}/logicalViews/{{logical_view_id}}"
+  to = google_bigtable_logical_view.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), LogicalView can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_bigtable_logical_view.default projects/{{project}}/instances/{{instance}}/logicalViews/{{logical_view_id}}
+$ terraform import google_bigtable_logical_view.default {{project}}/{{instance}}/{{logical_view_id}}
+$ terraform import google_bigtable_logical_view.default {{instance}}/{{logical_view_id}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

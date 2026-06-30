@@ -1,0 +1,35 @@
+---
+type: official_reference
+tool: terraform
+authority: external_reference
+---
+
+# `index` Function
+
+`index` finds the first element index for a given value in a list.
+
+```hcl
+index(list, value)
+```
+
+The returned index is zero-based. This function produces an error if the given
+value is not present in the list.
+
+## Examples
+
+```
+> index(["a", "b", "c"], "b")
+1
+```
+
+In this example, the index of the first occurence of `"two"` is returned.
+
+```
+> index(["one", "two", "two"], "two")
+1
+```
+
+## Related Functions
+
+* [`element`](/terraform/language/functions/element) retrieves a particular element from a list given
+  its index.

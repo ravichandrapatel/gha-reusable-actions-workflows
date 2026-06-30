@@ -1,0 +1,152 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_kms_project_kaj_policy_config
+
+`ProjectKajPolicyConfig` is a project-level singleton resource
+used to configure the default KAJ policy of newly created key.
+
+~> **Note:**  ProjectKajPolicyConfig cannot be deleted from Google Cloud Platform.
+Destroying a Terraform-managed  ProjectKajPolicyConfig will remove it from state but
+*will not delete the resource from Google Cloud Platform.*
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about ProjectKajPolicyConfig, see:
+
+* [API documentation](https://cloud.google.com/kms/docs/reference/rest/v1/KeyAccessJustificationsPolicyConfig)
+* How-to Guides
+    * [Set default Key Access Justifications policy](https://cloud.google.com/assured-workloads/key-access-justifications/docs/set-default-policy)
+
+## Example Usage - Kms Project Kaj Policy Config Basic
+
+
+```hcl
+# Create a project
+resource "google_project" "kms_project" {
+  provider        = google-beta
+  project_id      = "my-project"
+  name            = "my-project"
+  org_id      	  = "123456789"
+  billing_account = "000000-0000000-0000000-000000"
+  deletion_policy = "DELETE"
+}
+
+# Enable the Cloud KMS API.
+resource "google_project_service" "kms_api_service" {
+  provider                   = google-beta
+  service                    = "cloudkms.googleapis.com"
+  project                    = google_project.kms_project.project_id
+  disable_dependent_services = true
+  depends_on                 = [google_project.kms_project]
+}
+
+resource "time_sleep" "wait_enable_service_api" {
+	depends_on	= [google_project_service.kms_api_service]
+	create_duration	= "30s"
+}
+
+resource "google_kms_project_kaj_policy_config" "example" {
+	provider 				= google-beta
+	project 				= google_project.kms_project.project_id
+	default_key_access_justification_policy {
+		allowed_access_reasons = [
+			"CUSTOMER_INITIATED_ACCESS",
+			"GOOGLE_INITIATED_SYSTEM_OPERATION",
+		]
+	}
+  	depends_on                 		= [time_sleep.wait_enable_service_api]
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+
+* `default_key_access_justification_policy` -
+  (Optional)
+  The default key access justification policy used when a CryptoKey is
+  created in this project. This is only used when a Key Access Justifications
+  policy is not provided in the CreateCryptoKeyRequest.
+  Structure is [documented below](#nested_default_key_access_justification_policy).
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+<a name="nested_default_key_access_justification_policy"></a>The `default_key_access_justification_policy` block supports:
+
+* `allowed_access_reasons` -
+  (Optional)
+  A KeyAccessJustificationsPolicy specifies zero or more allowed
+  AccessReason values for encrypt, decrypt, and sign operations on a
+  CryptoKey.
+  Each value may be one of: `CUSTOMER_INITIATED_SUPPORT`, `GOOGLE_INITIATED_SERVICE`, `THIRD_PARTY_DATA_REQUEST`, `GOOGLE_INITIATED_REVIEW`, `CUSTOMER_INITIATED_ACCESS`, `GOOGLE_INITIATED_SYSTEM_OPERATION`, `REASON_NOT_EXPECTED`, `MODIFIED_CUSTOMER_INITIATED_ACCESS`, `MODIFIED_GOOGLE_INITIATED_SYSTEM_OPERATION`, `GOOGLE_RESPONSE_TO_PRODUCTION_ALERT`, `CUSTOMER_AUTHORIZED_WORKFLOW_SERVICING`.
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/kajPolicyConfig`
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+ProjectKajPolicyConfig can be imported using any of these accepted formats:
+
+* `projects/{{project}}/kajPolicyConfig`
+* `{{project}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import ProjectKajPolicyConfig using identity values. For example:
+
+```tf
+import {
+  identity = {
+    project = "<-optional value->"
+  }
+  to = google_kms_project_kaj_policy_config.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import ProjectKajPolicyConfig using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/kajPolicyConfig"
+  to = google_kms_project_kaj_policy_config.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), ProjectKajPolicyConfig can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_kms_project_kaj_policy_config.default projects/{{project}}/kajPolicyConfig
+$ terraform import google_kms_project_kaj_policy_config.default {{project}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

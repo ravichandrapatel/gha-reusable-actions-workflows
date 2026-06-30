@@ -1,0 +1,53 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_kubernetes_service_versions
+
+Use this data source to retrieve the version of Kubernetes supported by Azure Kubernetes Service.
+
+## Example Usage
+
+```hcl
+data "azurerm_kubernetes_service_versions" "current" {
+  location = "West Europe"
+}
+
+output "versions" {
+  value = data.azurerm_kubernetes_service_versions.current.versions
+}
+
+output "latest_version" {
+  value = data.azurerm_kubernetes_service_versions.current.latest_version
+}
+```
+
+## Arguments Reference
+
+* `location` - Specifies the location in which to query for versions.
+
+* `version_prefix` - (Optional) A prefix filter for the versions of Kubernetes which should be returned; for example `1.` will return `1.9` to `1.14`, whereas `1.12` will return `1.12.2`.
+
+* `include_preview` - (Optional) Should Preview versions of Kubernetes in AKS be included? Defaults to `true`
+
+## Attributes Reference
+
+* `versions` - The list of all supported versions.
+
+* `latest_version` - The most recent version available. If `include_preview == false`, this is the most recent non-preview version available.
+
+* `default_version` - The N-1 minor non-preview version and latest patch.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the versions.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.ContainerService` - 2019-08-01

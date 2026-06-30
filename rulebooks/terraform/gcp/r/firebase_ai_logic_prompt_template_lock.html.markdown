@@ -1,0 +1,162 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_firebase_ai_logic_prompt_template_lock
+
+A resource that manages the lock state of a PromptTemplate.
+When this resource is created, the template is locked.
+When this resource is deleted, the template is unlocked.
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+
+## Example Usage - Firebaseailogic Prompt Template Lock Basic
+
+
+```hcl
+resource "google_firebase_ai_logic_prompt_template" "basic" {
+  provider = google-beta
+  location = "global"
+  template_id = "lock-template"
+  template_string = <<EOF
+---
+model: googleai/gemini-1.5-flash
+---
+Hello World
+EOF
+}
+
+resource "google_firebase_ai_logic_prompt_template_lock" "basic_lock" {
+  provider = google-beta
+  location = google_firebase_ai_logic_prompt_template.basic.location
+  template_id = google_firebase_ai_logic_prompt_template.basic.template_id
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=firebaseailogic_prompt_template_lock_global_only&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Firebaseailogic Prompt Template Lock Global Only
+
+
+```hcl
+resource "google_firebase_ai_logic_prompt_template" "global_only" {
+  provider = google-beta
+  location = "global"
+  template_id = "global-only-lock-template"
+  template_string = <<EOF
+---
+model: googleai/gemini-1.5-flash
+---
+Hello World
+EOF
+}
+
+resource "google_firebase_ai_logic_prompt_template_lock" "global_only_lock" {
+  provider = google-beta
+  location = google_firebase_ai_logic_prompt_template.global_only.location
+  template_id = google_firebase_ai_logic_prompt_template.global_only.template_id
+  regional_propagation_disabled = true
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `location` -
+  (Required)
+  The location of the prompt template.
+
+* `template_id` -
+  (Required)
+  The ID of the prompt template.
+
+
+* `regional_propagation_disabled` -
+  (Optional)
+  For the `global` location only. If true, the modifyLock operation will
+  apply to the global region only. Otherwise, the operation will also
+  propagate to all applicable regions.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{location}}/templates/{{template_id}}`
+
+* `name` -
+  The resource name of the prompt template.
+
+* `locked` -
+  Indicates if the prompt template is currently locked.
+  This is verified against the server-side PromptTemplate resource.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+PromptTemplateLock can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{location}}/templates/{{template_id}}`
+* `{{project}}/{{location}}/{{template_id}}`
+* `{{location}}/{{template_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import PromptTemplateLock using identity values. For example:
+
+```tf
+import {
+  identity = {
+    location = "<-required value->"
+    template_id = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_firebase_ai_logic_prompt_template_lock.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import PromptTemplateLock using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{location}}/templates/{{template_id}}"
+  to = google_firebase_ai_logic_prompt_template_lock.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), PromptTemplateLock can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_firebase_ai_logic_prompt_template_lock.default projects/{{project}}/locations/{{location}}/templates/{{template_id}}
+$ terraform import google_firebase_ai_logic_prompt_template_lock.default {{project}}/{{location}}/{{template_id}}
+$ terraform import google_firebase_ai_logic_prompt_template_lock.default {{location}}/{{template_id}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

@@ -1,0 +1,49 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_source_control_token
+
+Use this data source to access information about an existing App Service Source Control Token.
+
+~> **Note:** This value can only be queried for the user or service principal that is executing Terraform. It is not possible to retrieve for another user.
+
+## Example Usage
+
+```hcl
+data "azurerm_source_control_token" "example" {
+  type = "GitHub"
+}
+
+output "id" {
+  value = data.azurerm_app_service_github_token.example.id
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `type` - (Required) The Token type. Possible values include `Bitbucket`, `Dropbox`, `Github`, and `OneDrive`.
+
+## Attributes Reference
+
+The following Attributes are exported:
+
+* `id` - The ID of the App Service Source GitHub Token.
+
+* `token` - The GitHub Token value.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the App Service Source GitHub Token.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.Web` - 2023-01-01

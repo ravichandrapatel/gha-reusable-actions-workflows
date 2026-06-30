@@ -1,0 +1,68 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_key_vault_certificate_data
+
+Use this data source to access data stored in an existing Key Vault Certificate.
+
+~> **Note:** All arguments including the secret value will be stored in the raw state as plain-text.
+[Read more about sensitive data in state](/docs/state/sensitive-data.html).
+
+~> **Note:** This data source uses the `GetSecret` function of the Azure API, to get the key of the certificate. Therefore you need secret/get permission
+
+## Example Usage
+
+```hcl
+data "azurerm_key_vault" "example" {
+  name                = "examplekv"
+  resource_group_name = "some-resource-group"
+}
+
+data "azurerm_key_vault_certificate_data" "example" {
+  name         = "secret-sauce"
+  key_vault_id = data.azurerm_key_vault.example.id
+}
+
+output "example_pem" {
+  value = data.azurerm_key_vault_certificate_data.example.pem
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - (Required) Specifies the name of the Key Vault Secret.
+
+* `key_vault_id` - (Required) Specifies the ID of the Key Vault instance where the Secret resides, available on the `azurerm_key_vault` Data Source / Resource.
+
+* `version` - (Optional) Specifies the version of the certificate to look up.  (Defaults to latest)
+
+~> **Note:** The vault must be in the same subscription as the provider. If the vault is in another subscription, you must create an aliased provider for that subscription.
+
+## Attributes Reference
+
+The following attributes are exported:
+
+* `certificates_count` - Amount of certificates in the chain in case Key Vault Certificate is a bundle (e.g. has an intermediate certificate).
+
+* `hex` - The raw Key Vault Certificate data represented as a hexadecimal string.
+
+* `pem` - The Key Vault Certificate in PEM format.
+
+* `key` - The Key Vault Certificate Key.
+
+* `expires` - Expiry date of certificate in RFC3339 format.
+
+* `not_before` - Not Before date of certificate in RFC3339 format.
+
+* `tags` - A mapping of tags to assign to the resource.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the Key Vault Certificate.

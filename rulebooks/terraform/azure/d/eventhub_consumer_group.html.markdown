@@ -1,0 +1,50 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_eventhub_consumer_group
+
+Use this data source to access information about an existing Event Hubs Consumer Group within an Event Hub.
+
+## Example Usage
+
+```hcl
+data "azurerm_eventhub_consumer_group" "test" {
+  name                = azurerm_eventhub_consumer_group.test.name
+  namespace_name      = azurerm_eventhub_namespace.test.name
+  eventhub_name       = azurerm_eventhub.test.name
+  resource_group_name = azurerm_resource_group.test.name
+}
+```
+
+## Arguments Reference
+
+* `name` - Specifies the name of the EventHub Consumer Group resource.
+
+* `namespace_name` - Specifies the name of the grandparent EventHub Namespace.
+
+* `eventhub_name` - Specifies the name of the EventHub.
+
+* `resource_group_name` - The name of the resource group in which the EventHub Consumer Group's grandparent Namespace exists.
+
+## Attributes Reference
+
+The following attributes are exported:
+
+* `id` - The EventHub Consumer Group ID.
+
+* `user_metadata` - Specifies the user metadata.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the EventHub Consumer Group.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.EventHub` - 2024-01-01

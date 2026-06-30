@@ -1,0 +1,50 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_public_ip_prefix
+
+Use this data source to access information about an existing Public IP Prefix.
+
+## Example Usage (reference an existing)
+
+```hcl
+data "azurerm_public_ip_prefix" "example" {
+  name                = "name_of_public_ip"
+  resource_group_name = "name_of_resource_group"
+}
+
+output "public_ip_prefix" {
+  value = data.azurerm_public_ip_prefix.example.ip_prefix
+}
+```
+
+## Arguments Reference
+
+* `name` - Specifies the name of the public IP prefix.
+* `resource_group_name` - Specifies the name of the resource group.
+
+## Attributes Reference
+
+* `id` - The ID of the Public IP Prefix.
+* `ip_prefix` - The Public IP address range, in CIDR notation.
+* `location` - The supported Azure location where the resource exists.
+* `sku` - The SKU of the Public IP Prefix.
+* `sku_tier` - The SKU Tier of the Public IP.
+* `prefix_length` - The number of bits of the prefix.
+* `tags` - A mapping of tags to assigned to the resource.
+* `zones` - A list of Availability Zones in which this Public IP Prefix is located.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the Public IP Prefix.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.Network` - 2025-01-01

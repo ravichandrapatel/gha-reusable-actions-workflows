@@ -1,0 +1,171 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_api_gateway_gateway
+
+A consumable API that can be used by multiple Gateways.
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about Gateway, see:
+
+* [API documentation](https://cloud.google.com/api-gateway/docs/reference/rest/v1beta/projects.locations.apis)
+* How-to Guides
+    * [Official Documentation](https://cloud.google.com/api-gateway/docs/quickstart)
+
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=apigateway_gateway_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Apigateway Gateway Basic
+
+
+```hcl
+resource "google_api_gateway_api" "api_gw" {
+  provider = google-beta
+  api_id = "my-api"
+}
+
+resource "google_api_gateway_api_config" "api_gw" {
+  provider = google-beta
+  api = google_api_gateway_api.api_gw.api_id
+  api_config_id = "my-config"
+
+  openapi_documents {
+    document {
+      path = "spec.yaml"
+      contents = filebase64("test-fixtures/openapi.yaml")
+    }
+  }
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "google_api_gateway_gateway" "api_gw" {
+  provider = google-beta
+  api_config = google_api_gateway_api_config.api_gw.id
+  gateway_id = "my-gateway"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `api_config` -
+  (Required)
+  Resource name of the API Config for this Gateway. Format: projects/{project}/locations/global/apis/{api}/configs/{apiConfig}.
+  When changing api configs please ensure the new config is a new resource and the
+  [lifecycle](https://developer.hashicorp.com/terraform/language/meta-arguments/lifecycle) rule `create_before_destroy` is set.
+
+* `gateway_id` -
+  (Required)
+  Identifier to assign to the Gateway. Must be unique within scope of the parent resource(project).
+
+
+* `display_name` -
+  (Optional)
+  A user-visible name for the API.
+
+* `labels` -
+  (Optional)
+  Resource labels to represent user-provided metadata.
+
+  **Note**: This field is non-authoritative, and will only manage the labels present in your configuration.
+  Please refer to the field `effective_labels` for all of the labels present on the resource.
+
+* `region` -
+  (Optional)
+  The region of the gateway for the API.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{region}}/gateways/{{gateway_id}}`
+
+* `name` -
+  Resource name of the Gateway. Format: projects/{project}/locations/{region}/gateways/{gateway}
+
+* `default_hostname` -
+  The default API Gateway host name of the form {gatewayId}-{hash}.{region_code}.gateway.dev.
+
+* `terraform_labels` -
+  The combination of labels configured directly on the resource
+   and default labels configured on the provider.
+
+* `effective_labels` -
+  All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Gateway can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{region}}/gateways/{{gateway_id}}`
+* `{{project}}/{{region}}/{{gateway_id}}`
+* `{{region}}/{{gateway_id}}`
+* `{{gateway_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Gateway using identity values. For example:
+
+```tf
+import {
+  identity = {
+    region = "<-optional value->"
+    gatewayId = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_api_gateway_gateway.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Gateway using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{region}}/gateways/{{gateway_id}}"
+  to = google_api_gateway_gateway.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Gateway can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_api_gateway_gateway.default projects/{{project}}/locations/{{region}}/gateways/{{gateway_id}}
+$ terraform import google_api_gateway_gateway.default {{project}}/{{region}}/{{gateway_id}}
+$ terraform import google_api_gateway_gateway.default {{region}}/{{gateway_id}}
+$ terraform import google_api_gateway_gateway.default {{gateway_id}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

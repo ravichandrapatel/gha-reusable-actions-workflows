@@ -1,0 +1,203 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_firebase_database_instance
+
+A Firebase Realtime Database instance.
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about Instance, see:
+
+* [API documentation](https://firebase.google.com/docs/reference/rest/database/database-management/rest)
+* How-to Guides
+    * [Official Documentation](https://firebase.google.com/products/realtime-database)
+
+## Example Usage - Firebase Database Instance Basic
+
+
+```hcl
+resource "google_firebase_database_instance" "basic" {
+  provider = google-beta
+  project  = "my-project-name"
+  region   = "us-central1"
+  instance_id = "active-db"
+}
+```
+## Example Usage - Firebase Database Instance Full
+
+
+```hcl
+resource "google_firebase_database_instance" "full" {
+  provider = google-beta
+  project  = "my-project-name"
+  region   = "europe-west1"
+  instance_id = "disabled-db"
+  type     = "USER_DATABASE"
+  desired_state   = "DISABLED"
+}
+```
+## Example Usage - Firebase Database Instance Default Database
+
+
+```hcl
+resource "google_project" "default" {
+  provider = google-beta
+  project_id = "rtdb-project"
+  name       = "rtdb-project"
+  org_id     = "123456789"
+  deletion_policy = "DELETE"
+  labels     = {
+    "firebase" = "enabled"
+  }
+}
+
+resource "google_project_service" "firebase" {
+  provider = google-beta
+  project  = google_project.default.project_id
+  service  = "firebase.googleapis.com"
+}
+
+resource "google_firebase_project" "default" {
+  provider = google-beta
+  project  = google_project.default.project_id
+
+  depends_on = [google_project_service.firebase]
+}
+
+resource "google_project_service" "firebase_database" {
+  provider = google-beta
+  project  = google_firebase_project.default.project
+  service  = "firebasedatabase.googleapis.com"
+}
+
+resource "time_sleep" "wait_60_seconds" {
+  create_duration = "60s"
+  depends_on = [google_project_service.firebase_database]
+}
+
+resource "google_firebase_database_instance" "default" {
+  provider = google-beta
+  project  = google_firebase_project.default.project
+  region   = "us-central1"
+  instance_id = "rtdb-project-default-rtdb"
+  type     = "DEFAULT_DATABASE"
+  depends_on = [time_sleep.wait_60_seconds]
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `region` -
+  (Required)
+  A reference to the region where the Firebase Realtime database resides.
+  Check all [available regions](https://firebase.google.com/docs/projects/locations#rtdb-locations)
+
+* `instance_id` -
+  (Required)
+  The globally unique identifier of the Firebase Realtime Database instance.
+  Instance IDs cannot be reused after deletion.
+
+
+* `type` -
+  (Optional)
+  The database type.
+  Each project can create one default Firebase Realtime Database, which cannot be deleted once created.
+  Creating user Databases is only available for projects on the Blaze plan.
+  Projects can be upgraded using the Cloud Billing API https://cloud.google.com/billing/reference/rest/v1/projects/updateBillingInfo.
+  Default value is `USER_DATABASE`.
+  Possible values are: `DEFAULT_DATABASE`, `USER_DATABASE`.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+* `desired_state` - (Optional) The intended database state. Possible values: ACTIVE, DISABLED.
+
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{region}}/instances/{{instance_id}}`
+
+* `name` -
+  The fully-qualified resource name of the Firebase Realtime Database, in
+  the format: projects/PROJECT_NUMBER/locations/REGION_IDENTIFIER/instances/INSTANCE_ID
+  PROJECT_NUMBER: The Firebase project's [`ProjectNumber`](https://firebase.google.com/docs/reference/firebase-management/rest/v1beta1/projects#FirebaseProject.FIELDS.project_number)
+  Learn more about using project identifiers in Google's [AIP 2510 standard](https://google.aip.dev/cloud/2510).
+
+* `database_url` -
+  The database URL in the form of https://{instance-id}.firebaseio.com for us-central1 instances
+  or https://{instance-id}.{region}.firebasedatabase.app in other regions.
+
+* `state` -
+  The current database state. Set desired_state to :DISABLED to disable the database and :ACTIVE to reenable the database
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Instance can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{region}}/instances/{{instance_id}}`
+* `{{project}}/{{region}}/{{instance_id}}`
+* `{{region}}/{{instance_id}}`
+* `{{instance_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Instance using identity values. For example:
+
+```tf
+import {
+  identity = {
+    region = "<-required value->"
+    instance_id = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_firebase_database_instance.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Instance using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{region}}/instances/{{instance_id}}"
+  to = google_firebase_database_instance.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Instance can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_firebase_database_instance.default projects/{{project}}/locations/{{region}}/instances/{{instance_id}}
+$ terraform import google_firebase_database_instance.default {{project}}/{{region}}/{{instance_id}}
+$ terraform import google_firebase_database_instance.default {{region}}/{{instance_id}}
+$ terraform import google_firebase_database_instance.default {{instance_id}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

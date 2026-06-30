@@ -1,0 +1,168 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_compute_instance_group_named_port
+
+Mange the named ports setting for a managed instance group without
+managing the group as whole. This resource is primarily intended for use
+with GKE-generated groups that shouldn't otherwise be managed by other
+tools.
+
+
+To get more information about InstanceGroupNamedPort, see:
+
+* [API documentation](https://cloud.google.com/compute/docs/reference/rest/v1/instanceGroup)
+* How-to Guides
+    * [Official Documentation](https://cloud.google.com/compute/docs/instance-groups/)
+
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=instance_group_named_port_gke&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Instance Group Named Port Gke
+
+
+```hcl
+resource "google_compute_instance_group_named_port" "my_port" {
+  group = google_container_cluster.my_cluster.node_pool[0].instance_group_urls[0]
+  zone = "us-central1-a"
+
+  name = "http"
+  port = 8080
+}
+
+resource "google_compute_instance_group_named_port" "my_ports" {
+  group = google_container_cluster.my_cluster.node_pool[0].instance_group_urls[0]
+  zone = "us-central1-a"
+
+  name = "https"
+  port = 4443
+}
+
+resource "google_compute_network" "container_network" {
+  name                    = "container-network"
+  auto_create_subnetworks = false
+}
+
+resource "google_compute_subnetwork" "container_subnetwork" {
+  name                     = "container-subnetwork"
+  region                   = "us-central1"
+  network                  = google_compute_network.container_network.name
+  ip_cidr_range            = "10.0.36.0/24"
+}
+
+resource "google_container_cluster" "my_cluster" {
+  name               = "my-cluster"
+  location           = "us-central1-a"
+  initial_node_count = 1
+
+  network    = google_compute_network.container_network.name
+  subnetwork = google_compute_subnetwork.container_subnetwork.name
+
+  ip_allocation_policy {
+    cluster_ipv4_cidr_block  = "/19"
+    services_ipv4_cidr_block = "/22"
+  }
+  deletion_protection  = true
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `name` -
+  (Required)
+  The name for this named port. The name must be 1-63 characters
+  long, and comply with RFC1035.
+
+* `port` -
+  (Required)
+  The port number, which can be a value between 1 and 65535.
+
+* `group` -
+  (Required)
+  The name of the instance group.
+
+
+* `zone` -
+  (Optional)
+  The zone of the instance group.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/zones/{{zone}}/instanceGroups/{{group}}/{{port}}/{{name}}`
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+InstanceGroupNamedPort can be imported using any of these accepted formats:
+
+* `projects/{{project}}/zones/{{zone}}/instanceGroups/{{group}}/{{port}}/{{name}}`
+* `{{project}}/{{zone}}/{{group}}/{{port}}/{{name}}`
+* `{{zone}}/{{group}}/{{port}}/{{name}}`
+* `{{group}}/{{port}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import InstanceGroupNamedPort using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-required value->"
+    port = "<-required value->"
+    group = "<-required value->"
+    zone = "<-optional value->"
+    project = "<-optional value->"
+  }
+  to = google_compute_instance_group_named_port.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import InstanceGroupNamedPort using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/zones/{{zone}}/instanceGroups/{{group}}/{{port}}/{{name}}"
+  to = google_compute_instance_group_named_port.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), InstanceGroupNamedPort can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_compute_instance_group_named_port.default projects/{{project}}/zones/{{zone}}/instanceGroups/{{group}}/{{port}}/{{name}}
+$ terraform import google_compute_instance_group_named_port.default {{project}}/{{zone}}/{{group}}/{{port}}/{{name}}
+$ terraform import google_compute_instance_group_named_port.default {{zone}}/{{group}}/{{port}}/{{name}}
+$ terraform import google_compute_instance_group_named_port.default {{group}}/{{port}}/{{name}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

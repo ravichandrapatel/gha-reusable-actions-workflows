@@ -1,0 +1,246 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_biglake_iceberg_catalog
+
+IcebergCatalogs are top-level containers for Apache Iceberg REST Catalog served Namespaces and Tables.
+
+
+To get more information about IcebergCatalog, see:
+* How-to Guides
+    * [Use the BigLake metastore Iceberg REST catalog](https://docs.cloud.google.com/biglake/docs/blms-rest-catalog)
+
+~> **Warning:** If you are using User ADCs (Application Default Credentials) with this resource's IAM,
+you must specify a `billing_project` and set `user_project_override` to true
+in the provider configuration. Otherwise the IAM API will return 403s.
+Your account must have the `serviceusage.services.use` permission on the
+`billing_project` you defined.
+
+## Example Usage - Biglake Iceberg Catalog
+
+
+```hcl
+resource "google_storage_bucket" "bucket_for_my_iceberg_catalog" {
+  name          = "my_iceberg_catalog"
+  location      = "us-central1"
+  force_destroy = true
+  uniform_bucket_level_access = true
+}
+
+resource "google_biglake_iceberg_catalog" "my_iceberg_catalog" {
+    name = google_storage_bucket.bucket_for_my_iceberg_catalog.name
+    catalog_type = "CATALOG_TYPE_GCS_BUCKET"
+    credential_mode = "CREDENTIAL_MODE_VENDED_CREDENTIALS"
+    depends_on = [
+      google_storage_bucket.bucket_for_my_iceberg_catalog
+    ]
+}
+
+# You need to grant an appropriate role to the credential vending service account.
+# The service account will generate tokens for accessing the GCS bucket.
+# You do not need this if using the other credential_mode.
+# resource "google_storage_bucket_iam_member" "cv_sa_storage_admin" {
+#  bucket = google_storage_bucket.bucket_for_my_iceberg_catalog.name
+#  role = "roles/storage.admin"
+#  member = "serviceAccount:${google_biglake_iceberg_catalog.my_iceberg_catalog.biglake_service_account}"
+#}
+```
+## Example Usage - Biglake Iceberg Catalog Primary Location
+
+
+```hcl
+resource "google_storage_bucket" "bucket_for_my_iceberg_catalog" {
+  name          = "my_iceberg_catalog"
+  location      = "us-central1"
+  force_destroy = true
+  uniform_bucket_level_access = true
+}
+
+resource "google_biglake_iceberg_catalog" "my_iceberg_catalog" {
+    name = google_storage_bucket.bucket_for_my_iceberg_catalog.name
+    catalog_type = "CATALOG_TYPE_GCS_BUCKET"
+    credential_mode = "CREDENTIAL_MODE_VENDED_CREDENTIALS"
+    primary_location = "us-central1"
+    depends_on = [
+      google_storage_bucket.bucket_for_my_iceberg_catalog
+    ]
+}
+```
+## Example Usage - Biglake Iceberg Catalog Biglake
+
+
+```hcl
+resource "google_storage_bucket" "default_bucket" {
+  name                        = "my_iceberg_catalog-default"
+  location                    = "us-central1"
+  force_destroy               = true
+  uniform_bucket_level_access = true
+}
+
+resource "google_storage_bucket" "restricted_bucket" {
+  name                        = "my_iceberg_catalog-restricted"
+  location                    = "us-central1"
+  force_destroy               = true
+  uniform_bucket_level_access = true
+}
+
+resource "google_biglake_iceberg_catalog" "my_iceberg_catalog" {
+    name             = "my_iceberg_catalog"
+    catalog_type     = "CATALOG_TYPE_BIGLAKE"
+    credential_mode  = "CREDENTIAL_MODE_VENDED_CREDENTIALS"
+    default_location = "gs://${google_storage_bucket.default_bucket.name}"
+    restricted_locations_config {
+      restricted_locations = [
+        "gs://${google_storage_bucket.default_bucket.name}",
+        "gs://${google_storage_bucket.restricted_bucket.name}",
+      ]
+    }
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `catalog_type` -
+  (Required)
+  The catalog type of the IcebergCatalog.
+  Possible values are: `CATALOG_TYPE_GCS_BUCKET`, `CATALOG_TYPE_BIGLAKE`.
+
+* `name` -
+  (Required)
+  The name of the IcebergCatalog.
+  For CATALOG_TYPE_GCS_BUCKET typed catalogs, the name needs to be the
+  exact same value of the GCS bucket's name. For example, for a bucket:
+  gs://bucket-name, the catalog name will be exactly "bucket-name".
+
+
+* `credential_mode` -
+  (Optional)
+  The credential mode used for the catalog. CREDENTIAL_MODE_END_USER - End user credentials, default. The authenticating user must have access to the catalog resources and the corresponding Google Cloud Storage files. CREDENTIAL_MODE_VENDED_CREDENTIALS - Use credential vending. The authenticating user must have access to the catalog resources and the system will provide the caller with downscoped credentials to access the Google Cloud Storage files. All table operations in this mode would require `X-Iceberg-Access-Delegation` header with `vended-credentials` value included. System will generate a service account and the catalog administrator must grant the service account appropriate permissions.
+  Possible values are: `CREDENTIAL_MODE_END_USER`, `CREDENTIAL_MODE_VENDED_CREDENTIALS`.
+
+* `default_location` -
+  (Optional)
+  The default storage location for the catalog, e.g., `gs://my-bucket`.
+  Output only when the catalog type is CATALOG_TYPE_GCS_BUCKET.
+  Required when the catalog type is CATALOG_TYPE_BIGLAKE.
+
+* `restricted_locations_config` -
+  (Optional)
+  Configuration for the additional GCS locations that are permitted for use
+  by resources within this catalog.
+  Structure is [documented below](#nested_restricted_locations_config).
+
+* `primary_location` -
+  (Optional)
+  The primary location for mirroring the remote catalog metadata. It must be
+  a BigLake-supported location, and it should be proximate to the remote
+  catalog's location.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+<a name="nested_restricted_locations_config"></a>The `restricted_locations_config` block supports:
+
+* `restricted_locations` -
+  (Optional)
+  A list of GCS locations (e.g., `gs://my-other-bucket/...`) that are
+  permitted for use by resources within this catalog. Each entry can be
+  either a GCS bucket or a path within it.
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `iceberg/v1/restcatalog/extensions/projects/{{project}}/catalogs/{{name}}`
+
+* `biglake_service_account` -
+  Output only. The service account used for credential vending. It might be empty if credential vending was never enabled for the catalog.
+
+* `storage_regions` -
+  Output only. The GCP region(s) where the physical metadata for the tables is stored, e.g. `us-central1`, `nam4` or `us`. This will contain one value for all locations, except for the catalogs that are configured to use custom dual region buckets.
+
+* `create_time` -
+  Output only. The creation time of the IcebergCatalog.
+
+* `update_time` -
+  Output only. The last modification time of the IcebergCatalog.
+
+* `replicas` -
+  Output only. The replicas for the catalog metadata.
+  Structure is [documented below](#nested_replicas).
+
+
+<a name="nested_replicas"></a>The `replicas` block contains:
+
+* `region` -
+  (Output)
+  The region of the replica, e.g., `us-east1`.
+
+* `state` -
+  (Output)
+  If the IcebergCatalog is replicated to multiple regions, this describes the current state of the replica. STATE_UNKNOWN - The replica state is unknown. STATE_PRIMARY - The replica is the writable primary. STATE_PRIMARY_IN_PROGRESS - The replica has been recently assigned as the primary, but not all namespaces are writeable yet. STATE_SECONDARY - The replica is a read-only secondary replica.
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+IcebergCatalog can be imported using any of these accepted formats:
+
+* `iceberg/v1/restcatalog/extensions/projects/{{project}}/catalogs/{{name}}`
+* `{{project}}/{{name}}`
+* `{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import IcebergCatalog using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_biglake_iceberg_catalog.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import IcebergCatalog using one of the formats above. For example:
+
+```tf
+import {
+  id = "iceberg/v1/restcatalog/extensions/projects/{{project}}/catalogs/{{name}}"
+  to = google_biglake_iceberg_catalog.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), IcebergCatalog can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_biglake_iceberg_catalog.default iceberg/v1/restcatalog/extensions/projects/{{project}}/catalogs/{{name}}
+$ terraform import google_biglake_iceberg_catalog.default {{project}}/{{name}}
+$ terraform import google_biglake_iceberg_catalog.default {{name}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

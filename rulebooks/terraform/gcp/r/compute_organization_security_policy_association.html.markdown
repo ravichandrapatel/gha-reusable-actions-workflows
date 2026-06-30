@@ -1,0 +1,156 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_compute_organization_security_policy_association
+
+An association for the OrganizationSecurityPolicy.
+
+
+To get more information about OrganizationSecurityPolicyAssociation, see:
+
+* [API documentation](https://cloud.google.com/compute/docs/reference/rest/v1/organizationSecurityPolicies/addAssociation)
+* How-to Guides
+    * [Associating a policy with the organization or folder](https://cloud.google.com/vpc/docs/using-firewall-policies#associate)
+
+## Example Usage - Organization Security Policy Association Basic
+
+
+```hcl
+resource "google_folder" "security_policy_target" {
+  display_name = "tf-test-secpol-%{random_suffix}"
+  parent       = "organizations/123456789"
+  deletion_protection = false
+}
+
+resource "google_compute_organization_security_policy" "policy" {
+  short_name   = "tf-test%{random_suffix}"
+  parent       = google_folder.security_policy_target.name
+  type         = "CLOUD_ARMOR"
+}
+
+resource "google_compute_organization_security_policy_association" "policy" {
+  name          = "tf-test%{random_suffix}"
+  attachment_id = google_compute_organization_security_policy.policy.parent
+  policy_id     = google_compute_organization_security_policy.policy.id
+}
+```
+## Example Usage - Organization Security Policy Association Excluded
+
+
+```hcl
+resource "google_folder" "security_policy_target" {
+  display_name        = "tf-test-secpol-%{random_suffix}"
+  parent              = "organizations/123456789"
+  deletion_protection = false
+}
+
+resource "google_compute_organization_security_policy" "policy" {
+  short_name = "tf-test%{random_suffix}"
+  parent     = google_folder.security_policy_target.name
+  type       = "CLOUD_ARMOR"
+}
+
+resource "google_compute_organization_security_policy_association" "policy" {
+  name          = "tf-test%{random_suffix}"
+  attachment_id = "organizations/123456789"
+  policy_id     = google_compute_organization_security_policy.policy.id
+
+  excluded_projects = [
+    "projects/2000000002",
+    "projects/3000000003"
+  ]
+  excluded_folders = [
+    "folders/4000000004",
+    "folders/5000000005"
+  ]
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `name` -
+  (Required)
+  The name for an association.
+
+* `attachment_id` -
+  (Required)
+  The resource that the security policy is attached to.
+
+* `policy_id` -
+  (Required)
+  The security policy ID of the association.
+
+
+* `excluded_projects` -
+  (Optional)
+  A list of projects to exclude from the security policy.
+
+* `excluded_folders` -
+  (Optional)
+  A list of folders to exclude from the security policy.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `{{policy_id}}/association/{{name}}`
+
+* `display_name` -
+  The display name of the security policy of the association.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+OrganizationSecurityPolicyAssociation can be imported using any of these accepted formats:
+
+* `{{policy_id}}/association/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import OrganizationSecurityPolicyAssociation using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-required value->"
+    policyId = "<-required value->"
+  }
+  to = google_compute_organization_security_policy_association.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import OrganizationSecurityPolicyAssociation using one of the formats above. For example:
+
+```tf
+import {
+  id = "{{policy_id}}/association/{{name}}"
+  to = google_compute_organization_security_policy_association.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), OrganizationSecurityPolicyAssociation can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_compute_organization_security_policy_association.default {{policy_id}}/association/{{name}}
+```

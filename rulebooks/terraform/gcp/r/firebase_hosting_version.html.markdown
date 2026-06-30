@@ -1,0 +1,433 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_firebase_hosting_version
+
+A `Version` is a configuration which determine how a site is displayed. Static files are not supported at the moment.
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about Version, see:
+
+* [API documentation](https://firebase.google.com/docs/reference/hosting/rest/v1beta1/sites.versions)
+* How-to Guides
+    * [Official Documentation](https://firebase.google.com/docs/hosting)
+
+## Example Usage - Firebasehosting Version Redirect
+
+
+```hcl
+resource "google_firebase_hosting_site" "default" {
+  provider = google-beta
+  project  = "my-project-name"
+  site_id  = "site-id"
+}
+
+resource "google_firebase_hosting_version" "default" {
+  provider = google-beta
+  site_id  = google_firebase_hosting_site.default.site_id
+  config {
+    redirects {
+      glob = "/google/**"
+      status_code = 302
+      location = "https://www.google.com"
+    }
+  }
+}
+
+resource "google_firebase_hosting_release" "default" {
+  provider     = google-beta
+  site_id      = google_firebase_hosting_site.default.site_id
+  version_name = google_firebase_hosting_version.default.name
+  message      = "Redirect to Google"
+}
+```
+## Example Usage - Firebasehosting Version Headers
+
+
+```hcl
+resource "google_firebase_hosting_site" "default" {
+  provider = google-beta
+  project  = "my-project-name"
+  site_id  = "site-id"
+}
+
+resource "google_firebase_hosting_version" "default" {
+  provider = google-beta
+  site_id  = google_firebase_hosting_site.default.site_id
+  config {
+    headers {
+      # Also okay to use regex
+      glob = "/headers/**"
+      headers = {
+        my-header = "my-value"
+      }
+    }
+  }
+}
+
+resource "google_firebase_hosting_release" "default" {
+  provider     = google-beta
+  site_id      = google_firebase_hosting_site.default.site_id
+  version_name = google_firebase_hosting_version.default.name
+  message      = "With custom headers"
+}
+```
+## Example Usage - Firebasehosting Version Headers Regex
+
+
+```hcl
+resource "google_firebase_hosting_site" "default" {
+  provider = google-beta
+  project  = "my-project-name"
+  site_id  = "site-id"
+}
+
+resource "google_firebase_hosting_version" "default" {
+  provider = google-beta
+  site_id  = google_firebase_hosting_site.default.site_id
+  config {
+    headers {
+      # Also okay to use glob
+      regex = "^~/headers$"
+      headers = {
+        my-header = "my-value"
+      }
+    }
+  }
+}
+
+resource "google_firebase_hosting_release" "default" {
+  provider     = google-beta
+  site_id      = google_firebase_hosting_site.default.site_id
+  version_name = google_firebase_hosting_version.default.name
+  message      = "With custom headers"
+}
+```
+## Example Usage - Firebasehosting Version Path
+
+
+```hcl
+resource "google_firebase_hosting_site" "default" {
+  provider = google-beta
+  project  = "my-project-name"
+  site_id  = "site-id"
+}
+
+resource "google_firebase_hosting_version" "default" {
+  provider = google-beta
+  site_id  = google_firebase_hosting_site.default.site_id
+  config {
+    rewrites {
+      glob = "**"
+      path = "/index.html"
+    }
+  }
+}
+
+resource "google_firebase_hosting_release" "default" {
+  provider     = google-beta
+  site_id      = google_firebase_hosting_site.default.site_id
+  version_name = google_firebase_hosting_version.default.name
+  message      = "Path Rewrite"
+}
+```
+## Example Usage - Firebasehosting Version Cloud Run
+
+
+```hcl
+resource "google_firebase_hosting_site" "default" {
+  provider = google-beta
+  project  = "my-project-name"
+  site_id  = "site-id"
+}
+
+resource "google_cloud_run_v2_service" "default" {
+  provider = google-beta
+  project  = "my-project-name"
+  name     = "cloud-run-service-via-hosting"
+  location = "us-central1"
+
+  # Warning: allows all public traffic
+  ingress = "INGRESS_TRAFFIC_ALL"
+
+  template {
+    containers {
+      image = "us-docker.pkg.dev/cloudrun/container/hello"
+    }
+  }
+
+  deletion_protection = true
+}
+
+resource "google_firebase_hosting_version" "default" {
+  provider = google-beta
+  site_id  = google_firebase_hosting_site.default.site_id
+  config {
+    rewrites {
+      glob = "/hello/**"
+      run {
+        service_id = google_cloud_run_v2_service.default.name
+        region = google_cloud_run_v2_service.default.location
+      }
+    }
+  }
+}
+
+resource "google_firebase_hosting_release" "default" {
+  provider     = google-beta
+  site_id      = google_firebase_hosting_site.default.site_id
+  version_name = google_firebase_hosting_version.default.name
+  message      = "Cloud Run Integration"
+}
+```
+## Example Usage - Firebasehosting Version Cloud Functions
+
+
+```hcl
+resource "google_firebase_hosting_site" "default" {
+  provider = google-beta
+  project  = "my-project-name"
+  site_id  = "site-id"
+}
+
+resource "google_storage_bucket" "bucket" {
+  provider = google-beta
+  project  = "my-project-name"
+  name     = "site-id-function-source"  # Every bucket name must be globally unique
+  location = "US"
+  uniform_bucket_level_access = true
+}
+
+resource "google_storage_bucket_object" "object" {
+  provider = google-beta
+  name   = "function-source.zip"
+  bucket = google_storage_bucket.bucket.name
+  source = "function-source.zip"  # Add path to the zipped function source code
+}
+
+resource "google_cloudfunctions2_function" "function" {
+  provider = google-beta
+  project  = "my-project-name"
+
+  name        = "cloud-function-via-hosting"
+  location    = "us-central1"
+  description = "A Cloud Function connected to Firebase Hosing"
+
+  build_config {
+    runtime = "nodejs22"
+    entry_point = "helloHttp"  # Set the entry point 
+    source {
+      storage_source {
+        bucket = google_storage_bucket.bucket.name
+        object = google_storage_bucket_object.object.name
+      }
+    }
+  }
+
+  service_config {
+    max_instance_count  = 1
+    available_memory    = "256M"
+    timeout_seconds     = 60
+  }
+}
+
+resource "google_firebase_hosting_version" "default" {
+  provider = google-beta
+  site_id  = google_firebase_hosting_site.default.site_id
+  config {
+    rewrites {
+      glob = "/hello/**"
+      function = google_cloudfunctions2_function.function.name
+    }
+  }
+}
+
+resource "google_firebase_hosting_release" "default" {
+  provider     = google-beta
+  site_id      = google_firebase_hosting_site.default.site_id
+  version_name = google_firebase_hosting_version.default.name
+  message      = "Cloud Functions Integration"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `site_id` -
+  (Required)
+  Required. The ID of the site in which to create this Version.
+
+
+* `config` -
+  (Optional)
+  The configuration for the behavior of the site. This configuration exists in the `firebase.json` file.
+  Structure is [documented below](#nested_config).
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+<a name="nested_config"></a>The `config` block supports:
+
+* `rewrites` -
+  (Optional)
+  An array of objects (called rewrite rules), where each rule specifies a URL pattern that, if matched to the
+  request URL path, triggers Hosting to respond as if the service were given the specified destination URL.
+  Structure is [documented below](#nested_config_rewrites).
+
+* `redirects` -
+  (Optional)
+  An array of objects (called redirect rules), where each rule specifies a URL pattern that, if matched to the request URL path,
+  triggers Hosting to respond with a redirect to the specified destination path.
+  Structure is [documented below](#nested_config_redirects).
+
+* `headers` -
+  (Optional)
+  An array of objects, where each object specifies a URL pattern that, if matched to the request URL path,
+  triggers Hosting to apply the specified custom response headers.
+  Structure is [documented below](#nested_config_headers).
+
+
+<a name="nested_config_rewrites"></a>The `rewrites` block supports:
+
+* `glob` -
+  (Optional)
+  The user-supplied glob to match against the request URL path.
+
+* `regex` -
+  (Optional)
+  The user-supplied RE2 regular expression to match against the request URL path.
+
+* `path` -
+  (Optional)
+  The URL path to rewrite the request to.
+
+* `function` -
+  (Optional)
+  The function to proxy requests to. Must match the exported function name exactly.
+
+* `run` -
+  (Optional)
+  The request will be forwarded to Cloud Run.
+  Structure is [documented below](#nested_config_rewrites_run).
+
+
+<a name="nested_config_rewrites_run"></a>The `run` block supports:
+
+* `service_id` -
+  (Required)
+  User-defined ID of the Cloud Run service.
+
+* `region` -
+  (Optional)
+  Optional. User-provided region where the Cloud Run service is hosted. Defaults to `us-central1` if not supplied.
+
+<a name="nested_config_redirects"></a>The `redirects` block supports:
+
+* `glob` -
+  (Optional)
+  The user-supplied glob to match against the request URL path.
+
+* `regex` -
+  (Optional)
+  The user-supplied RE2 regular expression to match against the request URL path.
+
+* `status_code` -
+  (Required)
+  The status HTTP code to return in the response. It must be a valid 3xx status code.
+
+* `location` -
+  (Required)
+  The value to put in the HTTP location header of the response.
+  The location can contain capture group values from the pattern using a : prefix to identify
+  the segment and an optional * to capture the rest of the URL. For example:
+  ```hcl
+  redirects {
+    glob = "/:capture*"
+    status_code = 302
+    location = "https://example.com/foo/:capture"
+  }
+  ```
+
+<a name="nested_config_headers"></a>The `headers` block supports:
+
+* `glob` -
+  (Optional)
+  The user-supplied glob to match against the request URL path.
+
+* `regex` -
+  (Optional)
+  The user-supplied RE2 regular expression to match against the request URL path.
+
+* `headers` -
+  (Required)
+  The additional headers to add to the response. Example: { "name": "wrench", "mass": "1.3kg", "count": "3" }.
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `sites/{{site_id}}/versions/{{version_id}}`
+
+* `name` -
+  The fully-qualified resource name for the version, in the format:
+  sites/SITE_ID/versions/VERSION_ID
+
+* `version_id` -
+  The ID for the version as in sites/SITE_ID/versions/VERSION_ID
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Version can be imported using any of these accepted formats:
+
+* `sites/{{site_id}}/versions/{{version_id}}`
+* `{{site_id}}/{{version_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Version using identity values. For example:
+
+```tf
+import {
+  identity = {
+    version_id = "<-optional value->"
+    site_id = "<-required value->"
+  }
+  to = google_firebase_hosting_version.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Version using one of the formats above. For example:
+
+```tf
+import {
+  id = "sites/{{site_id}}/versions/{{version_id}}"
+  to = google_firebase_hosting_version.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Version can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_firebase_hosting_version.default sites/{{site_id}}/versions/{{version_id}}
+$ terraform import google_firebase_hosting_version.default {{site_id}}/{{version_id}}
+```

@@ -1,0 +1,88 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_access_context_manager_egress_policy
+
+This resource has been deprecated, please refer to ServicePerimeterEgressPolicy.
+
+
+To get more information about EgressPolicy, see:
+
+* [API documentation](https://cloud.google.com/access-context-manager/docs/reference/rest/v1/accessPolicies.servicePerimeters#egresspolicy)
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `resource` -
+  (Required)
+  A GCP resource that is inside of the service perimeter.
+
+* `egress_policy_name` -
+  (Required)
+  The name of the Service Perimeter to add this resource to.
+
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `{{egress_policy_name}}/{{resource}}`
+
+* `access_policy_id` -
+  The name of the Access Policy this resource belongs to.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+EgressPolicy can be imported using any of these accepted formats:
+
+* `{{egress_policy_name}}/{{resource}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import EgressPolicy using identity values. For example:
+
+```tf
+import {
+  identity = {
+    resource = "<-required value->"
+    egressPolicyName = "<-required value->"
+  }
+  to = google_access_context_manager_egress_policy.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import EgressPolicy using one of the formats above. For example:
+
+```tf
+import {
+  id = "{{egress_policy_name}}/{{resource}}"
+  to = google_access_context_manager_egress_policy.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), EgressPolicy can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_access_context_manager_egress_policy.default {{egress_policy_name}}/{{resource}}
+```

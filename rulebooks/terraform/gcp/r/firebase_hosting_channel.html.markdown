@@ -1,0 +1,166 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_firebase_hosting_channel
+
+A `Channel` represents a stream of releases for a site. All sites have a default
+`live` channel that serves content to the Firebase-provided subdomains and any
+connected custom domains.
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about Channel, see:
+
+* [API documentation](https://firebase.google.com/docs/reference/hosting/rest/v1beta1/sites.channels)
+* How-to Guides
+    * [Official Documentation](https://firebase.google.com/docs/hosting)
+
+## Example Usage - Firebasehosting Channel Basic
+
+
+```hcl
+resource "google_firebase_hosting_site" "default" {
+  provider = google-beta
+  project  = "my-project-name"
+  site_id = "site-with-channel"
+}
+
+resource "google_firebase_hosting_channel" "default" {
+  provider = google-beta
+  site_id = google_firebase_hosting_site.default.site_id
+  channel_id = "channel-basic"
+}
+```
+## Example Usage - Firebasehosting Channel Full
+
+
+```hcl
+resource "google_firebase_hosting_site" "default" {
+  provider = google-beta
+  project  = "my-project-name"
+  site_id = "site-with-channel"
+}
+
+resource "google_firebase_hosting_channel" "full" {
+  provider = google-beta
+  site_id = google_firebase_hosting_site.default.site_id
+  channel_id = "channel-full"
+  ttl = "86400s"
+  retained_release_count = 20
+  labels = {
+    "some-key": "some-value"
+  }
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `site_id` -
+  (Required)
+  Required. The ID of the site in which to create this channel.
+
+* `channel_id` -
+  (Required)
+  Required. Immutable. A unique ID within the site that identifies the channel.
+
+
+* `retained_release_count` -
+  (Optional)
+  The number of previous releases to retain on the channel for rollback or other
+  purposes. Must be a number between 1-100. Defaults to 10 for new channels.
+
+* `labels` -
+  (Optional)
+  Text labels used for extra metadata and/or filtering
+  **Note**: This field is non-authoritative, and will only manage the labels present in your configuration.
+  Please refer to the field `effective_labels` for all of the labels present on the resource.
+
+* `expire_time` -
+  (Optional)
+  The time at which the channel will be automatically deleted. If null, the channel
+  will not be automatically deleted. This field is present in the output whether it's
+  set directly or via the `ttl` field.
+
+* `ttl` -
+  (Optional)
+  Input only. A time-to-live for this channel. Sets `expire_time` to the provided
+  duration past the time of the request. A duration in seconds with up to nine fractional
+  digits, terminated by 's'. Example: "86400s" (one day).
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `sites/{{site_id}}/channels/{{channel_id}}`
+
+* `name` -
+  The fully-qualified resource name for the channel, in the format:
+  sites/SITE_ID/channels/CHANNEL_ID
+
+* `terraform_labels` -
+  The combination of labels configured directly on the resource
+   and default labels configured on the provider.
+
+* `effective_labels` -
+  All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Channel can be imported using any of these accepted formats:
+
+* `sites/{{site_id}}/channels/{{channel_id}}`
+* `{{site_id}}/{{channel_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Channel using identity values. For example:
+
+```tf
+import {
+  identity = {
+    site_id = "<-required value->"
+    channel_id = "<-required value->"
+  }
+  to = google_firebase_hosting_channel.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Channel using one of the formats above. For example:
+
+```tf
+import {
+  id = "sites/{{site_id}}/channels/{{channel_id}}"
+  to = google_firebase_hosting_channel.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Channel can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_firebase_hosting_channel.default sites/{{site_id}}/channels/{{channel_id}}
+$ terraform import google_firebase_hosting_channel.default {{site_id}}/{{channel_id}}
+```

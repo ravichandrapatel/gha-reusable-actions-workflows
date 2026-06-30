@@ -1,0 +1,53 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_cosmosdb_mongo_database
+
+Use this data source to access information about an existing Cosmos DB Mongo Database.
+
+## Example Usage
+
+```hcl
+data "azurerm_cosmosdb_mongo_database" "example" {
+  name                = "test-cosmosdb-mongo-db"
+  resource_group_name = "test-cosmosdb-account-rg"
+  account_name        = "test-cosmosdb-account"
+}
+
+output "id" {
+  value = data.azurerm_cosmosdb_mongo_database.example.id
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `account_name` - (Required) The name of the Cosmos DB Account where the Mongo Database exists.
+
+* `name` - (Required) The name of this Cosmos DB Mongo Database.
+
+* `resource_group_name` - (Required) The name of the Resource Group where the Cosmos DB Mongo Database exists.
+
+## Attributes Reference
+
+In addition to the Arguments listed above - the following Attributes are exported:
+
+* `id` - The ID of the Cosmos DB Mongo Database.
+
+* `tags` - A mapping of tags assigned to the Cosmos DB Mongo Database.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the Cosmos Mongo Database.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.DocumentDB` - 2024-08-15

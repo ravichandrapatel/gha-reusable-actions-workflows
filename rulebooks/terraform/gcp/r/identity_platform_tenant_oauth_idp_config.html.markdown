@@ -1,0 +1,143 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_identity_platform_tenant_oauth_idp_config
+
+OIDC IdP configuration for a Identity Toolkit project within a tenant.
+
+You must enable the
+[Google Identity Platform](https://console.cloud.google.com/marketplace/details/google-cloud-platform/customer-identity) in
+the marketplace prior to using this resource.
+
+
+
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=identity_platform_tenant_oauth_idp_config_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Identity Platform Tenant Oauth Idp Config Basic
+
+
+```hcl
+resource "google_identity_platform_tenant" "tenant" {
+  display_name  = "tenant"
+}
+
+resource "google_identity_platform_tenant_oauth_idp_config" "tenant_oauth_idp_config" {
+  name          = "oidc.oauth-idp-config"
+  tenant        = google_identity_platform_tenant.tenant.name
+  display_name  = "Display Name"
+  client_id     = "client-id"
+  issuer        = "issuer"
+  enabled       = true
+  client_secret = "secret"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `name` -
+  (Required)
+  The name of the OauthIdpConfig. Must start with `oidc.`.
+
+* `tenant` -
+  (Required)
+  The name of the tenant where this OIDC IDP configuration resource exists
+
+* `display_name` -
+  (Required)
+  Human friendly display name.
+
+* `issuer` -
+  (Required)
+  For OIDC Idps, the issuer identifier.
+
+* `client_id` -
+  (Required)
+  The client id of an OAuth client.
+
+
+* `enabled` -
+  (Optional)
+  If this config allows users to sign in with the provider.
+
+* `client_secret` -
+  (Optional)
+  The client secret of the OAuth client, to enable OIDC code flow.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}`
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+TenantOauthIdpConfig can be imported using any of these accepted formats:
+
+* `projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}`
+* `{{project}}/{{tenant}}/{{name}}`
+* `{{tenant}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import TenantOauthIdpConfig using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-required value->"
+    tenant = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_identity_platform_tenant_oauth_idp_config.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import TenantOauthIdpConfig using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}"
+  to = google_identity_platform_tenant_oauth_idp_config.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), TenantOauthIdpConfig can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_identity_platform_tenant_oauth_idp_config.default projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}
+$ terraform import google_identity_platform_tenant_oauth_idp_config.default {{project}}/{{tenant}}/{{name}}
+$ terraform import google_identity_platform_tenant_oauth_idp_config.default {{tenant}}/{{name}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

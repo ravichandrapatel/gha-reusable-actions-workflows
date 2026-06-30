@@ -1,0 +1,52 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_shared_image_gallery
+
+Use this data source to access information about an existing Shared Image Gallery.
+
+## Example Usage
+
+```hcl
+data "azurerm_shared_image_gallery" "example" {
+  name                = "my-image-gallery"
+  resource_group_name = "example-resources"
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - The name of the Shared Image Gallery.
+
+* `resource_group_name` - The name of the Resource Group in which the Shared Image Gallery exists.
+
+## Attributes Reference
+
+The following attributes are exported:
+
+* `id` - The ID of the Shared Image Gallery.
+
+* `description` - A description for the Shared Image Gallery.
+
+* `image_names` - A list of Shared Image names within this Shared Image Gallery.
+
+* `unique_name` - The unique name assigned to the Shared Image Gallery.
+
+* `tags` - A mapping of tags which are assigned to the Shared Image Gallery.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the Shared Image Gallery.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.Compute` - 2022-03-03

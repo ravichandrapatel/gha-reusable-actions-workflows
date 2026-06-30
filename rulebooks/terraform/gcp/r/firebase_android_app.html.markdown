@@ -1,0 +1,177 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_firebase_android_app
+
+A Google Cloud Firebase Android application instance
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about AndroidApp, see:
+
+* [API documentation](https://firebase.google.com/docs/reference/firebase-management/rest/v1beta1/projects.androidApps)
+* How-to Guides
+    * [Official Documentation](https://firebase.google.com/docs/android/setup)
+
+## Example Usage - Firebase Android App Basic
+
+
+```hcl
+resource "google_firebase_android_app" "basic" {
+  provider = google-beta
+  project = "my-project-name"
+  display_name = "Display Name Basic"
+  package_name = "android.package.app"
+  sha1_hashes = ["2145bdf698b8715039bd0e83f2069bed435ac21c"]
+  sha256_hashes = ["2145bdf698b8715039bd0e83f2069bed435ac21ca1b2c3d4e5f6123456789abc"]
+}
+```
+## Example Usage - Firebase Android App Custom Api Key
+
+
+```hcl
+resource "google_firebase_android_app" "default" {
+  provider = google-beta
+  project = "my-project-name"
+  display_name = "Display Name"
+  package_name = "android.package.app"
+  sha1_hashes = ["2145bdf698b8715039bd0e83f2069bed435ac21c"]
+  sha256_hashes = ["2145bdf698b8715039bd0e83f2069bed435ac21ca1b2c3d4e5f6123456789abc"]
+  api_key_id = google_apikeys_key.android.uid
+}
+
+resource "google_apikeys_key" "android" {
+  provider = google-beta
+
+  name         = "api-key"
+  display_name = "Display Name"
+  project = "my-project-name"
+  
+  restrictions {
+    android_key_restrictions {
+      allowed_applications {
+        package_name     = "android.package.app"
+        sha1_fingerprint = "2145bdf698b8715039bd0e83f2069bed435ac21c"
+      }
+    }
+  }
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `display_name` -
+  (Required)
+  The user-assigned display name of the AndroidApp.
+
+* `package_name` -
+  (Required)
+  The canonical package name of the Android app as would appear in the Google Play
+  Developer Console.
+
+
+* `sha1_hashes` -
+  (Optional)
+  The SHA1 certificate hashes for the AndroidApp.
+
+* `sha256_hashes` -
+  (Optional)
+  The SHA256 certificate hashes for the AndroidApp.
+
+* `api_key_id` -
+  (Optional)
+  The globally unique, Google-assigned identifier (UID) for the Firebase API key associated with the AndroidApp.
+  If apiKeyId is not set during creation, then Firebase automatically associates an apiKeyId with the AndroidApp.
+  This auto-associated key may be an existing valid key or, if no valid key exists, a new one will be provisioned.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/androidApps/{{app_id}}`
+
+* `name` -
+  The fully qualified resource name of the AndroidApp, for example:
+  projects/projectId/androidApps/appId
+
+* `app_id` -
+  The globally unique, Firebase-assigned identifier of the AndroidApp.
+  This identifier should be treated as an opaque token, as the data format is not specified.
+
+* `etag` -
+  This checksum is computed by the server based on the value of other fields, and it may be sent
+  with update requests to ensure the client has an up-to-date value before proceeding.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+AndroidApp can be imported using any of these accepted formats:
+
+* `{{project}} projects/{{project}}/androidApps/{{app_id}}`
+* `projects/{{project}}/androidApps/{{app_id}}`
+* `{{project}}/{{project}}/{{app_id}}`
+* `androidApps/{{app_id}}`
+* `{{app_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import AndroidApp using identity values. For example:
+
+```tf
+import {
+  identity = {
+    appId = "<-optional value->"
+    project = "<-optional value->"
+  }
+  to = google_firebase_android_app.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import AndroidApp using one of the formats above. For example:
+
+```tf
+import {
+  id = "{{project}} projects/{{project}}/androidApps/{{app_id}}"
+  to = google_firebase_android_app.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), AndroidApp can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_firebase_android_app.default "{{project}} projects/{{project}}/androidApps/{{app_id}}"
+$ terraform import google_firebase_android_app.default projects/{{project}}/androidApps/{{app_id}}
+$ terraform import google_firebase_android_app.default {{project}}/{{project}}/{{app_id}}
+$ terraform import google_firebase_android_app.default androidApps/{{app_id}}
+$ terraform import google_firebase_android_app.default {{app_id}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

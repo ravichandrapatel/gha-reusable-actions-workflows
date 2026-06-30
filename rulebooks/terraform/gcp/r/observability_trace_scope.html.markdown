@@ -1,0 +1,143 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_observability_trace_scope
+
+A trace scope is a collection of resources whose traces are queried together
+
+
+
+## Example Usage - Observability Trace Scope Basic
+
+
+```hcl
+resource "google_observability_trace_scope" "observability_trace_scope" {
+    depends_on       = [google_project.project-2]
+    trace_scope_id   = "test-scope"
+    location         = "global"
+    resource_names   = [
+        "projects/${data.google_project.project.project_id}",
+        "projects/${google_project.project-2.project_id}",
+    ]
+    description      = "A trace scope configured with Terraform"
+}
+
+data "google_project" "project" {
+}
+
+resource "google_project" "project-2" {
+    project_id       = "tf-test%{random_suffix}"
+    name             = "tf-test%{random_suffix}"
+    org_id           = "123456789"
+    deletion_policy  = "DELETE"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `resource_names` -
+  (Required)
+  Names of the projects that are included in this trace scope.
+  *  `projects/[PROJECT_ID]`
+  A trace scope can include a maximum of 20 projects.
+
+* `location` -
+  (Required)
+  GCP region the TraceScope is stored in. Only `global` is supported.
+
+* `trace_scope_id` -
+  (Required)
+  A client-assigned identifier for the trace scope.
+
+
+* `description` -
+  (Optional)
+  Describes this trace scope.
+  The maximum length of the description is 8000 characters.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{location}}/traceScopes/{{trace_scope_id}}`
+
+* `create_time` -
+  The creation timestamp of the trace scope.
+
+* `name` -
+  Identifier. The resource name of the trace scope.
+  For example:
+  projects/my-project/locations/global/traceScopes/my-trace-scope
+
+* `update_time` -
+  The last update timestamp of the trace scope.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+TraceScope can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{location}}/traceScopes/{{trace_scope_id}}`
+* `{{project}}/{{location}}/{{trace_scope_id}}`
+* `{{location}}/{{trace_scope_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import TraceScope using identity values. For example:
+
+```tf
+import {
+  identity = {
+    location = "<-required value->"
+    traceScopeId = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_observability_trace_scope.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import TraceScope using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{location}}/traceScopes/{{trace_scope_id}}"
+  to = google_observability_trace_scope.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), TraceScope can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_observability_trace_scope.default projects/{{project}}/locations/{{location}}/traceScopes/{{trace_scope_id}}
+$ terraform import google_observability_trace_scope.default {{project}}/{{location}}/{{trace_scope_id}}
+$ terraform import google_observability_trace_scope.default {{location}}/{{trace_scope_id}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

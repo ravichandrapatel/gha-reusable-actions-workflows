@@ -1,0 +1,70 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# azurerm_container_registry_task_schedule_run_now
+
+Runs a Container Registry Task Schedule.
+
+## Example Usage
+
+```hcl
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "example" {
+  name     = "example-rg"
+  location = "West Europe"
+}
+resource "azurerm_container_registry" "example" {
+  name                = "example-acr"
+  resource_group_name = azurerm_resource_group.example.name
+  location            = azurerm_resource_group.example.location
+  sku                 = "Basic"
+}
+resource "azurerm_container_registry_task" "example" {
+  name                  = "example-task"
+  container_registry_id = azurerm_container_registry.example.id
+  platform {
+    os = "Linux"
+  }
+  docker_step {
+    dockerfile_path      = "Dockerfile"
+    context_path         = "https://github.com/<user name>/acr-build-helloworld-node#main"
+    context_access_token = "<github personal access token>"
+    image_names          = ["helloworld:{{.Run.ID}}"]
+  }
+}
+resource "azurerm_container_registry_task_schedule_run_now" "example" {
+  container_registry_task_id = azurerm_container_registry_task.example.id
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `container_registry_task_id` - (Required) The ID of the Container Registry Task that to be scheduled. Changing this forces a new Container Registry Task Schedule to be created.
+
+## Attributes Reference
+
+In addition to the Arguments listed above - the following Attributes are exported:
+
+* `id` - The ID of the Container Registry Task Schedule.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `create` - (Defaults to 30 minutes) Used when creating the Container Registry Task Schedule.
+* `read` - (Defaults to 5 minutes) Used when retrieving the Container Registry Task Schedule.
+* `delete` - (Defaults to 30 minutes) Used when deleting the Container Registry Task Schedule.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This resource uses the following Azure API Providers:
+
+* `Microsoft.ContainerRegistry` - 2019-06-01-preview

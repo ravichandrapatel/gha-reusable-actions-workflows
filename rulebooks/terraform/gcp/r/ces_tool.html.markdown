@@ -1,0 +1,2163 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_ces_tool
+
+Description
+
+
+
+~> **Note:** **Direct Management Restriction for Certain Tool Types:**
+
+Individual tools of type `openApiTool`, `mcpTool`, `connectorTool`, and `remoteAgentTool` **cannot** be created, updated, or managed directly using the `google_ces_tool` resource.
+
+`openApiTool`, `mcpTool`, and `connectorTool` are dynamically generated at runtime based on their corresponding **toolsets** (configured via the `google_ces_toolset` resource). `remoteAgentTool` represents A2A connections configured externally, and `systemTool` represents pre-defined platform tools managed entirely by Google Cloud.
+
+Consequently, blocks like `open_api_tool`, `mcp_tool`, `connector_tool`, `remote_agent_tool`, and `system_tool` are marked as **read-only (output-only)** in this resource. They are populated by the server for reference purposes only (e.g., after importing an existing tool into your state) and **cannot** be configured in your Terraform HCL configuration.
+
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=ces_tool_client_function_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Ces Tool Client Function Basic
+
+
+```hcl
+resource "google_ces_app" "my-app" {
+    location     = "us"
+    display_name = "my-app"
+    app_id       = "app-id"
+    time_zone_settings {   
+        time_zone = "America/Los_Angeles"
+    }
+}
+resource "google_ces_tool" "ces_tool_client_function_basic" {
+    location     = "us"
+    app          = google_ces_app.my-app.name
+    tool_id      = "ces_tool_basic1"
+    execution_type = "SYNCHRONOUS"
+    client_function {
+        name = "ces_tool_client_function_basic"
+        description = "example-description"
+        parameters {
+            additional_properties = jsonencode(
+                {
+                type        = "BOOLEAN"
+                })
+            any_of = jsonencode([
+                {
+                type        = "STRING"
+                description = "any_of option 1: string"
+                },])
+            default = jsonencode(
+                false)
+            defs = jsonencode({
+                SimpleString = {
+                type        = "STRING"
+                description = "A simple string definition"
+            }})
+            description = "schema description"
+            enum = ["VALUE_A", "VALUE_B"]
+            items = jsonencode({
+                type        = "ARRAY"
+                description = "An array"
+            })
+            max_items   = 32
+            maximum     = 64
+            min_items   = 1
+            minimum     = 2
+            nullable    = true
+            prefix_items = jsonencode([
+                {
+                type        = "ARRAY"
+                description = "prefix item 1"
+                },])
+            properties = jsonencode({
+                name = {
+                type        = "STRING"
+                description = "A name"
+            }})
+            ref = "#/defs/MyDefinition"
+            required = ["some_property"]
+            title        = "Title"
+            type         = "ARRAY"
+            unique_items = true
+        }
+        response {
+            additional_properties = jsonencode(
+                {
+                type        = "BOOLEAN"
+                })
+            any_of = jsonencode([
+                {
+                type        = "STRING"
+                description = "any_of option 1: string"
+                },])
+            default = jsonencode(
+                false)
+            defs = jsonencode({
+                SimpleString = {
+                type        = "STRING"
+                description = "A simple string definition"
+            }})
+            description = "schema description"
+            enum = ["VALUE_A", "VALUE_B"]
+            items = jsonencode({
+                type        = "ARRAY"
+                description = "An array"
+            })
+            max_items   = 32
+            maximum     = 64
+            min_items   = 1
+            minimum     = 2
+            nullable    = true
+            prefix_items = jsonencode([
+                {
+                type        = "ARRAY"
+                description = "prefix item 1"
+                },])
+            properties = jsonencode({
+                name = {
+                type        = "STRING"
+                description = "A name"
+            }})
+            ref = "#/defs/MyDefinition"
+            required = ["some_property"]
+            title        = "Title"
+            type         = "ARRAY"
+            unique_items = true
+        }
+    }
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=ces_tool_data_store_tool_engine_source_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Ces Tool Data Store Tool Engine Source Basic
+
+
+```hcl
+resource "google_discovery_engine_data_store" "basic" {
+  location                    = "global"
+  data_store_id               = "tool_data_store_id"
+  display_name                = "tf-test-structured-datastore"
+  industry_vertical           = "GENERIC"
+  content_config              = "NO_CONTENT"
+  solution_types              = ["SOLUTION_TYPE_SEARCH"]
+  create_advanced_site_search = false
+}
+resource "google_discovery_engine_search_engine" "basic" {
+  engine_id = "tool_engine_id"
+  collection_id = "default_collection"
+  location = google_discovery_engine_data_store.basic.location
+  display_name = "Example Display Name"
+  data_store_ids = [google_discovery_engine_data_store.basic.data_store_id]
+  search_engine_config {
+  }
+}
+resource "google_ces_app" "my-app" {
+    location     = "us"
+    display_name = "my-app"
+    app_id       = "app-id"
+    time_zone_settings {   
+        time_zone = "America/Los_Angeles"
+    }
+}
+resource "google_ces_tool" "ces_tool_data_store_tool_engine_source_basic" {
+    location       = "us"
+    app            = google_ces_app.my-app.name
+    tool_id        = "ces_tool_basic2"
+    execution_type = "SYNCHRONOUS"
+    data_store_tool {
+        name = "example-tool"
+        description = "example-description"
+        boost_specs {
+            data_stores = [
+                google_discovery_engine_data_store.basic.name,
+            ]
+            spec {
+                condition_boost_specs {
+                    condition = "(lang_code: ANY(\"en\", \"fr\"))"
+                    boost = 1
+                    boost_control_spec {
+                        field_name = "example-field"
+                        attribute_type = "NUMERICAL"
+                        interpolation_type = "LINEAR"
+                        control_points {
+                            attribute_value = 1
+                            boost_amount = 1
+                        }
+                    }
+                }
+            }
+        }
+        modality_configs {
+            modality_type = "TEXT"
+            rewriter_config {
+                model_settings {
+                    model = "gemini-3.0-flash-001"
+                    temperature = 1
+                }
+                prompt = "example-prompt"
+                disabled = false
+            }
+            summarization_config {
+                model_settings {
+                    model = "gemini-3.0-flash-001"
+                    temperature = 1
+                }
+                prompt = "example-prompt"
+                disabled = false
+            }
+            grounding_config {
+                grounding_level = 3
+                disabled = false
+            }
+        }
+
+        engine_source {
+            engine = google_discovery_engine_search_engine.basic.name
+            data_store_sources {
+                filter = "example_field: ANY(\"specific_example\")"
+                data_store {
+                    name = google_discovery_engine_data_store.basic.name
+                }
+            }
+            filter = "example_field: ANY(\"specific_example\")"
+        }
+    }
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=ces_tool_google_search_tool_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Ces Tool Google Search Tool Basic
+
+
+```hcl
+resource "google_ces_app" "my-app" {
+    location     = "us"
+    display_name = "my-app"
+    app_id       = "app-id"
+    time_zone_settings {   
+        time_zone = "America/Los_Angeles"
+    }
+}
+resource "google_ces_tool" "ces_tool_google_search_tool_basic" {
+    location       = "us"
+    app            = google_ces_app.my-app.name
+    tool_id        = "ces_tool_basic3"
+    execution_type = "SYNCHRONOUS"
+    google_search_tool {
+        name            = "example-tool"
+        context_urls    = ["example.com", "example2.com"]
+        description     = "example-description"
+        exclude_domains = ["example.com", "example2.com"]
+        preferred_domains = ["example3.com", "example4.com"]
+    }
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=ces_tool_python_function_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Ces Tool Python Function Basic
+
+
+```hcl
+resource "google_ces_app" "my-app" {
+    location     = "us"
+    display_name = "my-app"
+    app_id       = "app-id"
+    time_zone_settings {   
+        time_zone = "America/Los_Angeles"
+    }
+}
+resource "google_ces_tool" "ces_tool_python_function_basic" {
+    location       = "us"
+    app            = google_ces_app.my-app.name
+    tool_id        = "ces_tool_basic4"
+    execution_type = "SYNCHRONOUS"
+    python_function {
+        name = "example_function"
+        python_code = "def example_function() -> int: return 0"
+    }
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=ces_tool_agent_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Ces Tool Agent Basic
+
+
+```hcl
+resource "google_ces_app" "my-app" {
+    location     = "us"
+    display_name = "my-app"
+    app_id       = "app-id"
+    time_zone_settings {   
+        time_zone = "America/Los_Angeles"
+    }
+}
+
+resource "google_ces_agent" "target_agent" {
+  agent_id     = "target-agent"
+  location     = "us"
+  app          = google_ces_app.my-app.app_id
+  display_name = "Target Agent"
+  instruction  = "Target agent instruction"
+  llm_agent {}
+}
+
+resource "google_ces_tool" "ces_tool_agent_basic" {
+    location       = "us"
+    app            = google_ces_app.my-app.name
+    tool_id        = "ces_tool_basic5"
+    execution_type = "SYNCHRONOUS"
+    agent_tool {
+        name        = "ces_tool_agent_basic"
+        description = "example-description"
+        agent       = "projects/${google_ces_app.my-app.project}/locations/us/apps/${google_ces_app.my-app.app_id}/agents/${google_ces_agent.target_agent.agent_id}"
+    }
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=ces_tool_file_search_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Ces Tool File Search Basic
+
+
+```hcl
+resource "google_ces_app" "my-app" {
+    location     = "us"
+    display_name = "my-app"
+    app_id       = "app-id"
+    time_zone_settings {   
+        time_zone = "America/Los_Angeles"
+    }
+}
+
+resource "google_ces_tool" "ces_tool_file_search_basic" {
+    location       = "us"
+    app            = google_ces_app.my-app.name
+    tool_id        = "ces_tool_basic6"
+    execution_type = "SYNCHRONOUS"
+    file_search_tool {
+        name        = "ces_tool_file_search_basic"
+        description = "example-description"
+        corpus_type = "FULLY_MANAGED"
+        file_corpus = "projects/${google_ces_app.my-app.project}/locations/us/ragCorpora/tf-test-mock-corpus"
+    }
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=ces_tool_widget_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Ces Tool Widget Basic
+
+
+```hcl
+resource "google_ces_app" "my-app" {
+    location     = "us"
+    display_name = "my-app"
+    app_id       = "app-id"
+    time_zone_settings {   
+        time_zone = "America/Los_Angeles"
+    }
+}
+
+resource "google_ces_tool" "ces_tool_widget_basic" {
+    location       = "us"
+    app            = google_ces_app.my-app.name
+    tool_id        = "ces_tool_basic7"
+    execution_type = "SYNCHRONOUS"
+    widget_tool {
+        name        = "ces_tool_widget_basic"
+        description = "example-description"
+        widget_type = "PRODUCT_CAROUSEL"
+        ui_config = jsonencode({
+            displaySettings = {
+                showHeader = true
+            }
+        })
+        data_mapping {
+            mode = "FIELD_MAPPING"
+            field_mappings = {
+                "key1" = "value1"
+                "key2" = "value2"
+            }
+        }
+        text_response_config {
+            type = "STATIC"
+            static_text = "example-static-text"
+        }
+        parameters {
+            type = "OBJECT"
+            properties = jsonencode({
+                param1 = {
+                    type = "STRING"
+                }
+            })
+        }
+    }
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `location` -
+  (Required)
+  Resource ID segment making up resource `name`. It identifies the resource within its parent collection as described in https://google.aip.dev/122.
+
+* `app` -
+  (Required)
+  Resource ID segment making up resource `name`. It identifies the resource within its parent collection as described in https://google.aip.dev/122.
+
+* `tool_id` -
+  (Required)
+  The ID to use for the tool, which will become the final component of
+  the tool's resource name. If not provided, a unique ID will be
+  automatically assigned for the tool.
+
+
+* `agent_tool` -
+  (Optional)
+  Represents a tool that allows the agent to call another agent.
+  Structure is [documented below](#nested_agent_tool).
+
+* `client_function` -
+  (Optional)
+  Represents a client-side function that the agent can invoke. When the
+  tool is chosen by the agent, control is handed off to the client.
+  The client is responsible for executing the function and returning the result
+  as a ToolResponse to continue the interaction with the agent.
+  Structure is [documented below](#nested_client_function).
+
+* `data_store_tool` -
+  (Optional)
+  Tool to retrieve from Vertex AI Search datastore or engine for grounding.
+  Accepts either a datastore or an engine, but not both.
+  See Vertex AI Search:
+  https://cloud.google.com/generative-ai-app-builder/docs/enterprise-search-introduction.
+  Structure is [documented below](#nested_data_store_tool).
+
+* `execution_type` -
+  (Optional)
+  Possible values:
+  SYNCHRONOUS
+  ASYNCHRONOUS
+
+* `file_search_tool` -
+  (Optional)
+  The file search tool allows the agent to search across the files uploaded by the
+  app/agent developer.
+  Structure is [documented below](#nested_file_search_tool).
+
+* `google_search_tool` -
+  (Optional)
+  Represents a tool to perform Google web searches for grounding.
+  See
+  https://cloud.google.com/vertex-ai/generative-ai/docs/grounding/grounding-with-google-search.
+  Structure is [documented below](#nested_google_search_tool).
+
+* `python_function` -
+  (Optional)
+  A Python function tool.
+  Structure is [documented below](#nested_python_function).
+
+* `timeout` -
+  (Optional)
+  The timeout for the tool execution. If not set, the default timeout is 30
+  seconds for SYNCHRONOUS tools and 60 seconds for ASYNCHRONOUS tools.
+
+* `tool_fake_config` -
+  (Optional)
+  Configuration for tool behavior in fake mode.
+  Structure is [documented below](#nested_tool_fake_config).
+
+* `widget_tool` -
+  (Optional)
+  Represents a widget tool that the agent can invoke.
+  Structure is [documented below](#nested_widget_tool).
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+<a name="nested_agent_tool"></a>The `agent_tool` block supports:
+
+* `name` -
+  (Required)
+  Required. The name of the agent tool.
+
+* `description` -
+  (Optional)
+  Optional. Description of the tool's purpose.
+
+* `agent` -
+  (Optional)
+  Optional. The resource name of the agent that is the entry point of the tool.
+  Format: projects/{project}/locations/{location}/agents/{agent}
+
+<a name="nested_client_function"></a>The `client_function` block supports:
+
+* `description` -
+  (Optional)
+  The function description.
+
+* `name` -
+  (Required)
+  The function name.
+
+* `parameters` -
+  (Optional)
+  Represents a select subset of an OpenAPI 3.0 schema object.
+  Structure is [documented below](#nested_client_function_parameters).
+
+* `response` -
+  (Optional)
+  Represents a select subset of an OpenAPI 3.0 schema object.
+  Structure is [documented below](#nested_client_function_response).
+
+
+<a name="nested_client_function_parameters"></a>The `parameters` block supports:
+
+* `additional_properties` -
+  (Optional)
+  Defines the schema for additional properties allowed in an object.
+  The value must be a valid JSON string representing the Schema object.
+  (Note: OpenAPI also allows a boolean, this definition expects a Schema JSON).
+
+* `any_of` -
+  (Optional)
+  The instance value should be valid against at least one of the schemas in this list.
+
+* `default` -
+  (Optional)
+  Default value of the data. Represents a dynamically typed value
+  which can be either null, a number, a string, a boolean, a struct,
+  or a list of values. The provided default value must be compatible
+  with the defined 'type' and other schema constraints.
+
+* `defs` -
+  (Optional)
+  A map of definitions for use by ref. Only allowed at the root of the schema.
+
+* `description` -
+  (Optional)
+  The description of the data.
+
+* `enum` -
+  (Optional)
+  Possible values of the element of primitive type with enum format.
+  Examples:
+  1. We can define direction as :
+  {type:STRING, format:enum, enum:["EAST", NORTH", "SOUTH", "WEST"]}
+  2. We can define apartment number as :
+  {type:INTEGER, format:enum, enum:["101", "201", "301"]}
+
+* `items` -
+  (Optional)
+  Schema of the elements of Type.ARRAY.
+
+* `max_items` -
+  (Optional)
+  Maximum number of the elements for Type.ARRAY. (int64 format)
+
+* `maximum` -
+  (Optional)
+  Maximum value for Type.INTEGER and Type.NUMBER.
+
+* `min_items` -
+  (Optional)
+  Minimum number of the elements for Type.ARRAY. (int64 format)
+
+* `minimum` -
+  (Optional)
+  Minimum value for Type.INTEGER and Type.NUMBER.
+
+* `nullable` -
+  (Optional)
+  Indicates if the value may be null.
+
+* `prefix_items` -
+  (Optional)
+  Schemas of initial elements of Type.ARRAY.
+
+* `properties` -
+  (Optional)
+  Properties of Type.OBJECT.
+
+* `ref` -
+  (Optional)
+  Allows indirect references between schema nodes. The value should be a
+  valid reference to a child of the root `defs`.
+  For example, the following schema defines a reference to a schema node
+  named "Pet":
+  type: object
+  properties:
+    pet:
+      ref: #/defs/Pet
+  defs:
+    Pet:
+      type: object
+      properties:
+        name:
+          type: string
+  The value of the "pet" property is a reference to the schema node
+  named "Pet".
+  See details in
+  https://json-schema.org/understanding-json-schema/structuring.
+
+* `required` -
+  (Optional)
+  Required properties of Type.OBJECT.
+
+* `title` -
+  (Optional)
+  The title of the schema.
+
+* `type` -
+  (Required)
+  The type of the data.
+  Possible values:
+  STRING
+  INTEGER
+  NUMBER
+  BOOLEAN
+  OBJECT
+  ARRAY
+
+* `unique_items` -
+  (Optional)
+  Indicate the items in the array must be unique. Only applies to TYPE.ARRAY.
+
+<a name="nested_client_function_response"></a>The `response` block supports:
+
+* `additional_properties` -
+  (Optional)
+  Defines the schema for additional properties allowed in an object.
+  The value must be a valid JSON string representing the Schema object.
+  (Note: OpenAPI also allows a boolean, this definition expects a Schema JSON).
+
+* `any_of` -
+  (Optional)
+  The instance value should be valid against at least one of the schemas in this list.
+
+* `default` -
+  (Optional)
+  Default value of the data. Represents a dynamically typed value
+  which can be either null, a number, a string, a boolean, a struct,
+  or a list of values. The provided default value must be compatible
+  with the defined 'type' and other schema constraints.
+
+* `defs` -
+  (Optional)
+  A map of definitions for use by ref. Only allowed at the root of the schema.
+
+* `description` -
+  (Optional)
+  The description of the data.
+
+* `enum` -
+  (Optional)
+  Possible values of the element of primitive type with enum format.
+  Examples:
+  1. We can define direction as :
+  {type:STRING, format:enum, enum:["EAST", NORTH", "SOUTH", "WEST"]}
+  2. We can define apartment number as :
+  {type:INTEGER, format:enum, enum:["101", "201", "301"]}
+
+* `items` -
+  (Optional)
+  Schema of the elements of Type.ARRAY.
+
+* `max_items` -
+  (Optional)
+  Maximum number of the elements for Type.ARRAY. (int64 format)
+
+* `maximum` -
+  (Optional)
+  Maximum value for Type.INTEGER and Type.NUMBER.
+
+* `min_items` -
+  (Optional)
+  Minimum number of the elements for Type.ARRAY. (int64 format)
+
+* `minimum` -
+  (Optional)
+  Minimum value for Type.INTEGER and Type.NUMBER.
+
+* `nullable` -
+  (Optional)
+  Indicates if the value may be null.
+
+* `prefix_items` -
+  (Optional)
+  Schemas of initial elements of Type.ARRAY.
+
+* `properties` -
+  (Optional)
+  Properties of Type.OBJECT.
+
+* `ref` -
+  (Optional)
+  Allows indirect references between schema nodes. The value should be a
+  valid reference to a child of the root `defs`.
+  For example, the following schema defines a reference to a schema node
+  named "Pet":
+  type: object
+  properties:
+    pet:
+      ref: #/defs/Pet
+  defs:
+    Pet:
+      type: object
+      properties:
+        name:
+          type: string
+  The value of the "pet" property is a reference to the schema node
+  named "Pet".
+  See details in
+  https://json-schema.org/understanding-json-schema/structuring.
+
+* `required` -
+  (Optional)
+  Required properties of Type.OBJECT.
+
+* `title` -
+  (Optional)
+  The title of the schema.
+
+* `type` -
+  (Required)
+  The type of the data.
+  Possible values:
+  STRING
+  INTEGER
+  NUMBER
+  BOOLEAN
+  OBJECT
+  ARRAY
+
+* `unique_items` -
+  (Optional)
+  Indicate the items in the array must be unique. Only applies to TYPE.ARRAY.
+
+<a name="nested_data_store_tool"></a>The `data_store_tool` block supports:
+
+* `boost_specs` -
+  (Optional)
+  Boost specification to boost certain documents.
+  Structure is [documented below](#nested_data_store_tool_boost_specs).
+
+* `data_store_source` -
+  (Optional)
+  Optional. Search within a single specific DataStore.
+  Structure is [documented below](#nested_data_store_tool_data_store_source).
+
+* `description` -
+  (Optional)
+  The tool description.
+
+* `engine_source` -
+  (Optional)
+  Configuration for searching within an Engine, potentially targeting
+  specific DataStores.
+  Structure is [documented below](#nested_data_store_tool_engine_source).
+
+* `filter_parameter_behavior` -
+  (Optional)
+  Optional. The filter parameter behavior.
+  Possible values:
+  FILTER_PARAMETER_BEHAVIOR_UNSPECIFIED
+  ALWAYS_INCLUDE
+  NEVER_INCLUDE
+  Possible values are: `FILTER_PARAMETER_BEHAVIOR_UNSPECIFIED`, `ALWAYS_INCLUDE`, `NEVER_INCLUDE`.
+
+* `max_results` -
+  (Optional, Deprecated)
+  Number of search results to return per query.
+  The default value is 10. The maximum allowed value is 10.
+
+  ~> **Warning:** `max_results` is deprecated and will be removed in a future release.
+
+* `modality_configs` -
+  (Optional)
+  The modality configs for the data store.
+  Structure is [documented below](#nested_data_store_tool_modality_configs).
+
+* `name` -
+  (Required)
+  The data store tool name.
+
+
+<a name="nested_data_store_tool_boost_specs"></a>The `boost_specs` block supports:
+
+* `data_stores` -
+  (Required)
+  The Data Store where the boosting configuration is applied. Full resource
+  name of DataStore, such as
+  projects/{project}/locations/{location}/collections/{collection}/dataStores/{dataStore}.
+
+* `spec` -
+  (Required)
+  A list of boosting specifications.
+  Structure is [documented below](#nested_data_store_tool_boost_specs_spec).
+
+
+<a name="nested_data_store_tool_boost_specs_spec"></a>The `spec` block supports:
+
+* `condition_boost_specs` -
+  (Required)
+  A list of boosting specifications.
+  Structure is [documented below](#nested_data_store_tool_boost_specs_spec_condition_boost_specs).
+
+
+<a name="nested_data_store_tool_boost_specs_spec_condition_boost_specs"></a>The `condition_boost_specs` block supports:
+
+* `boost` -
+  (Optional)
+  Strength of the boost, which should be in [-1, 1]. Negative boost means
+  demotion. Default is 0.0.
+  Setting to 1.0 gives the suggestions a big promotion. However, it does
+  not necessarily mean that the top result will be a boosted suggestion.
+  Setting to -1.0 gives the suggestions a big demotion. However, other
+  suggestions that are relevant might still be shown.
+  Setting to 0.0 means no boost applied. The boosting condition is
+  ignored.
+
+* `boost_control_spec` -
+  (Optional)
+  Specification for custom ranking based on customer specified attribute
+  value. It provides more controls for customized ranking than the simple
+  (condition, boost) combination above.
+  Structure is [documented below](#nested_data_store_tool_boost_specs_spec_condition_boost_specs_boost_control_spec).
+
+* `condition` -
+  (Required)
+  An expression which specifies a boost condition. The syntax is the same
+  as filter expression syntax. Currently, the only supported condition is
+  a list of BCP-47 lang codes.
+  Example: To boost suggestions in languages en or fr:
+  (lang_code: ANY("en", "fr"))
+
+
+<a name="nested_data_store_tool_boost_specs_spec_condition_boost_specs_boost_control_spec"></a>The `boost_control_spec` block supports:
+
+* `attribute_type` -
+  (Optional)
+  The attribute type to be used to determine the boost amount. The
+  attribute value can be derived from the field value of the specified
+  field_name. In the case of numerical it is straightforward i.e.
+  attribute_value = numerical_field_value. In the case of freshness
+  however, attribute_value = (time.now() - datetime_field_value).
+  Possible values:
+  NUMERICAL
+  FRESHNESS
+
+* `control_points` -
+  (Optional)
+  The control points used to define the curve. The monotonic function
+  (defined through the interpolation_type above) passes through the
+  control points listed here.
+  Structure is [documented below](#nested_data_store_tool_boost_specs_spec_condition_boost_specs_boost_control_spec_control_points).
+
+* `field_name` -
+  (Optional)
+  The name of the field whose value will be used to determine the
+  boost amount.
+
+* `interpolation_type` -
+  (Optional)
+  The interpolation type to be applied to connect the control points
+  listed below.
+  Possible values:
+  LINEAR
+
+
+<a name="nested_data_store_tool_boost_specs_spec_condition_boost_specs_boost_control_spec_control_points"></a>The `control_points` block supports:
+
+* `attribute_value` -
+  (Optional)
+  Can be one of:
+  1. The numerical field value.
+  2. The duration spec for freshness:
+  The value must be formatted as an XSD `dayTimeDuration` value (a
+  restricted subset of an ISO 8601 duration value). The pattern for
+  this is: `nDnM]`.
+
+* `boost_amount` -
+  (Optional)
+  The value between -1 to 1 by which to boost the score if the
+  attribute_value evaluates to the value specified above.
+
+<a name="nested_data_store_tool_data_store_source"></a>The `data_store_source` block supports:
+
+* `filter` -
+  (Optional)
+  Optional. Filter specification for the DataStore.
+  See: https://cloud.google.com/generative-ai-app-builder/docs/filter-search-metadata
+
+* `data_store` -
+  (Optional)
+  Optional. The data store.
+  Structure is [documented below](#nested_data_store_tool_data_store_source_data_store).
+
+
+<a name="nested_data_store_tool_data_store_source_data_store"></a>The `data_store` block supports:
+
+* `connector_config` -
+  (Output)
+  The connector config for the data store connection.
+  Structure is [documented below](#nested_data_store_tool_data_store_source_data_store_connector_config).
+
+* `create_time` -
+  (Output)
+  Timestamp when the data store was created.
+
+* `display_name` -
+  (Output)
+  The display name of the data store.
+
+* `document_processing_mode` -
+  (Output)
+  The document processing mode for the data store connection.
+  Only set for PUBLIC_WEB and UNSTRUCTURED data stores.
+  Possible values:
+  DOCUMENTS
+  CHUNKS
+
+* `name` -
+  (Required)
+  Full resource name of the DataStore.
+  Format: projects/{project}/locations/{location}/collections/{collection}/dataStores/{dataStore}
+
+* `type` -
+  (Output)
+  The type of the data store. This field is readonly and populated by the
+  server.
+  Possible values:
+  PUBLIC_WEB
+  UNSTRUCTURED
+  FAQ
+  CONNECTOR
+
+
+<a name="nested_data_store_tool_data_store_source_data_store_connector_config"></a>The `connector_config` block contains:
+
+* `collection` -
+  (Output)
+  Resource name of the collection the data store belongs to.
+
+* `collection_display_name` -
+  (Output)
+  Display name of the collection the data store belongs to.
+
+* `data_source` -
+  (Output)
+  The name of the data source.
+  Example: `salesforce`, `jira`, `confluence`, `bigquery`.
+
+<a name="nested_data_store_tool_engine_source"></a>The `engine_source` block supports:
+
+* `data_store_sources` -
+  (Optional)
+  Use to target specific DataStores within the Engine.
+  If empty, the search applies to all DataStores associated with the
+  Engine.
+  Structure is [documented below](#nested_data_store_tool_engine_source_data_store_sources).
+
+* `engine` -
+  (Required)
+  Full resource name of the Engine.
+  Format:
+  `projects/{project}/locations/{location}/collections/{collection}/engines/{engine}`
+
+* `filter` -
+  (Optional)
+  A filter applied to the search across the Engine. Not relevant and not
+  used if 'data_store_sources' is provided.
+  See:
+  https://cloud.google.com/generative-ai-app-builder/docs/filter-search-metadata
+
+
+<a name="nested_data_store_tool_engine_source_data_store_sources"></a>The `data_store_sources` block supports:
+
+* `data_store` -
+  (Optional)
+  A DataStore resource in Vertex AI Search.
+  Structure is [documented below](#nested_data_store_tool_engine_source_data_store_sources_data_store).
+
+* `filter` -
+  (Optional)
+  Filter specification for the DataStore.
+  See:
+  https://cloud.google.com/generative-ai-app-builder/docs/filter-search-metadata
+
+
+<a name="nested_data_store_tool_engine_source_data_store_sources_data_store"></a>The `data_store` block supports:
+
+* `connector_config` -
+  (Output)
+  The connector config for the data store connection.
+  Structure is [documented below](#nested_data_store_tool_engine_source_data_store_sources_data_store_connector_config).
+
+* `create_time` -
+  (Output)
+  Timestamp when the data store was created.
+
+* `display_name` -
+  (Output)
+  The display name of the data store.
+
+* `document_processing_mode` -
+  (Output)
+  The document processing mode for the data store connection.
+  Only set for PUBLIC_WEB and UNSTRUCTURED data stores.
+  Possible values:
+  DOCUMENTS
+  CHUNKS
+
+* `name` -
+  (Required)
+  Full resource name of the DataStore.
+  Format:
+  `projects/{project}/locations/{location}/collections/{collection}/dataStores/{dataStore}`
+
+* `type` -
+  (Output)
+  The type of the data store. This field is readonly and populated by the
+  server.
+  Possible values:
+  PUBLIC_WEB
+  UNSTRUCTURED
+  FAQ
+  CONNECTOR
+
+
+<a name="nested_data_store_tool_engine_source_data_store_sources_data_store_connector_config"></a>The `connector_config` block contains:
+
+* `collection` -
+  (Output)
+  Resource name of the collection the data store belongs to.
+
+* `collection_display_name` -
+  (Output)
+  Display name of the collection the data store belongs to.
+
+* `data_source` -
+  (Output)
+  The name of the data source.
+  Example: `salesforce`, `jira`, `confluence`, `bigquery`.
+
+<a name="nested_data_store_tool_modality_configs"></a>The `modality_configs` block supports:
+
+* `grounding_config` -
+  (Optional)
+  Grounding configuration.
+  Structure is [documented below](#nested_data_store_tool_modality_configs_grounding_config).
+
+* `modality_type` -
+  (Required)
+  The modality type.
+  Possible values:
+  TEXT
+  AUDIO
+
+* `rewriter_config` -
+  (Optional)
+  Rewriter configuration.
+  Structure is [documented below](#nested_data_store_tool_modality_configs_rewriter_config).
+
+* `summarization_config` -
+  (Optional)
+  Summarization configuration.
+  Structure is [documented below](#nested_data_store_tool_modality_configs_summarization_config).
+
+
+<a name="nested_data_store_tool_modality_configs_grounding_config"></a>The `grounding_config` block supports:
+
+* `disabled` -
+  (Optional)
+  Whether grounding is disabled.
+
+* `grounding_level` -
+  (Optional)
+  The groundedness threshold of the answer based on the retrieved sources.
+  The value has a configurable range of [1, 5]. The level is used to
+  threshold the groundedness of the answer, meaning that all responses with
+  a groundedness score below the threshold will fall back to returning
+  relevant snippets only.
+  For example, a level of 3 means that the groundedness score must be
+  3 or higher for the response to be returned.
+
+<a name="nested_data_store_tool_modality_configs_rewriter_config"></a>The `rewriter_config` block supports:
+
+* `disabled` -
+  (Optional)
+  Whether the rewriter is disabled.
+
+* `model_settings` -
+  (Required)
+  Model settings contains various configurations for the LLM model.
+  Structure is [documented below](#nested_data_store_tool_modality_configs_rewriter_config_model_settings).
+
+* `prompt` -
+  (Optional)
+  The prompt definition. If not set, default prompt will be used.
+
+
+<a name="nested_data_store_tool_modality_configs_rewriter_config_model_settings"></a>The `model_settings` block supports:
+
+* `model` -
+  (Optional)
+  The LLM model that the agent should use.
+  If not set, the agent will inherit the model from its parent agent.
+
+* `temperature` -
+  (Optional)
+  If set, this temperature will be used for the LLM model. Temperature
+  controls the randomness of the model's responses. Lower temperatures
+  produce responses that are more predictable. Higher temperatures produce
+  responses that are more creative.
+
+<a name="nested_data_store_tool_modality_configs_summarization_config"></a>The `summarization_config` block supports:
+
+* `disabled` -
+  (Optional)
+  Whether summarization is disabled.
+
+* `model_settings` -
+  (Optional)
+  Model settings contains various configurations for the LLM model.
+  Structure is [documented below](#nested_data_store_tool_modality_configs_summarization_config_model_settings).
+
+* `prompt` -
+  (Optional)
+  The prompt definition. If not set, default prompt will be used.
+
+
+<a name="nested_data_store_tool_modality_configs_summarization_config_model_settings"></a>The `model_settings` block supports:
+
+* `model` -
+  (Optional)
+  The LLM model that the agent should use.
+  If not set, the agent will inherit the model from its parent agent.
+
+* `temperature` -
+  (Optional)
+  If set, this temperature will be used for the LLM model. Temperature
+  controls the randomness of the model's responses. Lower temperatures
+  produce responses that are more predictable. Higher temperatures produce
+  responses that are more creative.
+
+<a name="nested_file_search_tool"></a>The `file_search_tool` block supports:
+
+* `corpus_type` -
+  (Optional)
+  Optional. The type of the corpus. Default is FULLY_MANAGED.
+  Possible values:
+  CORPUS_TYPE_UNSPECIFIED
+  USER_OWNED
+  FULLY_MANAGED
+  Possible values are: `CORPUS_TYPE_UNSPECIFIED`, `USER_OWNED`, `FULLY_MANAGED`.
+
+* `name` -
+  (Required)
+  Required. The tool name.
+
+* `description` -
+  (Optional)
+  Optional. The tool description.
+
+* `file_corpus` -
+  (Optional)
+  Optional. The corpus where files are stored.
+  Format: projects/{project}/locations/{location}/ragCorpora/{rag_corpus}
+
+<a name="nested_google_search_tool"></a>The `google_search_tool` block supports:
+
+* `context_urls` -
+  (Optional)
+  Content will be fetched directly from these URLs for context and grounding.
+  More details: https://cloud.google.com/vertex-ai/generative-ai/docs/url-context.
+  Example: "https://example.com/path.html". A maximum of 20 URLs are allowed.
+
+* `description` -
+  (Optional)
+  Description of the tool's purpose.
+
+* `exclude_domains` -
+  (Optional)
+  List of domains to be excluded from the search results.
+  Example: "example.com".
+  A maximum of 2000 domains can be excluded.
+
+* `name` -
+  (Required)
+  The name of the tool.
+
+* `preferred_domains` -
+  (Optional)
+  Specifies domain names to guide the search.
+  The model will be instructed to prioritize these domains
+  when formulating queries for google search.
+  This is a best-effort hint and these domains may or may
+  not be exclusively reflected in the final search results.
+  Example: "example.com", "another.site".
+  A maximum of 20 domains can be specified.
+
+* `prompt_config` -
+  (Optional)
+  Optional. Prompt instructions passed to planner on how the search results should be
+  processed for text and voice.
+  Structure is [documented below](#nested_google_search_tool_prompt_config).
+
+
+<a name="nested_google_search_tool_prompt_config"></a>The `prompt_config` block supports:
+
+* `text_prompt` -
+  (Optional)
+  Optional. Defines the prompt used for the system instructions when interacting with the
+  agent in chat conversations. If not set, default prompt will be used.
+
+* `voice_prompt` -
+  (Optional)
+  Optional. Defines the prompt used for the system instructions when interacting with the
+  agent in voice conversations. If not set, default prompt will be used.
+
+<a name="nested_python_function"></a>The `python_function` block supports:
+
+* `description` -
+  (Output)
+  The description of the Python function, parsed from the python code's
+  docstring.
+
+* `name` -
+  (Optional)
+  The name of the Python function to execute. Must match a Python function
+  name defined in the python code. Case sensitive. If the name is not
+  provided, the first function defined in the python code will be used.
+
+* `python_code` -
+  (Optional)
+  The Python code to execute for the tool.
+
+<a name="nested_tool_fake_config"></a>The `tool_fake_config` block supports:
+
+* `enable_fake_mode` -
+  (Optional)
+  Whether the tool is using fake mode.
+
+* `code_block` -
+  (Optional)
+  Code block which will be executed instead of a real tool call.
+  Structure is [documented below](#nested_tool_fake_config_code_block).
+
+
+<a name="nested_tool_fake_config_code_block"></a>The `code_block` block supports:
+
+* `python_code` -
+  (Required)
+  Python code which will be invoked in tool fake mode.
+
+<a name="nested_widget_tool"></a>The `widget_tool` block supports:
+
+* `name` -
+  (Required)
+  Required. The display name of the widget tool.
+
+* `description` -
+  (Optional)
+  Optional. The description of the widget tool.
+
+* `widget_type` -
+  (Optional)
+  Optional. The type of the widget tool. If not specified, the default type will be CUSTOMIZED.
+  Possible values:
+  WIDGET_TYPE_UNSPECIFIED
+  CUSTOM
+  PRODUCT_CAROUSEL
+  PRODUCT_DETAILS
+  QUICK_ACTIONS
+  PRODUCT_COMPARISON
+  ADVANCED_PRODUCT_DETAILS
+  SHORT_FORM
+  OVERALL_SATISFACTION
+  ORDER_SUMMARY
+  APPOINTMENT_DETAILS
+  APPOINTMENT_SCHEDULER
+  CONTACT_FORM
+  Possible values are: `WIDGET_TYPE_UNSPECIFIED`, `CUSTOM`, `PRODUCT_CAROUSEL`, `PRODUCT_DETAILS`, `QUICK_ACTIONS`, `PRODUCT_COMPARISON`, `ADVANCED_PRODUCT_DETAILS`, `SHORT_FORM`, `OVERALL_SATISFACTION`, `ORDER_SUMMARY`, `APPOINTMENT_DETAILS`, `APPOINTMENT_SCHEDULER`, `CONTACT_FORM`.
+
+* `ui_config` -
+  (Optional)
+  Optional. Configuration for rendering the widget. Represents a JSON object.
+
+* `data_mapping` -
+  (Optional)
+  Optional. The mapping that defines how data from a source tool is mapped to the
+  widget's input parameters.
+  Structure is [documented below](#nested_widget_tool_data_mapping).
+
+* `text_response_config` -
+  (Optional)
+  Optional. Configuration for always-included text responses.
+  Structure is [documented below](#nested_widget_tool_text_response_config).
+
+* `parameters` -
+  (Optional)
+  Optional. The input parameters of the widget tool. Represents a Schema object.
+  Structure is [documented below](#nested_widget_tool_parameters).
+
+
+<a name="nested_widget_tool_data_mapping"></a>The `data_mapping` block supports:
+
+* `source_tool_name` -
+  (Optional)
+  Optional. The resource name of the tool that provides the data for the widget (e.g., a search tool or a custom function).
+  Format: projects/{project}/locations/{location}/agents/{agent}/tools/{tool}
+
+* `field_mappings` -
+  (Optional)
+  Optional. A map of widget input parameter fields to the corresponding output fields of the source tool.
+  An object containing a list of "key": value pairs. Example: { "name": "wrench", "mass": "1.3kg", "count": "3" }.
+
+* `python_function` -
+  (Optional)
+  Optional. Configuration for a Python function used to transform the source tool's
+  output into the widget's input format.
+  Structure is [documented below](#nested_widget_tool_data_mapping_python_function).
+
+* `mode` -
+  (Optional)
+  Optional. The mode of the data mapping.
+  Possible values:
+  MODE_UNSPECIFIED
+  FIELD_MAPPING
+  PYTHON_SCRIPT
+  Possible values are: `MODE_UNSPECIFIED`, `FIELD_MAPPING`, `PYTHON_SCRIPT`.
+
+
+<a name="nested_widget_tool_data_mapping_python_function"></a>The `python_function` block supports:
+
+* `name` -
+  (Optional)
+  Optional. The name of the Python function to execute. Must match a Python function
+  name defined in the python code. Case sensitive. If the name is not
+  provided, the first function defined in the python code will be used.
+
+* `python_code` -
+  (Optional)
+  Optional. The Python code to execute for the tool.
+
+* `description` -
+  (Output)
+  The description of the Python function, parsed from the python code's
+  docstring.
+
+<a name="nested_widget_tool_text_response_config"></a>The `text_response_config` block supports:
+
+* `type` -
+  (Optional)
+  Optional. The strategy for providing the text response.
+  Possible values:
+  TYPE_UNSPECIFIED
+  NONE
+  LLM_GENERATED
+  STATIC
+  Possible values are: `TYPE_UNSPECIFIED`, `NONE`, `LLM_GENERATED`, `STATIC`.
+
+* `static_text` -
+  (Optional)
+  Optional. The static text response to return when type is STATIC.
+
+* `text_response_instruction` -
+  (Optional)
+  Optional. Instruction for the LLM on how to generate the text response. Used as
+  the description for the text response parameter if type is LLM_GENERATED.
+
+<a name="nested_widget_tool_parameters"></a>The `parameters` block supports:
+
+* `additional_properties` -
+  (Optional)
+  Defines the schema for additional properties allowed in an object.
+  The value must be a valid JSON string representing the Schema object.
+  (Note: OpenAPI also allows a boolean, this definition expects a Schema JSON).
+
+* `any_of` -
+  (Optional)
+  The instance value should be valid against at least one of the schemas in this list.
+
+* `default` -
+  (Optional)
+  Default value of the data. Represents a dynamically typed value
+  which can be either null, a number, a string, a boolean, a struct,
+  or a list of values. The provided default value must be compatible
+  with the defined 'type' and other schema constraints.
+
+* `defs` -
+  (Optional)
+  A map of definitions for use by ref. Only allowed at the root of the schema.
+
+* `description` -
+  (Optional)
+  The description of the data.
+
+* `enum` -
+  (Optional)
+  Possible values of the element of primitive type with enum format.
+  Examples:
+  1. We can define direction as :
+  {type:STRING, format:enum, enum:["EAST", NORTH", "SOUTH", "WEST"]}
+  2. We can define apartment number as :
+  {type:INTEGER, format:enum, enum:["101", "201", "301"]}
+
+* `items` -
+  (Optional)
+  Schema of the elements of Type.ARRAY.
+
+* `max_items` -
+  (Optional)
+  Maximum number of the elements for Type.ARRAY. (int64 format)
+
+* `maximum` -
+  (Optional)
+  Maximum value for Type.INTEGER and Type.NUMBER.
+
+* `min_items` -
+  (Optional)
+  Minimum number of the elements for Type.ARRAY. (int64 format)
+
+* `minimum` -
+  (Optional)
+  Minimum value for Type.INTEGER and Type.NUMBER.
+
+* `nullable` -
+  (Optional)
+  Indicates if the value may be null.
+
+* `prefix_items` -
+  (Optional)
+  Schemas of initial elements of Type.ARRAY.
+
+* `properties` -
+  (Optional)
+  Properties of Type.OBJECT.
+
+* `ref` -
+  (Optional)
+  Allows indirect references between schema nodes. The value should be a
+  valid reference to a child of the root `defs`.
+  For example, the following schema defines a reference to a schema node
+  named "Pet":
+  type: object
+  properties:
+    pet:
+      ref: #/defs/Pet
+  defs:
+    Pet:
+      type: object
+      properties:
+        name:
+          type: string
+  The value of the "pet" property is a reference to the schema node
+  named "Pet".
+  See details in
+  https://json-schema.org/understanding-json-schema/structuring.
+
+* `required` -
+  (Optional)
+  Required properties of Type.OBJECT.
+
+* `title` -
+  (Optional)
+  The title of the schema.
+
+* `type` -
+  (Required)
+  The type of the data.
+  Possible values:
+  STRING
+  INTEGER
+  NUMBER
+  BOOLEAN
+  OBJECT
+  ARRAY
+
+* `unique_items` -
+  (Optional)
+  Indicate the items in the array must be unique. Only applies to TYPE.ARRAY.
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{location}}/apps/{{app}}/tools/{{name}}`
+
+* `connector_tool` -
+  A ConnectorTool allows connections to different integrations.
+  Structure is [documented below](#nested_connector_tool).
+
+* `create_time` -
+  Timestamp when the tool was created.
+
+* `display_name` -
+  The display name of the tool, derived based on the tool's type. For
+  example, display name of a ClientFunction is derived
+  from its `name` property.
+
+* `etag` -
+  Etag used to ensure the object hasn't changed during a read-modify-write
+  operation. If the etag is empty, the update will overwrite any concurrent
+  changes.
+
+* `generated_summary` -
+  If the tool is generated by the LLM assistant, this field contains a
+  descriptive summary of the generation.
+
+* `mcp_tool` -
+  An MCP tool.
+  Structure is [documented below](#nested_mcp_tool).
+
+* `name` -
+  Identifier. The unique identifier of the tool.
+  Format:
+  `projects/{project}/locations/{location}/apps/{app}/tools/{tool}`
+
+* `open_api_tool` -
+  A remote API tool defined by an OpenAPI schema.
+  Structure is [documented below](#nested_open_api_tool).
+
+* `update_time` -
+  Timestamp when the tool was last updated.
+
+* `remote_agent_tool` -
+  Represents a tool that allows the agent to call another remote agent.
+  Structure is [documented below](#nested_remote_agent_tool).
+
+* `system_tool` -
+  The system tool.
+  Structure is [documented below](#nested_system_tool).
+
+
+<a name="nested_connector_tool"></a>The `connector_tool` block contains:
+
+* `connection` -
+  (Output)
+  The full resource name of the referenced Integration Connectors Connection. Format: projects/{project}/locations/{location}/connections/{connection}
+
+* `action` -
+  (Output)
+  Action for the tool to use.
+  Structure is [documented below](#nested_connector_tool_action).
+
+* `auth_config` -
+  (Output)
+  Configures how authentication is handled in Integration Connectors. By default, an admin authentication is passed in the Integration Connectors API requests. You can override it with a different end-user authentication config. Note: The Connection must have authentication override enabled in order to specify an EUC configuration here - otherwise, the ConnectorTool creation will fail. See https://cloud.google.com/application-integration/docs/configure-connectors-task#configure-authentication-override for details. Represents a JSON object.
+
+* `name` -
+  (Output)
+  The name of the tool that can be used by the Agent to decide whether to call this ConnectorTool.
+
+* `description` -
+  (Output)
+  The description of the tool that can be used by the Agent to decide whether to call this ConnectorTool.
+
+
+<a name="nested_connector_tool_action"></a>The `action` block contains:
+
+* `input_fields` -
+  (Output)
+  Entity fields to use as inputs for the operation.
+
+* `output_fields` -
+  (Output)
+  Entity fields to return from the operation.
+
+* `connection_action_id` -
+  (Output)
+  ID of a Connection action for the tool to use.
+
+* `entity_operation` -
+  (Output)
+  Entity operation configuration for the tool to use.
+  Structure is [documented below](#nested_connector_tool_action_entity_operation).
+
+
+<a name="nested_connector_tool_action_entity_operation"></a>The `entity_operation` block contains:
+
+* `entity_id` -
+  (Output)
+  ID of the entity.
+
+* `operation` -
+  (Output)
+  Operation to perform on the entity.
+  Possible values:
+  OPERATION_TYPE_UNSPECIFIED
+  LIST
+  GET
+  CREATE
+  UPDATE
+  DELETE
+
+<a name="nested_mcp_tool"></a>The `mcp_tool` block contains:
+
+* `name` -
+  (Output)
+  The name of the MCP tool.
+
+* `name_override` -
+  (Output)
+  The name override of the MCP tool. This is populated if the name was overridden by a Toolset override.
+
+* `description` -
+  (Output)
+  The description of the MCP tool.
+
+* `input_schema` -
+  (Output)
+  The schema of the input arguments of the MCP tool. Represents a JSON object.
+
+* `output_schema` -
+  (Output)
+  The schema of the output arguments of the MCP tool. Represents a JSON object.
+
+* `server_address` -
+  (Output)
+  The server address of the MCP server, e.g., "https://example.com/mcp/". If the server is built with the MCP SDK, the url should be suffixed with "/mcp/". Only Streamable HTTP transport based servers are supported. This is the same as the serverAddress in the McpToolset.
+
+* `api_authentication` -
+  (Output)
+  Authentication information required to access tools and execute a tool against the MCP server. For API key auth, the API key can only be sent in the request header; sending it via query parameters is not supported.
+  Structure is [documented below](#nested_mcp_tool_api_authentication).
+
+* `tls_config` -
+  (Output)
+  The TLS configuration. Includes the custom server certificates that the client should trust.
+  Structure is [documented below](#nested_mcp_tool_tls_config).
+
+* `service_directory_config` -
+  (Output)
+  Service Directory configuration for VPC-SC, used to resolve service names within a perimeter.
+  Structure is [documented below](#nested_mcp_tool_service_directory_config).
+
+* `custom_headers` -
+  (Output)
+  The custom headers to send in the request to the MCP server. The values must be in the format `$context.variables.<name_of_variable>` and can be set in the session variables.
+
+* `state` -
+  (Output)
+  The state of the MCP tool.
+  Possible values:
+  STATE_UNSPECIFIED
+  ACTIVE
+  INACTIVE
+  STALE
+
+
+<a name="nested_mcp_tool_api_authentication"></a>The `api_authentication` block contains:
+
+* `api_key_config` -
+  (Output)
+  Configurations for authentication with API key.
+  Structure is [documented below](#nested_mcp_tool_api_authentication_api_key_config).
+
+* `bearer_token_config` -
+  (Output)
+  Configurations for authentication with a bearer token.
+  Structure is [documented below](#nested_mcp_tool_api_authentication_bearer_token_config).
+
+* `oauth_config` -
+  (Output)
+  Configurations for authentication with OAuth.
+  Structure is [documented below](#nested_mcp_tool_api_authentication_oauth_config).
+
+* `service_account_auth_config` -
+  (Output)
+  Configurations for authentication using a custom service account.
+  Structure is [documented below](#nested_mcp_tool_api_authentication_service_account_auth_config).
+
+* `service_agent_id_token_auth_config` -
+  (Output)
+  Configurations for authentication with [ID
+  token](https://cloud.google.com/docs/authentication/token-types#id) generated
+  from service agent.
+
+
+<a name="nested_mcp_tool_api_authentication_api_key_config"></a>The `api_key_config` block contains:
+
+* `api_key_secret_version` -
+  (Output)
+  The name of the SecretManager secret version resource storing the API key.
+  Format: `projects/{project}/secrets/{secret}/versions/{version}`
+  Note: You should grant `roles/secretmanager.secretAccessor` role to the CES
+  service agent
+  `service-<PROJECT-NUMBER>@gcp-sa-ces.iam.gserviceaccount.com`.
+
+* `key_name` -
+  (Output)
+  The parameter name or the header name of the API key.
+  E.g., If the API request is "https://example.com/act?X-Api-Key=", "X-Api-Key" would be the parameter name.
+
+* `request_location` -
+  (Output)
+  Key location in the request. For API key auth on MCP toolsets,
+  the API key can only be sent in the request header.
+  Possible values:
+  HEADER
+
+<a name="nested_mcp_tool_api_authentication_bearer_token_config"></a>The `bearer_token_config` block contains:
+
+* `token` -
+  (Output)
+  The bearer token. Must be in the format $context.variables.<name_of_variable>.
+
+<a name="nested_mcp_tool_api_authentication_oauth_config"></a>The `oauth_config` block contains:
+
+* `client_id` -
+  (Output)
+  The client ID from the OAuth provider.
+
+* `client_secret_version` -
+  (Output)
+  The name of the SecretManager secret version resource storing the
+  client secret.
+  Format: `projects/{project}/secrets/{secret}/versions/{version}`
+  Note: You should grant `roles/secretmanager.secretAccessor` role to the CES
+  service agent
+  `service-<PROJECT-NUMBER>@gcp-sa-ces.iam.gserviceaccount.com`.
+
+* `oauth_grant_type` -
+  (Output)
+  OAuth grant types.
+  Possible values:
+  CLIENT_CREDENTIAL
+
+* `scopes` -
+  (Output)
+  The OAuth scopes to grant.
+
+* `token_endpoint` -
+  (Output)
+  The token endpoint in the OAuth provider to exchange for an access token.
+
+<a name="nested_mcp_tool_api_authentication_service_account_auth_config"></a>The `service_account_auth_config` block contains:
+
+* `service_account` -
+  (Output)
+  The email address of the service account used for authenticatation. CES
+  uses this service account to exchange an access token and the access token
+  is then sent in the `Authorization` header of the request.
+  The service account must have the
+  `roles/iam.serviceAccountTokenCreator` role granted to the
+  CES service agent
+  `service-<PROJECT-NUMBER>@gcp-sa-ces.iam.gserviceaccount.com`.
+
+<a name="nested_mcp_tool_tls_config"></a>The `tls_config` block contains:
+
+* `ca_certs` -
+  (Output)
+  Specifies a list of allowed custom CA certificates for HTTPS verification.
+  Structure is [documented below](#nested_mcp_tool_tls_config_ca_certs).
+
+
+<a name="nested_mcp_tool_tls_config_ca_certs"></a>The `ca_certs` block contains:
+
+* `cert` -
+  (Output)
+  The allowed custom CA certificates (in DER format) for
+  HTTPS verification. This overrides the default SSL trust store. If this
+  is empty or unspecified, CES will use Google's default trust
+  store to verify certificates. N.B. Make sure the HTTPS server
+  certificates are signed with "subject alt name". For instance a
+  certificate can be self-signed using the following command,
+  openssl x509 -req -days 200 -in example.com.csr \
+  -signkey example.com.key \
+  -out example.com.crt \
+  -extfile <(printf "\nsubjectAltName='DNS:www.example.com'")
+
+* `display_name` -
+  (Output)
+  The name of the allowed custom CA certificates. This can be used to disambiguate the custom CA certificates.
+
+<a name="nested_mcp_tool_service_directory_config"></a>The `service_directory_config` block contains:
+
+* `service` -
+  (Output)
+  The name of [Service
+  Directory](https://cloud.google.com/service-directory) service.
+  Format:
+  `projects/{project}/locations/{location}/namespaces/{namespace}/services/{service}`.
+  Location of the service directory must be the same as the location of the
+  app.
+
+<a name="nested_open_api_tool"></a>The `open_api_tool` block contains:
+
+* `api_authentication` -
+  (Output)
+  Authentication information required for API calls.
+  Structure is [documented below](#nested_open_api_tool_api_authentication).
+
+* `description` -
+  (Output)
+  The description of the tool. If not provided, the description of the tool
+  will be derived from the OpenAPI schema, from `operation.description` or
+  `operation.summary`.
+
+* `ignore_unknown_fields` -
+  (Output)
+  If true, the agent will ignore unknown fields in the API response.
+
+* `name` -
+  (Output)
+  The name of the tool. If not provided, the name of the tool will be
+  derived from the OpenAPI schema, from `operation.operationId`.
+
+* `open_api_schema` -
+  (Output)
+  The OpenAPI schema in JSON or YAML format.
+
+* `service_directory_config` -
+  (Output)
+  Configuration for tools using Service Directory.
+  Structure is [documented below](#nested_open_api_tool_service_directory_config).
+
+* `tls_config` -
+  (Output)
+  The TLS configuration.
+  Structure is [documented below](#nested_open_api_tool_tls_config).
+
+* `url` -
+  (Output)
+  The server URL of the Open API schema. This field is only set in tools in the
+  environment dependencies during the export process if the schema contains a
+  server url. During the import process, if this url is present in the environment
+  dependencies and the schema has the $env_var placeholder, it will replace the
+  placeholder in the schema.
+
+
+<a name="nested_open_api_tool_api_authentication"></a>The `api_authentication` block contains:
+
+* `api_key_config` -
+  (Output)
+  Configurations for authentication with API key.
+  Structure is [documented below](#nested_open_api_tool_api_authentication_api_key_config).
+
+* `bearer_token_config` -
+  (Output)
+  Configurations for authentication with a bearer token.
+  Structure is [documented below](#nested_open_api_tool_api_authentication_bearer_token_config).
+
+* `oauth_config` -
+  (Output)
+  Configurations for authentication with OAuth.
+  Structure is [documented below](#nested_open_api_tool_api_authentication_oauth_config).
+
+* `service_account_auth_config` -
+  (Output)
+  Configurations for authentication using a custom service account.
+  Structure is [documented below](#nested_open_api_tool_api_authentication_service_account_auth_config).
+
+* `service_agent_id_token_auth_config` -
+  (Output)
+  Configurations for authentication with [ID
+  token](https://cloud.google.com/docs/authentication/token-types#id) generated
+  from service agent.
+
+
+<a name="nested_open_api_tool_api_authentication_api_key_config"></a>The `api_key_config` block contains:
+
+* `api_key_secret_version` -
+  (Output)
+  The name of the SecretManager secret version resource storing the API key.
+  Format: `projects/{project}/secrets/{secret}/versions/{version}`
+  Note: You should grant `roles/secretmanager.secretAccessor` role to the CES
+  service agent
+  `service-<PROJECT-NUMBER>@gcp-sa-ces.iam.gserviceaccount.com`.
+
+* `key_name` -
+  (Output)
+  The parameter name or the header name of the API key.
+  E.g., If the API request is "https://example.com/act?X-Api-Key=", "X-Api-Key" would be the parameter name.
+
+* `request_location` -
+  (Output)
+  Key location in the request.
+  Possible values:
+  HEADER
+  QUERY_STRING
+
+<a name="nested_open_api_tool_api_authentication_bearer_token_config"></a>The `bearer_token_config` block contains:
+
+* `token` -
+  (Output)
+  The bearer token. Must be in the format $context.variables.<name_of_variable>.
+
+<a name="nested_open_api_tool_api_authentication_oauth_config"></a>The `oauth_config` block contains:
+
+* `client_id` -
+  (Output)
+  The client ID from the OAuth provider.
+
+* `client_secret_version` -
+  (Output)
+  The name of the SecretManager secret version resource storing the
+  client secret.
+  Format: `projects/{project}/secrets/{secret}/versions/{version}`
+  Note: You should grant `roles/secretmanager.secretAccessor` role to the CES
+  service agent
+  `service-<PROJECT-NUMBER>@gcp-sa-ces.iam.gserviceaccount.com`.
+
+* `oauth_grant_type` -
+  (Output)
+  OAuth grant types.
+  Possible values:
+  CLIENT_CREDENTIAL
+
+* `scopes` -
+  (Output)
+  The OAuth scopes to grant.
+
+* `token_endpoint` -
+  (Output)
+  The token endpoint in the OAuth provider to exchange for an access token.
+
+<a name="nested_open_api_tool_api_authentication_service_account_auth_config"></a>The `service_account_auth_config` block contains:
+
+* `service_account` -
+  (Output)
+  The email address of the service account used for authenticatation. CES
+  uses this service account to exchange an access token and the access token
+  is then sent in the `Authorization` header of the request.
+  The service account must have the
+  `roles/iam.serviceAccountTokenCreator` role granted to the
+  CES service agent
+  `service-<PROJECT-NUMBER>@gcp-sa-ces.iam.gserviceaccount.com`.
+
+<a name="nested_open_api_tool_service_directory_config"></a>The `service_directory_config` block contains:
+
+* `service` -
+  (Output)
+  The name of [Service
+  Directory](https://cloud.google.com/service-directory) service.
+  Format:
+  `projects/{project}/locations/{location}/namespaces/{namespace}/services/{service}`.
+  Location of the service directory must be the same as the location of the
+  app.
+
+<a name="nested_open_api_tool_tls_config"></a>The `tls_config` block contains:
+
+* `ca_certs` -
+  (Output)
+  Specifies a list of allowed custom CA certificates for HTTPS
+  verification.
+  Structure is [documented below](#nested_open_api_tool_tls_config_ca_certs).
+
+
+<a name="nested_open_api_tool_tls_config_ca_certs"></a>The `ca_certs` block contains:
+
+* `cert` -
+  (Output)
+  The allowed custom CA certificates (in DER format) for
+  HTTPS verification. This overrides the default SSL trust store. If this
+  is empty or unspecified, CES will use Google's default trust
+  store to verify certificates. N.B. Make sure the HTTPS server
+  certificates are signed with "subject alt name". For instance a
+  certificate can be self-signed using the following command,
+  openssl x509 -req -days 200 -in example.com.csr \
+  -signkey example.com.key \
+  -out example.com.crt \
+  -extfile <(printf "\nsubjectAltName='DNS:www.example.com'")
+  A base64-encoded string.
+
+* `display_name` -
+  (Output)
+  The name of the allowed custom CA certificates. This
+  can be used to disambiguate the custom CA certificates.
+
+<a name="nested_remote_agent_tool"></a>The `remote_agent_tool` block contains:
+
+* `name` -
+  (Output)
+  The name of the tool.
+
+* `description` -
+  (Output)
+  The description of the tool.
+
+* `agent_card` -
+  (Output)
+  The agent card of the remote agent that this tool invokes.
+  Structure is [documented below](#nested_remote_agent_tool_agent_card).
+
+
+<a name="nested_remote_agent_tool_agent_card"></a>The `agent_card` block contains:
+
+* `name` -
+  (Output)
+  A human-readable name for the agent.
+
+* `description` -
+  (Output)
+  A description of the agent's domain of action/solution space.
+
+* `version` -
+  (Output)
+  The version of the agent.
+
+* `supported_interfaces` -
+  (Output)
+  Ordered list of supported interfaces. The first entry is preferred.
+  Structure is [documented below](#nested_remote_agent_tool_agent_card_supported_interfaces).
+
+* `skills` -
+  (Output)
+  Skills represent a unit of ability an agent can perform. This may
+  somewhat abstract but represents a more focused set of actions that the agent is highly
+  likely to succeed at.
+  Structure is [documented below](#nested_remote_agent_tool_agent_card_skills).
+
+
+<a name="nested_remote_agent_tool_agent_card_supported_interfaces"></a>The `supported_interfaces` block contains:
+
+* `url` -
+  (Output)
+  The URL where this interface is available. Must be a valid absolute
+  HTTPS URL in production.
+
+* `protocol_binding` -
+  (Output)
+  The protocol binding supported at this URL. The core ones officially
+  supported are JSONRPC, GRPC and HTTP+JSON.
+
+* `tenant` -
+  (Output)
+  Tenant ID to be used in the request when calling the agent.
+
+* `protocol_version` -
+  (Output)
+  The version of the A2A protocol this interface exposes.
+  Examples: "0.3", "1.0"
+
+<a name="nested_remote_agent_tool_agent_card_skills"></a>The `skills` block contains:
+
+* `id` -
+  (Output)
+  A unique identifier for the agent's skill.
+
+* `name` -
+  (Output)
+  A human-readable name for the skill.
+
+* `description` -
+  (Output)
+  A detailed description of the skill.
+
+* `tags` -
+  (Output)
+  A set of keywords describing the skill's capabilities.
+
+* `examples` -
+  (Output)
+  Example prompts or scenarios that this skill can handle.
+
+* `input_modes` -
+  (Output)
+  The set of supported input media types for this skill, overriding the agent's
+  defaults.
+
+* `output_modes` -
+  (Output)
+  The set of supported output media types for this skill, overriding the agent's
+  defaults.
+
+<a name="nested_system_tool"></a>The `system_tool` block contains:
+
+* `description` -
+  (Output)
+  The description of the system tool.
+
+* `name` -
+  (Output)
+  The name of the system tool.
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Tool can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{location}}/apps/{{app}}/tools/{{name}}`
+* `{{project}}/{{location}}/{{app}}/{{name}}`
+* `{{location}}/{{app}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Tool using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-optional value->"
+    location = "<-required value->"
+    app = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_ces_tool.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Tool using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{location}}/apps/{{app}}/tools/{{name}}"
+  to = google_ces_tool.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Tool can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_ces_tool.default projects/{{project}}/locations/{{location}}/apps/{{app}}/tools/{{name}}
+$ terraform import google_ces_tool.default {{project}}/{{location}}/{{app}}/{{name}}
+$ terraform import google_ces_tool.default {{location}}/{{app}}/{{name}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

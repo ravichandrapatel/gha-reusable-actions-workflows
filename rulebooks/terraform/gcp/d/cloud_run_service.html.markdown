@@ -1,0 +1,48 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_cloud_run_service
+
+Get information about a Cloud Run Service.
+
+
+For more information see the [official documentation](https://cloud.google.com/run/docs/) and
+the [API](https://cloud.google.com/run/docs/reference/rest/v1/namespaces.services).
+
+## Example Usage
+
+```hcl
+data "google_cloud_run_service" "default" {
+  location = google_cloud_run_service.default.location
+  name = google_cloud_run_service.default.name
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+
+* `name` -
+  (Required)
+  Name must be unique within a Google Cloud project and region.
+  Is required when creating resources. Name is primarily intended
+  for creation idempotence and configuration definition. Cannot be updated.
+  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+
+* `location` -
+  (Required)
+  The location of the cloud run instance. eg us-central1
+
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+
+## Attributes Reference
+
+See [google_cloud_run_service](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/cloud_run_service#argument-reference) resource for details of the available attributes.

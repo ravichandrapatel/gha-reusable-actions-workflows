@@ -1,0 +1,105 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_vertex_ai_cache_config
+
+Config of GenAI caching features. This is a singleton resource.
+
+
+To get more information about CacheConfig, see:
+
+* [API documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/reference/rest/v1/projects/updateCacheConfig)
+* How-to Guides
+    * [Official Documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/reference/rest/Shared.Types/CacheConfig)
+
+## Example Usage - Vertex Ai Cache Config
+
+
+```hcl
+resource "google_vertex_ai_cache_config" "cache_config" {
+  project       = "my-project-name"
+  disable_cache = true
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `disable_cache` -
+  (Required)
+  If set to true, disables GenAI caching. Otherwise caching is enabled.
+
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/cacheConfig`
+
+* `name` -
+  Identifier. name of the cache config. Format: - `projects/{project}/cacheConfig`.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+CacheConfig can be imported using any of these accepted formats:
+
+* `projects/{{project}}/cacheConfig`
+* `{{project}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import CacheConfig using identity values. For example:
+
+```tf
+import {
+  identity = {
+    project = "<-optional value->"
+  }
+  to = google_vertex_ai_cache_config.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import CacheConfig using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/cacheConfig"
+  to = google_vertex_ai_cache_config.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), CacheConfig can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_vertex_ai_cache_config.default projects/{{project}}/cacheConfig
+$ terraform import google_vertex_ai_cache_config.default {{project}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

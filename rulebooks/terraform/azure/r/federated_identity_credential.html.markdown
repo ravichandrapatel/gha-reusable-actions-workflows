@@ -1,0 +1,77 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# azurerm_federated_identity_credential
+
+Manages a Federated Identity Credential.
+
+## Example Usage
+
+```hcl
+resource "azurerm_resource_group" "example" {
+  name     = "example"
+  location = "West Europe"
+}
+
+resource "azurerm_user_assigned_identity" "example" {
+  location            = azurerm_resource_group.example.location
+  name                = "example"
+  resource_group_name = azurerm_resource_group.example.name
+}
+
+resource "azurerm_federated_identity_credential" "example" {
+  name                      = "example"
+  audience                  = ["foo"]
+  issuer                    = "https://foo"
+  user_assigned_identity_id = azurerm_user_assigned_identity.example.id
+  subject                   = "foo"
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - (Required) Specifies the name of this Federated Identity Credential. Changing this forces a new resource to be created.
+
+* `user_assigned_identity_id` - (Required) Specifies the ID of the User Assigned Identity for this Federated Identity Credential. Changing this forces a new Federated Identity Credential to be created.
+
+* `audience` - (Required) Specifies the audience for this Federated Identity Credential.
+
+* `issuer` - (Required) Specifies the issuer of this Federated Identity Credential.
+
+* `subject` - (Required) Specifies the subject for this Federated Identity Credential.
+
+## Attributes Reference
+
+In addition to the Arguments listed above - the following Attributes are exported:
+
+* `id` - The ID of the Federated Identity Credential.
+
+---
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `create` - (Defaults to 30 minutes) Used when creating the Federated Identity Credential.
+* `read` - (Defaults to 5 minutes) Used when retrieving the Federated Identity Credential.
+* `update` - (Defaults to 30 minutes) Used when updating the Federated Identity Credential.
+* `delete` - (Defaults to 30 minutes) Used when deleting the Federated Identity Credential.
+
+## Import
+
+An existing Federated Identity Credential can be imported into Terraform using the `resource id`, e.g.
+
+```shell
+terraform import azurerm_federated_identity_credential.example /subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{parentIdentityName}/federatedIdentityCredentials/{resourceName}
+```
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This resource uses the following Azure API Providers:
+
+* `Microsoft.ManagedIdentity` - 2024-11-30

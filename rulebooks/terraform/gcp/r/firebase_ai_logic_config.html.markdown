@@ -1,0 +1,310 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_firebase_ai_logic_config
+
+Configuration for Firebase AI Logic.
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about Config, see:
+
+* [API documentation](https://firebase.google.com/docs/reference/ai-logic/rest)
+* How-to Guides
+    * [Official Documentation](https://firebase.google.com/docs/ai-logic)
+
+~> **Warning:** All arguments including the following potentially sensitive
+values will be stored in the raw state as plain text: `generative_language_config.api_key`.
+[Read more about sensitive data in state](https://developer.hashicorp.com/terraform/language/manage-sensitive-data).
+
+~> **Note:**  All arguments marked as write-only values will not be stored in the state: `generative_language_config.api_key_wo`.
+[Read more about Write-only Arguments](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/write-only-arguments).
+
+## Example Usage - Firebaseailogic Config Basic
+
+
+```hcl
+resource "google_project" "project" {
+  provider = google-beta
+
+  project_id      = "basic"
+  name            = "Firebase Project"
+  org_id          = "123456789"
+  billing_account = "000000-0000000-0000000-000000"
+  deletion_policy = "DELETE"
+}
+
+resource "google_firebase_project" "default" {
+  provider = google-beta
+
+  project  = google_project.project.project_id
+}
+
+resource "google_project_service" "firebase" {
+  provider = google-beta
+
+  project = google_project.project.project_id
+  service = "firebase.googleapis.com"
+}
+
+resource "google_project_service" "ailogic" {
+  provider = google-beta
+
+  project = google_project.project.project_id
+  service = "firebasevertexai.googleapis.com"
+}
+
+# It takes a while for permissions to propagate
+# If your Terraform setup has a retry mechanism, this wait is unnecessary
+resource "time_sleep" "wait_30s" {
+  depends_on = [
+    google_project_service.ailogic,
+    google_project_service.firebase
+  ]
+
+  create_duration = "30s"
+}
+
+resource "google_firebase_ai_logic_config" "default" {
+  provider  = google-beta
+  project   = google_firebase_project.default.project
+  location  = "global"
+
+  depends_on = [time_sleep.wait_30s]
+}
+```
+## Example Usage - Firebaseailogic Config Full
+
+
+```hcl
+resource "google_project" "project" {
+  provider = google-beta
+
+  project_id      = "full"
+  name            = "Firebase Project"
+  org_id          = "123456789"
+  billing_account = "000000-0000000-0000000-000000"
+  deletion_policy = "DELETE"
+}
+
+resource "google_firebase_project" "default" {
+  provider = google-beta
+
+  project  = google_project.project.project_id
+}
+
+resource "google_project_service" "firebase" {
+  provider = google-beta
+
+  project = google_project.project.project_id
+  service = "firebase.googleapis.com"
+}
+
+resource "google_project_service" "ailogic" {
+  provider = google-beta
+
+  project = google_project.project.project_id
+  service = "firebasevertexai.googleapis.com"
+}
+
+resource "google_apikeys_key" "gemini" {
+  provider  = google-beta
+  project  = google_project.project.project_id
+
+  name         = "gemini-api-key"
+  display_name = "Gemini Developer API key"
+
+  restrictions {
+    api_targets {
+      service = "generativelanguage.googleapis.com"
+    }
+  }
+}
+
+# It takes a while for permissions to propagate
+# If your Terraform setup has a retry mechanism, this wait is unnecessary
+resource "time_sleep" "wait_30s" {
+  depends_on = [
+    google_project_service.ailogic,
+    google_project_service.firebase
+  ]
+
+  create_duration = "30s"
+}
+
+resource "google_firebase_ai_logic_config" "default" {
+  provider  = google-beta
+  project   = google_firebase_project.default.project
+  location  = "global"
+
+  generative_language_config {
+    api_key = google_apikeys_key.gemini.key_string
+  }
+
+  telemetry_config {
+    mode = "ALL"
+    sampling_rate = 1.0
+  }
+
+  traffic_filter {
+    template_only = true
+  }
+
+  depends_on = [time_sleep.wait_30s]
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+
+* `generative_language_config` -
+  (Optional)
+  Configuration for using the Gemini Developer API via Firebase AI Logic.
+  When using the Gemini Developer API via Firebase AI Logic, a separate Gemini
+  API key is stored in this configuration *on the server* so that you do
+  **not** add your Gemini API key directly into your app's codebase.
+  Structure is [documented below](#nested_generative_language_config).
+
+* `telemetry_config` -
+  (Optional)
+  Configuration for telemetry.
+  Telemetry is the collection of metrics, logs, and traces recorded by the
+  Firebase AI Logic backend.
+  Structure is [documented below](#nested_telemetry_config).
+
+* `traffic_filter` -
+  (Optional)
+  Configuration for traffic filtering.
+  Structure is [documented below](#nested_traffic_filter).
+
+* `location` -
+  (Optional)
+  Resource ID segment making up resource `name`. It identifies the resource within its parent collection as described in https://google.aip.dev/122.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+<a name="nested_generative_language_config"></a>The `generative_language_config` block supports:
+
+* `api_key` -
+  (Optional)
+  The value of the API key. The API key must have
+  `generativelanguage.googleapis.com` in its "API restrictions" allowlist.
+  Note that this API is sometimes called the *Generative Language API* in
+  the Google Cloud console.
+  Do **not** add this Gemini API key into your app's codebase
+  **Note**: This property is sensitive and will not be displayed in the plan.
+
+* `api_key_wo` -
+  (Optional, Write-Only)
+  The value of the API key. The API key must have
+  `generativelanguage.googleapis.com` in its "API restrictions" allowlist.
+  Note that this API is sometimes called the *Generative Language API* in
+  the Google Cloud console.
+  Do **not** add this Gemini API key into your app's codebase
+  **Note**: This property is write-only and will not be read from the API.
+
+  ~> **Note:** One of `api_key` or `api_key_wo` can only be set.
+
+* `api_key_wo_version` -
+  (Optional)
+  Triggers update of `api_key_wo` write-only. Increment this value when an update to `api_key_wo` is needed. For more info see [updating write-only arguments](/docs/providers/google/guides/using_write_only_arguments.html#updating-write-only-arguments)
+
+<a name="nested_telemetry_config"></a>The `telemetry_config` block supports:
+
+* `mode` -
+  (Optional)
+  The current monitoring mode used for this project.
+  Possible values:
+  NONE
+  ALL
+
+* `sampling_rate` -
+  (Optional)
+  The percentage of requests to be sampled, expressed as a fraction
+  in the range (0,1]. Note that the actual sampling rate may be lower than
+  the specified value if the system is overloaded. Default is 1.0.
+
+<a name="nested_traffic_filter"></a>The `traffic_filter` block supports:
+
+* `template_only` -
+  (Optional)
+  Only allows users to use AI Logic via prompt templates for this project.
+  If true, only calls using server templates are permitted.
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{location}}/config`
+
+* `name` -
+  Identifier. The resource name of the config.
+  Format: projects/{project}/locations/{location}/config
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Config can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{location}}/config`
+* `{{project}}/{{location}}`
+* `{{location}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Config using identity values. For example:
+
+```tf
+import {
+  identity = {
+    location = "<-optional value->"
+    project = "<-optional value->"
+  }
+  to = google_firebase_ai_logic_config.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Config using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{location}}/config"
+  to = google_firebase_ai_logic_config.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Config can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_firebase_ai_logic_config.default projects/{{project}}/locations/{{location}}/config
+$ terraform import google_firebase_ai_logic_config.default {{project}}/{{location}}
+$ terraform import google_firebase_ai_logic_config.default {{location}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

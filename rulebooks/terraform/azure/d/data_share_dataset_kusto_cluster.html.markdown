@@ -1,0 +1,58 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_data_share_dataset_kusto_cluster
+
+Use this data source to access information about an existing Data Share Kusto Cluster Dataset.
+
+## Example Usage
+
+```hcl
+provider "azurerm" {
+  features {}
+}
+
+data "azurerm_data_share_dataset_kusto_cluster" "example" {
+  name     = "example-dskc"
+  share_id = "example-share-id"
+}
+
+output "id" {
+  value = data.azurerm_data_share_dataset_kusto_cluster.example.id
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - (Required) The name of this Data Share Kusto Cluster Dataset.
+
+* `share_id` - (Required) The resource ID of the Data Share where this Data Share Kusto Cluster Dataset should be created.
+
+## Attributes Reference
+
+In addition to the Arguments listed above - the following Attributes are exported:
+
+* `id` - The resource ID of the Data Share Kusto Cluster Dataset.
+
+* `kusto_cluster_id` - The resource ID of the Kusto Cluster to be shared with the receiver.
+
+* `display_name` - The name of the Data Share Dataset.
+
+* `kusto_cluster_location` - The location of the Kusto Cluster.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the Data Share Kusto Cluster Dataset.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.DataShare` - 2019-11-01

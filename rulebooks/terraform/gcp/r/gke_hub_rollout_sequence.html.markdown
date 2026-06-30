@@ -1,0 +1,264 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_gke_hub_rollout_sequence
+
+RolloutSequence defines the desired order of upgrades.
+
+
+To get more information about RolloutSequence, see:
+
+* [API documentation](https://docs.cloud.google.com/kubernetes-engine/fleet-management/docs/reference/rest/v1beta/projects.locations.rolloutSequences)
+* How-to Guides
+    * [Rollout Sequencing Overview](https://cloud.google.com/kubernetes-engine/docs/concepts/rollout-sequencing-custom-stages/about-rollout-sequencing)
+
+## Example Usage - Gke Hub Rollout Sequence Create
+
+
+```hcl
+resource "google_gke_hub_rollout_sequence" "rollout_sequence" {
+  rollout_sequence_id = "rs-basic"
+  display_name        = "Basic Rollout Sequence"
+  ignored_clusters_selector {
+    label_selector = "resource.labels.ignored == 'true'"
+  }
+  stages {
+    fleet_projects = ["projects/my-project-name"]
+    soak_duration  = "1h"
+  }
+  auto_upgrade_config {
+    rollout_creation_scope {
+      upgrade_types = [
+        "CONTROL_PLANE_MINOR",
+        "CONTROL_PLANE_PATCH",
+        "NODE_MINOR",
+        "NODE_PATCH"
+      ]
+    }
+  }
+}
+```
+## Example Usage - Gke Hub Rollout Sequence Update
+
+
+```hcl
+resource "google_gke_hub_rollout_sequence" "rollout_sequence" {
+  rollout_sequence_id = "rs-basic"
+  display_name        = "Modified Rollout Sequence"
+  ignored_clusters_selector {
+    label_selector = "resource.labels.ignored == 'super_true'"
+  }
+  stages {
+    fleet_projects = ["projects/my-project-name"]
+    cluster_selector {
+      label_selector = "resource.labels.canary=='true'"
+    }
+    soak_duration  = "2h"
+  }
+  stages {
+    fleet_projects = ["projects/my-project-name"]
+    soak_duration  = "1d"
+  }
+  auto_upgrade_config {
+    rollout_creation_scope {
+      upgrade_types = [
+        "CONTROL_PLANE_PATCH",
+        "NODE_PATCH"
+      ]
+    }
+  }
+  labels = {
+    some_key = "some_value"
+  }
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `stages` -
+  (Required)
+  Ordered list of stages that constitute this Rollout Sequence.
+  Structure is [documented below](#nested_stages).
+
+* `rollout_sequence_id` -
+  (Required)
+  The user-provided identifier of the RolloutSequence.
+
+
+* `display_name` -
+  (Optional)
+  Human readable display name of the Rollout Sequence.
+
+* `labels` -
+  (Optional)
+  Labels for this Rollout Sequence.
+
+  **Note**: This field is non-authoritative, and will only manage the labels present in your configuration.
+  Please refer to the field `effective_labels` for all of the labels present on the resource.
+
+* `ignored_clusters_selector` -
+  (Optional)
+  Selector for clusters to exclude from the Rollout Sequence.
+  Structure is [documented below](#nested_ignored_clusters_selector).
+
+* `auto_upgrade_config` -
+  (Optional)
+  Configuration for automatic upgrades.
+  If not specified, the system applies default behavior.
+  Structure is [documented below](#nested_auto_upgrade_config).
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+<a name="nested_stages"></a>The `stages` block supports:
+
+* `fleet_projects` -
+  (Required)
+  List of Fleet projects to select the clusters from.
+  Expected format: projects/{project}
+
+* `cluster_selector` -
+  (Optional)
+  Filter to select a subset of clusters from the specified Fleet projects.
+  If not specified, all clusters in the fleet projects are selected.
+  Structure is [documented below](#nested_stages_cluster_selector).
+
+* `soak_duration` -
+  (Optional)
+  Soak time after upgrading all the clusters in the stage.
+  Has to be specified in seconds, minutes, hours or days.
+
+
+<a name="nested_stages_cluster_selector"></a>The `cluster_selector` block supports:
+
+* `label_selector` -
+  (Required)
+  The label selector must be a valid CEL (Common Expression Language) expression which
+  evaluates resource.labels.
+
+<a name="nested_ignored_clusters_selector"></a>The `ignored_clusters_selector` block supports:
+
+* `label_selector` -
+  (Required)
+  The label selector must be a valid CEL (Common Expression Language) expression which
+  evaluates resource.labels.
+
+<a name="nested_auto_upgrade_config"></a>The `auto_upgrade_config` block supports:
+
+* `rollout_creation_scope` -
+  (Optional)
+  Specifies the scope of automation for the creation of rollouts.
+  Represents the types of rollouts (version upgrades) the sequence should
+  initiate automatically.
+  If this field is not specified, it defaults to all types.
+  If this field is specified, but the nested upgradeTypes field is empty,
+  most automatic rollouts are disabled for this sequence.
+  Exceptions are rollouts enforcing our security policies (e.g. such as
+  end-of-support and outdated control plane patch enforcements).
+  These policy enforcements cannot be disabled.
+  Structure is [documented below](#nested_auto_upgrade_config_rollout_creation_scope).
+
+
+<a name="nested_auto_upgrade_config_rollout_creation_scope"></a>The `rollout_creation_scope` block supports:
+
+* `upgrade_types` -
+  (Optional)
+  The list of enabled upgrade types.
+  Current valid values are `CONTROL_PLANE_MINOR`, `CONTROL_PLANE_PATCH`, `NODE_MINOR`, and `NODE_PATCH`.
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/global/rolloutSequences/{{rollout_sequence_id}}`
+
+* `name` -
+  The full resource name of the RolloutSequence.
+
+* `uid` -
+  Google-generated UUID for this resource.
+
+* `etag` -
+  etag of the Rollout Sequence.
+
+* `create_time` -
+  The timestamp at which the Rollout Sequence was created.
+
+* `update_time` -
+  The timestamp at which the Rollout Sequence was last updated.
+
+* `delete_time` -
+  The timestamp at the Rollout Sequence was deleted.
+
+* `terraform_labels` -
+  The combination of labels configured directly on the resource
+   and default labels configured on the provider.
+
+* `effective_labels` -
+  All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+RolloutSequence can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/global/rolloutSequences/{{rollout_sequence_id}}`
+* `{{project}}/{{rollout_sequence_id}}`
+* `{{rollout_sequence_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import RolloutSequence using identity values. For example:
+
+```tf
+import {
+  identity = {
+    rollout_sequence_id = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_gke_hub_rollout_sequence.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import RolloutSequence using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/global/rolloutSequences/{{rollout_sequence_id}}"
+  to = google_gke_hub_rollout_sequence.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), RolloutSequence can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_gke_hub_rollout_sequence.default projects/{{project}}/locations/global/rolloutSequences/{{rollout_sequence_id}}
+$ terraform import google_gke_hub_rollout_sequence.default {{project}}/{{rollout_sequence_id}}
+$ terraform import google_gke_hub_rollout_sequence.default {{rollout_sequence_id}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

@@ -1,0 +1,145 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_tags_tag_binding
+
+A TagBinding represents a connection between a TagValue and a cloud resource (currently project, folder, or organization). Once a TagBinding is created, the TagValue is applied to all the descendants of the cloud resource.
+
+
+To get more information about TagBinding, see:
+
+* [API documentation](https://docs.cloud.google.com/resource-manager/reference/rest/v3/tagBindings)
+* How-to Guides
+    * [Official Documentation](https://docs.cloud.google.com/resource-manager/docs/tags/tags-creating-and-managing)
+
+## Example Usage - Tag Binding Basic
+
+
+```hcl
+resource "google_project" "project" {
+  project_id = "project_id"
+  name       = "project_id"
+  org_id     = "123456789"
+
+  deletion_policy = "DELETE"
+}
+
+resource "google_tags_tag_key" "key" {
+  parent      = "organizations/123456789"
+  short_name  = "keyname"
+  description = "For keyname resources."
+}
+
+resource "google_tags_tag_value" "value" {
+  parent      = google_tags_tag_key.key.id
+  short_name  = "valuename"
+  description = "For valuename resources."
+}
+
+resource "google_tags_tag_binding" "binding" {
+  parent    = "//cloudresourcemanager.googleapis.com/projects/${google_project.project.number}"
+  tag_value = google_tags_tag_value.value.id
+}
+```
+## Example Usage - Tag Binding Using Dynamic Tag Value
+
+
+```hcl
+resource "google_project" "project" {
+  project_id = "project_id"
+  name       = "project_id"
+  org_id     = "123456789"
+
+  deletion_policy = "DELETE"
+}
+
+resource "google_tags_tag_key" "key" {
+  parent               = "organizations/123456789"
+  short_name           = "keyname"
+  description          = "For keyname resources."
+  allowed_values_regex = "^[a-z]+$"
+}
+
+resource "google_tags_tag_binding" "binding" {
+  parent    = "//cloudresourcemanager.googleapis.com/projects/${google_project.project.number}"
+  tag_value = "${google_tags_tag_key.key.namespaced_name}/test-value"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `parent` -
+  (Required)
+  The full resource name of the resource the TagValue is bound to. E.g. //cloudresourcemanager.googleapis.com/projects/123
+
+* `tag_value` -
+  (Required)
+  The TagValue of the TagBinding. Must be either in id format `tagValues/{tag-value-id}`, or namespaced format `{parent-id}/{tag-key-short-name}/{tag-value-short-name}`.
+
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `tagBindings/{{name}}`
+
+* `name` -
+  The generated id for the TagBinding. This is a string of the form `tagBindings/{full-resource-name}/{tag-value-name}` or `tagBindings/{full-resource-name}/{tag-key-name}`
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+TagBinding can be imported using any of these accepted formats:
+
+* `tagBindings/{{name}}`
+* `{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import TagBinding using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-optional value->"
+  }
+  to = google_tags_tag_binding.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import TagBinding using one of the formats above. For example:
+
+```tf
+import {
+  id = "tagBindings/{{name}}"
+  to = google_tags_tag_binding.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), TagBinding can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_tags_tag_binding.default tagBindings/{{name}}
+$ terraform import google_tags_tag_binding.default {{name}}
+```

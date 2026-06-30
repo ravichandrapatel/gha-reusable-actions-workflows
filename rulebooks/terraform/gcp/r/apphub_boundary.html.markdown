@@ -1,0 +1,120 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_apphub_boundary
+
+Application management boundary.
+
+
+To get more information about Boundary, see:
+
+* [API documentation](https://docs.cloud.google.com/app-hub/docs/reference/rest/v1/Boundary)
+* How-to Guides
+    * [AppHub](https://docs.cloud.google.com/app-hub/docs/)
+
+## Example Usage - Apphub Boundary Basic
+
+
+```hcl
+resource "google_apphub_boundary" "example" {
+  location = "global"
+  crm_node = "projects/1111111111111"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `location` -
+  (Required)
+  The location for the Boundary resource. Must be global.
+
+
+* `crm_node` -
+  (Optional)
+  Optional. The resource name of the CRM node being attached to the
+  boundary.
+  Format: `projects/{project-number}`
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{location}}/boundary`
+
+* `name` -
+  Identifier. The resource name of the boundary.
+  Format: "projects/{project}/locations/{{location}}/boundary"
+
+* `create_time` -
+  Create time.
+
+* `update_time` -
+  Update time.
+
+* `type` -
+  Boundary type.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Boundary can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{location}}/boundary`
+* `{{project}}/{{location}}`
+* `{{location}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Boundary using identity values. For example:
+
+```tf
+import {
+  identity = {
+    location = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_apphub_boundary.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Boundary using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{location}}/boundary"
+  to = google_apphub_boundary.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Boundary can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_apphub_boundary.default projects/{{project}}/locations/{{location}}/boundary
+$ terraform import google_apphub_boundary.default {{project}}/{{location}}
+$ terraform import google_apphub_boundary.default {{location}}
+```

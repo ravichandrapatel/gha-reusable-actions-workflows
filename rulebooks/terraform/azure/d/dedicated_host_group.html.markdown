@@ -1,0 +1,58 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_dedicated_host_group
+
+Use this data source to access information about an existing Dedicated Host Group.
+
+## Example Usage
+
+```hcl
+data "azurerm_dedicated_host_group" "example" {
+  name                = "example-dedicated-host-group"
+  resource_group_name = "example-rg"
+}
+
+output "id" {
+  value = data.azurerm_dedicated_host_group.example.id
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - Specifies the name of the Dedicated Host Group.
+
+* `resource_group_name` - Specifies the name of the resource group the Dedicated Host Group is located in.
+
+## Attributes Reference
+
+The following attributes are exported:
+
+* `id` - The ID of the Dedicated Host Group.
+
+* `location` - The Azure location where the Dedicated Host Group exists.
+
+* `platform_fault_domain_count` - The number of fault domains that the Dedicated Host Group spans.
+
+* `automatic_placement_enabled` - Whether virtual machines or virtual machine scale sets be placed automatically on this Dedicated Host Group.
+
+* `zones` - A list of Availability Zones in which this Dedicated Host Group is located.
+
+* `tags` - A mapping of tags assigned to the resource.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the Dedicated Host Group.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.Compute` - 2024-03-01

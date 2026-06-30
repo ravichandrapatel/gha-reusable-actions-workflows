@@ -1,0 +1,65 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_compute_disk_async_replication
+
+Starts and stops asynchronous persistent disk replication. For more information
+see [the official documentation](https://cloud.google.com/compute/docs/disks/async-pd/about)
+and the [API](https://cloud.google.com/compute/docs/reference/rest/v1/disks).
+
+## Example Usage
+
+```tf
+resource "google_compute_disk" "primary-disk" {
+  name = "primary-disk"
+  type = "pd-ssd"
+  zone = "europe-west4-a"
+
+  physical_block_size_bytes = 4096
+}
+
+resource "google_compute_disk" "secondary-disk" {
+  name = "secondary-disk"
+  type = "pd-ssd"
+  zone = "europe-west3-a"
+
+  async_primary_disk {
+    disk = google_compute_disk.primary-disk.id
+  }
+
+  physical_block_size_bytes = 4096
+}
+
+resource "google_compute_disk_async_replication" "replication" {
+  primary_disk = google_compute_disk.primary-disk.id
+  secondary_disk {
+    disk  = google_compute_disk.secondary-disk.id
+  }
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+* `primary_disk` - (Required) The primary disk (source of replication).
+
+* `secondary_disk` - (Required) The secondary disk (target of replication). You can specify only one value. Structure is documented below.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to "DELETE".
+    When a 'terraform destroy' or 'terraform apply' would delete the resource,
+    the command will fail if this field is set to "PREVENT" in Terraform state.
+    When set to "ABANDON", the command will remove the resource from Terraform
+    management without updating or deleting the resource in the API.
+    When set to "DELETE", deleting the resource is allowed.
+
+The `secondary_disk` block includes:
+
+* `disk` - (Required) The secondary disk.
+
+* `state` - Output-only. Status of replication on the secondary disk.
+
+- - -

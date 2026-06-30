@@ -1,0 +1,350 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_network_services_agent_gateway
+
+AgentGateway represents the agent gateway resource.
+
+
+To get more information about AgentGateway, see:
+
+* [API documentation](https://cloud.google.com/network-services/docs/reference/network-services/rest/v1/projects.locations.agentGateways)
+
+## Example Usage - Network Services Agent Gateway Full
+
+
+```hcl
+data "google_project" "project" {}
+
+resource "google_network_services_agent_gateway" "default" {
+  name     = "my-full-agent-gateway"
+  location = "us-central1"
+  description = "A full configuration for Agent Gateway"
+  labels = {
+    env = "test"
+    tier = "gold"
+  }
+
+  protocols = ["MCP"]
+  google_managed {
+    governed_access_path = "AGENT_TO_ANYWHERE"
+  }
+
+  registries = [
+    "//agentregistry.googleapis.com/projects/my-project-name/locations/us-central1"
+  ]
+
+  network_config {
+    egress {
+      network_attachment = google_compute_network_attachment.default.id
+    }
+
+    dns_peering_config {
+      domains        = [google_dns_managed_zone.default.dns_name]
+      target_project = data.google_project.project.project_id
+      target_network = google_compute_network.default.id
+    }
+  }
+
+  depends_on = [google_project_service.agent_registry]
+}
+
+resource "google_project_service" "agent_registry" {
+  service            = "agentregistry.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_compute_network" "default" {
+  name                    = "my-gateway-network"
+  auto_create_subnetworks = false
+}
+
+resource "google_compute_subnetwork" "default" {
+  name          = "my-gateway-subnetwork"
+  region        = "us-central1"
+  network       = google_compute_network.default.id
+  ip_cidr_range = "10.0.0.0/16"
+}
+
+resource "google_compute_network_attachment" "default" {
+  name                  = "my-gateway-attachment"
+  region                = "us-central1"
+  connection_preference = "ACCEPT_MANUAL"
+
+  subnetworks = [
+    google_compute_subnetwork.default.id,
+  ]
+}
+
+resource "google_dns_managed_zone" "default" {
+  name        = "my-gateway-zone"
+  dns_name    = "example.com."
+  description = "Private zone used by AgentGateway DNS peering"
+  visibility  = "private"
+
+  private_visibility_config {
+    networks {
+      network_url = google_compute_network.default.id
+    }
+  }
+}
+```
+## Example Usage - Network Services Agent Gateway Client To Agent
+
+
+```hcl
+resource "google_network_services_agent_gateway" "default" {
+  name     = "my-client-to-agent-gateway"
+  location = "us-central1"
+
+  google_managed {
+    governed_access_path = "CLIENT_TO_AGENT"
+  }
+
+  registries = [
+    "//agentregistry.googleapis.com/projects/my-project-name/locations/us-central1"
+  ]
+
+  depends_on = [google_project_service.agent_registry]
+}
+
+resource "google_project_service" "agent_registry" {
+  service            = "agentregistry.googleapis.com"
+  disable_on_destroy = false
+}
+```
+## Example Usage - Network Services Agent Gateway Self Managed
+
+
+```hcl
+resource "google_network_services_agent_gateway" "default" {
+  name = "my-self-managed-agent-gateway"
+  location = "us-central1"
+
+  self_managed {
+    resource_uri = "projects/my-project-name/locations/us-central1/gateways/my-gateway"
+  }
+
+  registries = [
+    "//agentregistry.googleapis.com/projects/my-project-name/locations/us-central1"
+  ]
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `name` -
+  (Required)
+  Name of the AgentGateway resource.
+
+* `location` -
+  (Required)
+  The location of the agent gateway.
+
+
+* `labels` -
+  (Optional)
+  Set of label tags associated with the AgentGateway resource.
+
+  **Note**: This field is non-authoritative, and will only manage the labels present in your configuration.
+  Please refer to the field `effective_labels` for all of the labels present on the resource.
+
+* `description` -
+  (Optional)
+  A free-text description of the resource. Max length 1024 characters.
+
+* `protocols` -
+  (Optional, Deprecated)
+  List of protocols supported by an Agent Gateway.
+  Each value may be one of: `MCP`.
+
+  ~> **Warning:** `protocols` is deprecated and will be removed in a future major release.
+
+* `google_managed` -
+  (Optional)
+  Configuration for Google Managed deployment mode.
+  Proxy is orchestrated and managed by GoogleCloud in a tenant project.
+  Structure is [documented below](#nested_google_managed).
+
+* `self_managed` -
+  (Optional)
+  Configuration for Self Managed deployment mode.
+  Attach to existing Application Load Balancers or Secure Web Proxies.
+  Structure is [documented below](#nested_self_managed).
+
+* `registries` -
+  (Optional)
+  A list of Agent registries containing the agents, MCP servers and tools governed by the Agent Gateway.
+  Note: Currently limited to project-scoped registries Must be of format
+  `//agentregistry.googleapis.com/{version}/projects/{{project}}/locations/{{location}}`
+
+* `network_config` -
+  (Optional)
+  Network configuration for the AgentGateway.
+  Structure is [documented below](#nested_network_config).
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+<a name="nested_google_managed"></a>The `google_managed` block supports:
+
+* `governed_access_path` -
+  (Required)
+  Operating Mode of Agent Gateway.
+  Possible values are: `AGENT_TO_ANYWHERE`, `CLIENT_TO_AGENT`.
+
+<a name="nested_self_managed"></a>The `self_managed` block supports:
+
+* `resource_uri` -
+  (Required)
+  A supported Google Cloud networking proxy in the Project and Location.
+
+<a name="nested_network_config"></a>The `network_config` block supports:
+
+* `egress` -
+  (Required)
+  Optional PSC-Interface network attachment for connectivity to your
+  private VPCs network.
+  Structure is [documented below](#nested_network_config_egress).
+
+* `dns_peering_config` -
+  (Optional)
+  DNS peering configuration for the AgentGateway. When set, the
+  AgentGateway will resolve queries for the configured `domains` via
+  Cloud DNS in the specified `targetNetwork`.
+  Structure is [documented below](#nested_network_config_dns_peering_config).
+
+
+<a name="nested_network_config_egress"></a>The `egress` block supports:
+
+* `network_attachment` -
+  (Required)
+  The URI of the Network Attachment resource.
+
+<a name="nested_network_config_dns_peering_config"></a>The `dns_peering_config` block supports:
+
+* `domains` -
+  (Required)
+  The list of domain names to peer for DNS resolution. Each entry
+  must be a fully qualified domain name ending with a dot
+  (for example, `example.com.`).
+
+* `target_project` -
+  (Required)
+  The ID of the project that hosts the target VPC network for DNS
+  peering.
+
+* `target_network` -
+  (Required)
+  The URI of the target VPC network for DNS peering. Must be of the
+  form `projects/{project}/global/networks/{network}`.
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{location}}/agentGateways/{{name}}`
+
+* `create_time` -
+  The timestamp when the resource was created.
+
+* `update_time` -
+  The timestamp when the resource was updated.
+
+* `etag` -
+  Etag of the resource.
+  If this is provided, it must match the server's etag. If the provided etag
+  does not match the server's etag, the request will fail with a 409 ABORTED
+  error.
+
+* `agent_gateway_card` -
+  AgentGatewayOutputCard contains informational output-only fields.
+  Structure is [documented below](#nested_agent_gateway_card).
+
+* `terraform_labels` -
+  The combination of labels configured directly on the resource
+   and default labels configured on the provider.
+
+* `effective_labels` -
+  All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.
+
+
+<a name="nested_agent_gateway_card"></a>The `agent_gateway_card` block contains:
+
+* `mtls_endpoint` -
+  (Output)
+  mTLS Endpoint associated with this AgentGateway.
+
+* `root_certificates` -
+  (Output)
+  Root Certificates for Agents to validate this AgentGateway.
+
+* `service_extensions_service_account` -
+  (Output)
+  Service Account used by Service Extensions to operate.
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 30 minutes.
+- `update` - Default is 30 minutes.
+- `delete` - Default is 30 minutes.
+
+## Import
+
+
+AgentGateway can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{location}}/agentGateways/{{name}}`
+* `{{project}}/{{location}}/{{name}}`
+* `{{location}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import AgentGateway using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-required value->"
+    location = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_network_services_agent_gateway.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import AgentGateway using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{location}}/agentGateways/{{name}}"
+  to = google_network_services_agent_gateway.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), AgentGateway can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_network_services_agent_gateway.default projects/{{project}}/locations/{{location}}/agentGateways/{{name}}
+$ terraform import google_network_services_agent_gateway.default {{project}}/{{location}}/{{name}}
+$ terraform import google_network_services_agent_gateway.default {{location}}/{{name}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

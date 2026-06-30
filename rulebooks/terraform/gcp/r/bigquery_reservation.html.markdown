@@ -1,0 +1,289 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_bigquery_reservation
+
+A reservation is a mechanism used to guarantee BigQuery slots to users.
+
+
+To get more information about Reservation, see:
+
+* [API documentation](https://cloud.google.com/bigquery/docs/reference/reservations/rest/v1/projects.locations.reservations/create)
+* How-to Guides
+    * [Introduction to Reservations](https://cloud.google.com/bigquery/docs/reservations-intro)
+
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=bigquery_reservation_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Bigquery Reservation Basic
+
+
+```hcl
+resource "google_bigquery_reservation" "reservation" {
+	name           = "my-reservation"
+	location       = "us-west2"
+	// Set to 0 for testing purposes
+	// In reality this would be larger than zero
+	slot_capacity     = 0
+	edition = "STANDARD"
+	ignore_idle_slots = true
+	concurrency       = 0
+	autoscale {
+   	  max_slots = 100
+    }
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `slot_capacity` -
+  (Required)
+  Minimum slots available to this reservation. A slot is a unit of computational power in BigQuery, and serves as the
+  unit of parallelism. Queries using this reservation might use more slots during runtime if ignoreIdleSlots is set to false.
+
+* `name` -
+  (Required)
+  The name of the reservation. This field must only contain alphanumeric characters or dash.
+
+
+* `ignore_idle_slots` -
+  (Optional)
+  If false, any query using this reservation will use idle slots from other reservations within
+  the same admin project. If true, a query using this reservation will execute with the slot
+  capacity specified above at most.
+
+* `concurrency` -
+  (Optional)
+  Maximum number of queries that are allowed to run concurrently in this reservation. This is a soft limit due to asynchronous nature of the system and various optimizations for small queries. Default value is 0 which means that concurrency will be automatically set based on the reservation size.
+
+* `edition` -
+  (Optional)
+  The edition type. Valid values are STANDARD, ENTERPRISE, ENTERPRISE_PLUS
+
+* `autoscale` -
+  (Optional)
+  The configuration parameters for the auto scaling feature.
+  Structure is [documented below](#nested_autoscale).
+
+* `secondary_location` -
+  (Optional)
+  The current location of the reservation's secondary replica. This field is only set for
+  reservations using the managed disaster recovery feature. Users can set this in create
+  reservation calls to create a failover reservation or in update reservation calls to convert
+  a non-failover reservation to a failover reservation(or vice versa).
+
+* `scaling_mode` -
+  (Optional, [Beta](../guides/provider_versions.html.markdown))
+  The scaling mode for the reservation. If the field is present but maxSlots is not present,
+  requests will be rejected with error code google.rpc.Code.INVALID_ARGUMENT.
+  Enum values:
+  `SCALING_MODE_UNSPECIFIED`: Default value of ScalingMode.
+  `AUTOSCALE_ONLY`: The reservation will scale up only using slots from autoscaling. It will
+  not use any idle slots even if there may be some available. The upper limit that autoscaling
+  can scale up to will be maxSlots - baseline. For example, if maxSlots is 1000, baseline is 200
+  and customer sets ScalingMode to AUTOSCALE_ONLY, then autoscalerg will scale up to 800 slots
+  and no idle slots will be used. Please note, in this mode, the ignoreIdleSlots field must be
+  set to true. Otherwise the request will be rejected with error code
+  google.rpc.Code.INVALID_ARGUMENT.
+  `IDLE_SLOTS_ONLY`: The reservation will scale up using only idle slots contributed by other
+  reservations or from unassigned commitments. If no idle slots are available it will not scale
+  up further. If the idle slots which it is using are reclaimed by the contributing reservation(s)
+  it may be forced to scale down. The max idle slots the reservation can be maxSlots - baseline
+  capacity. For example, if maxSlots is 1000, baseline is 200 and customer sets ScalingMode to
+  IDLE_SLOTS_ONLY, 1. if there are 1000 idle slots available in other reservations, the
+  reservation will scale up to 1000 slots with 200 baseline and 800 idle slots. 2. if there are
+  500 idle slots available in other reservations, the reservation will scale up to 700 slots with
+  200 baseline and 300 idle slots. Please note, in this mode, the reservation might not be able to
+  scale up to maxSlots. Please note, in this mode, the ignoreIdleSlots field must be set to false.
+  Otherwise the request will be rejected with error code google.rpc.Code.INVALID_ARGUMENT
+  `ALL_SLOTS`: The reservation will scale up using all slots available to it. It will use idle slots
+  contributed by other reservations or from unassigned commitments first. If no idle slots are
+  available it will scale up using autoscaling. For example, if maxSlots is 1000, baseline is 200
+  and customer sets ScalingMode to ALL_SLOTS, 1. if there are 800 idle slots available in other
+  reservations, the reservation will scale up to 1000 slots with 200 baseline and 800 idle slots. 2.
+  if there are 500 idle slots available in other reservations, the reservation will scale up to 1000
+  slots with 200 baseline, 500 idle slots and 300 autoscaling slots. 3. if there are no idle slots
+  available in other reservations, it will scale up to 1000 slots with 200 baseline and 800
+  autoscaling slots. Please note, in this mode, the ignoreIdleSlots field must be set to false.
+  Otherwise the request will be rejected with error code google.rpc.Code.INVALID_ARGUMENT.
+  Possible values are: `SCALING_MODE_UNSPECIFIED`, `AUTOSCALE_ONLY`, `IDLE_SLOTS_ONLY`, `ALL_SLOTS`.
+
+* `max_slots` -
+  (Optional, [Beta](../guides/provider_versions.html.markdown))
+  The overall max slots for the reservation, covering slotCapacity (baseline), idle slots
+  (if ignoreIdleSlots is false) and scaled slots. If present, the reservation won't use
+  more than the specified number of slots, even if there is demand and supply (from idle
+  slots). NOTE: capping a reservation's idle slot usage is best effort and its usage may
+  exceed the maxSlots value. However, in terms of autoscale.current_slots (which accounts
+  for the additional added slots), it will never exceed the maxSlots - baseline.
+  This field must be set together with the scalingMode enum value, otherwise the request
+  will be rejected with error code google.rpc.Code.INVALID_ARGUMENT.
+  If the maxSlots and scalingMode are set, the autoscale or autoscale.max_slots field
+  must be unset. Otherwise the request will be rejected with error code
+  google.rpc.Code.INVALID_ARGUMENT. However, the autoscale field may still be in the
+  output. The autopscale.max_slots will always show as 0 and the autoscaler.current_slots
+  will represent the current slots from autoscaler excluding idle slots. For example,
+  if the maxSlots is 1000 and scalingMode is AUTOSCALE_ONLY, then in the output, the
+  autoscaler.max_slots will be 0 and the autoscaler.current_slots may be any value
+  between 0 and 1000.
+  If the maxSlots is 1000, scalingMode is ALL_SLOTS, the baseline is 100 and idle slots
+  usage is 200, then in the output, the autoscaler.max_slots will be 0 and the
+  autoscaler.current_slots will not be higher than 700.
+  If the maxSlots is 1000, scalingMode is IDLE_SLOTS_ONLY, then in the output, the
+  autoscaler field will be null.
+  If the maxSlots and scalingMode are set, then the ignoreIdleSlots field must be
+  aligned with the scalingMode enum value.(See details in ScalingMode comments).
+  Otherwise the request will be rejected with error code google.rpc.Code.INVALID_ARGUMENT.
+  Please note, the maxSlots is for user to manage the part of slots greater than the
+  baseline. Therefore, we don't allow users to set maxSlots smaller or equal to the
+  baseline as it will not be meaningful. If the field is present and
+  slotCapacity>=maxSlots, requests will be rejected with error code
+  google.rpc.Code.INVALID_ARGUMENT.
+  Please note that if maxSlots is set to 0, we will treat it as unset. Customers can set
+  maxSlots to 0 and set scalingMode to SCALING_MODE_UNSPECIFIED to disable the maxSlots
+  feature.
+
+* `reservation_group` -
+  (Optional)
+  The reservation group that this reservation belongs to.
+
+* `location` -
+  (Optional)
+  The geographic location where the transfer config should reside.
+  Examples: US, EU, asia-northeast1. The default value is US.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+<a name="nested_autoscale"></a>The `autoscale` block supports:
+
+* `current_slots` -
+  (Output)
+  The slot capacity added to this reservation when autoscale happens. Will be between [0, max_slots].
+
+* `max_slots` -
+  (Optional)
+  Number of slots to be scaled when needed.
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{location}}/reservations/{{name}}`
+
+* `primary_location` -
+  The current location of the reservation's primary replica. This field is only set for
+  reservations using the managed disaster recovery feature.
+
+* `original_primary_location` -
+  The location where the reservation was originally created. This is set only during the
+  failover reservation's creation. All billing charges for the failover reservation will be
+  applied to this location.
+
+* `replication_status` -
+  The Disaster Recovery(DR) replication status of the reservation. This is only available for
+  the primary replicas of DR/failover reservations and provides information about the both the
+  staleness of the secondary and the last error encountered while trying to replicate changes
+  from the primary to the secondary. If this field is blank, it means that the reservation is
+  either not a DR reservation or the reservation is a DR secondary or that any replication
+  operations on the reservation have succeeded.
+  Structure is [documented below](#nested_replication_status).
+
+
+<a name="nested_replication_status"></a>The `replication_status` block contains:
+
+* `error` -
+  (Output)
+  The last error encountered while trying to replicate changes from the primary to the
+  secondary. This field is only available if the replication has not succeeded since.
+  Structure is [documented below](#nested_replication_status_error).
+
+* `last_error_time` -
+  (Output)
+  The time at which the last error was encountered while trying to replicate changes from
+  the primary to the secondary. This field is only available if the replication has not
+  succeeded since.
+
+* `last_replication_time` -
+  (Output)
+  A timestamp corresponding to the last change on the primary that was successfully
+  replicated to the secondary.
+
+
+<a name="nested_replication_status_error"></a>The `error` block contains:
+
+* `code` -
+  (Output)
+  The status code, which should be an enum value of [google.rpc.Code](https://cloud.google.com/bigquery/docs/reference/reservations/rpc/google.rpc#google.rpc.Code).
+
+* `message` -
+  (Output)
+  A developer-facing error message, which should be in English.
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Reservation can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{location}}/reservations/{{name}}`
+* `{{project}}/{{location}}/{{name}}`
+* `{{location}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Reservation using identity values. For example:
+
+```tf
+import {
+  identity = {
+    location = "<-optional value->"
+    name = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_bigquery_reservation.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Reservation using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{location}}/reservations/{{name}}"
+  to = google_bigquery_reservation.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Reservation can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_bigquery_reservation.default projects/{{project}}/locations/{{location}}/reservations/{{name}}
+$ terraform import google_bigquery_reservation.default {{project}}/{{location}}/{{name}}
+$ terraform import google_bigquery_reservation.default {{location}}/{{name}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

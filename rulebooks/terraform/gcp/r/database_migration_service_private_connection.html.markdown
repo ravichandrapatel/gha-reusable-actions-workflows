@@ -1,0 +1,247 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_database_migration_service_private_connection
+
+The PrivateConnection resource is used to establish private connectivity between Database Migration Service and a customer's network.
+
+
+To get more information about PrivateConnection, see:
+
+* [API documentation](https://cloud.google.com/database-migration/docs/reference/rest/v1/projects.locations.privateConnections)
+* How-to Guides
+    * [Official Documentation](https://cloud.google.com/database-migration/docs/oracle-to-postgresql/create-private-connectivity-configuration)
+
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=database_migration_service_private_connection&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Database Migration Service Private Connection
+
+
+```hcl
+resource "google_database_migration_service_private_connection" "default" {
+	display_name          = "dbms_pc"
+	location              = "us-west1"
+	private_connection_id = "my-connection"
+
+	labels = {
+		key = "value"
+	}
+
+	vpc_peering_config {
+		vpc_name = resource.google_compute_network.default.id
+		subnet = "10.0.0.0/29"
+	}
+
+	create_without_validation = false
+}
+
+resource "google_compute_network" "default" {
+  name = "my-network"
+  auto_create_subnetworks = false
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=database_migration_service_private_connection_psc&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Database Migration Service Private Connection Psc
+
+
+```hcl
+resource "google_database_migration_service_private_connection" "default" {
+	display_name          = "dbms_pc"
+	location              = "us-west1"
+	private_connection_id = "my-connection"
+
+	labels = {
+		key = "value"
+	}
+
+	psc_interface_config {
+		network_attachment = resource.google_compute_network_attachment.default.id
+	}
+
+	create_without_validation = false
+}
+
+resource "google_compute_network_attachment" "default" {
+  name                  = "my-attachment"
+  region                = "us-west1"
+  connection_preference = "ACCEPT_AUTOMATIC"
+  subnetworks           = [resource.google_compute_subnetwork.default.id]
+}
+
+resource "google_compute_network" "default" {
+  name = "my-network"
+  auto_create_subnetworks = false
+}
+
+resource "google_compute_subnetwork" "default" {
+  name          = "my-subnetwork"
+  ip_cidr_range = "10.0.0.0/16"
+  region        = "us-west1"
+  network       = google_compute_network.default.id
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `private_connection_id` -
+  (Required)
+  The private connectivity identifier.
+
+* `location` -
+  (Required)
+  The name of the location this private connection is located in.
+
+
+* `labels` -
+  (Optional)
+  Labels.
+  **Note**: This field is non-authoritative, and will only manage the labels present in your configuration.
+  Please refer to the field `effective_labels` for all of the labels present on the resource.
+
+* `display_name` -
+  (Optional)
+  Display name.
+
+* `vpc_peering_config` -
+  (Optional)
+  The VPC Peering configuration is used to create VPC peering
+  between databasemigrationservice and the consumer's VPC.
+  Structure is [documented below](#nested_vpc_peering_config).
+
+* `psc_interface_config` -
+  (Optional)
+  The PSC Interface configuration is used to create PSC Interface
+  between DMS's internal VPC and the consumer's PSC.
+  Structure is [documented below](#nested_psc_interface_config).
+
+* `create_without_validation` -
+  (Optional)
+  If set to true, will skip validations.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+<a name="nested_vpc_peering_config"></a>The `vpc_peering_config` block supports:
+
+* `vpc_name` -
+  (Required)
+  Fully qualified name of the VPC that Database Migration Service will peer to.
+  Format: projects/{project}/global/{networks}/{name}
+
+* `subnet` -
+  (Required)
+  A free subnet for peering. (CIDR of /29)
+
+<a name="nested_psc_interface_config"></a>The `psc_interface_config` block supports:
+
+* `network_attachment` -
+  (Required)
+  Fully qualified name of the Network Attachment that DMS will connect to.
+  Format: projects/{project}/regions/{region}/networkAttachments/{name}
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{location}}/privateConnections/{{private_connection_id}}`
+
+* `name` -
+  The resource's name.
+
+* `state` -
+  State of the PrivateConnection.
+
+* `error` -
+  The PrivateConnection error in case of failure.
+  Structure is [documented below](#nested_error).
+
+* `terraform_labels` -
+  The combination of labels configured directly on the resource
+   and default labels configured on the provider.
+
+* `effective_labels` -
+  All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.
+
+
+<a name="nested_error"></a>The `error` block contains:
+
+* `message` -
+  (Optional)
+  A message containing more information about the error that occurred.
+
+* `details` -
+  (Optional)
+  A list of messages that carry the error details.
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 60 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 60 minutes.
+
+## Import
+
+
+PrivateConnection can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{location}}/privateConnections/{{private_connection_id}}`
+* `{{project}}/{{location}}/{{private_connection_id}}`
+* `{{location}}/{{private_connection_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import PrivateConnection using identity values. For example:
+
+```tf
+import {
+  identity = {
+    privateConnectionId = "<-required value->"
+    location = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_database_migration_service_private_connection.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import PrivateConnection using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{location}}/privateConnections/{{private_connection_id}}"
+  to = google_database_migration_service_private_connection.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), PrivateConnection can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_database_migration_service_private_connection.default projects/{{project}}/locations/{{location}}/privateConnections/{{private_connection_id}}
+$ terraform import google_database_migration_service_private_connection.default {{project}}/{{location}}/{{private_connection_id}}
+$ terraform import google_database_migration_service_private_connection.default {{location}}/{{private_connection_id}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

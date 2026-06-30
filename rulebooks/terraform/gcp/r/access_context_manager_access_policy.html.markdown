@@ -1,0 +1,139 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_access_context_manager_access_policy
+
+AccessPolicy is a container for AccessLevels (which define the necessary
+attributes to use GCP services) and ServicePerimeters (which define
+regions of services able to freely pass data within a perimeter). An
+access policy is globally visible within an organization, and the
+restrictions it specifies apply to all projects within an organization.
+
+
+To get more information about AccessPolicy, see:
+
+* [API documentation](https://cloud.google.com/access-context-manager/docs/reference/rest/v1/accessPolicies)
+* How-to Guides
+    * [Access Policy Quickstart](https://cloud.google.com/access-context-manager/docs/quickstart)
+
+~> **Warning:** If you are using User ADCs (Application Default Credentials) with this resource,
+you must specify a `billing_project` and set `user_project_override` to true
+in the provider configuration. Otherwise the ACM API will return a 403 error.
+Your account must have the `serviceusage.services.use` permission on the
+`billing_project` you defined.
+
+## Example Usage - Access Context Manager Access Policy Basic
+
+
+```hcl
+resource "google_access_context_manager_access_policy" "access-policy" {
+  parent = "organizations/123456789"
+  title  = "Org Access Policy"
+}
+```
+## Example Usage - Access Context Manager Access Policy Scoped
+
+
+```hcl
+resource "google_project" "project" {
+  project_id      = "my-project-name"
+  name            = "my-project-name"
+  org_id          = "123456789"
+  deletion_policy = "DELETE"
+}
+
+resource "google_access_context_manager_access_policy" "access-policy" {
+  parent = "organizations/123456789"
+  title  = "Scoped Access Policy"
+  scopes = ["projects/${google_project.project.number}"]
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `parent` -
+  (Required)
+  The parent of this AccessPolicy in the Cloud Resource Hierarchy.
+  Format: 'organizations/{{organization_id}}'
+
+* `title` -
+  (Required)
+  Human readable title. Does not affect behavior.
+
+
+* `scopes` -
+  (Optional)
+  Folder or project on which this policy is applicable.
+  Format: 'folders/{{folder_id}}' or 'projects/{{project_number}}'
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `{{name}}`
+
+* `name` -
+  Resource name of the AccessPolicy. Format: '{{policy_id}}'
+
+* `create_time` -
+  Time the AccessPolicy was created in UTC.
+
+* `update_time` -
+  Time the AccessPolicy was updated in UTC.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+AccessPolicy can be imported using any of these accepted formats:
+
+* `{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import AccessPolicy using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-optional value->"
+  }
+  to = google_access_context_manager_access_policy.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import AccessPolicy using one of the formats above. For example:
+
+```tf
+import {
+  id = "{{name}}"
+  to = google_access_context_manager_access_policy.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), AccessPolicy can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_access_context_manager_access_policy.default {{name}}
+```

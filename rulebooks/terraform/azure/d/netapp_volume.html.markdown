@@ -1,0 +1,118 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_netapp_volume
+
+Uses this data source to access information about an existing NetApp Volume.
+
+## NetApp Volume Usage
+
+```hcl
+data "azurerm_netapp_volume" "example" {
+  resource_group_name = "acctestRG"
+  account_name        = "acctestnetappaccount"
+  pool_name           = "acctestnetapppool"
+  name                = "example-volume"
+}
+
+output "netapp_volume_id" {
+  value = data.azurerm_netapp_volume.example.id
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - The name of the NetApp Volume.
+
+* `resource_group_name` - The Name of the Resource Group where the NetApp Volume exists.
+
+* `account_name` - The name of the NetApp account where the NetApp pool exists.
+
+* `pool_name` - The name of the NetApp pool where the NetApp volume exists.
+
+## Attributes Reference
+
+The following attributes are exported:
+
+* `location` - The Azure Region where the NetApp Volume exists.
+  
+* `zone` - The Availability Zone in which the Volume is located.
+
+* `mount_ip_addresses` - A list of IPv4 Addresses which should be used to mount the volume.
+
+* `protocols` - A list of protocol types enabled on volume.
+
+* `service_level` - The service level of the file system.
+
+* `subnet_id` - The ID of a Subnet in which the NetApp Volume resides.
+
+* `network_features` - Network features in use `Basic` or `Standard`.
+  
+* `storage_quota_in_gb` - The maximum Storage Quota in Gigabytes allowed for a file system.
+
+* `security_style` - Volume security style
+
+* `data_protection_replication` - Volume data protection replication block
+
+* `data_protection_backup_policy` - A data protecion backup policy block
+
+* `data_protection_advanced_ransomware` - An Advanced Ransomware Protection (ARP) data protection block.
+
+* `volume_path` - The unique file path of the volume.
+
+* `smb_non_browsable_enabled` - Limits clients from browsing for an SMB share.
+
+* `smb_access_based_enumeration_enabled` - Limits enumeration of files and folders (that is, listing the contents) in SMB only to users with allowed access on the share.
+
+* `large_volume_enabled` - Indicates if the volume is a large volume.
+
+* `accept_grow_capacity_pool_for_short_term_clone_split` - The accept grow capacity pool for short term clone split property.
+
+---
+
+A `data_protection_replication` block exports the following:
+
+* `endpoint_type` - The endpoint type.
+
+* `remote_volume_location` - Location of the primary volume.
+
+* `remote_volume_resource_id` - Resource ID of the primary volume.
+
+* `replication_frequency` - Frequency of replication.
+
+---
+
+A `data_protection_backup_policy` block supports the following:
+
+* `backup_vault_id` - The Resource ID of the backup backup vault.
+
+* `backup_policy_id` - The Resource ID of the backup policy.
+
+* `policy_enabled` - Backup policy is enabled or not.
+
+---
+
+A `data_protection_advanced_ransomware` block exports the following:
+
+* `protection_enabled` - Whether the Advanced Ransomware Protection feature is enabled.
+
+~> **Note:** For performance considerations and supported regions, please refer to the [Azure documentation](https://learn.microsoft.com/en-us/azure/azure-netapp-files/ransomware-configure).
+
+---
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the NetApp Volume.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.NetApp` - 2026-01-01

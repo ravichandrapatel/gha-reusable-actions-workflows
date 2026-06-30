@@ -1,0 +1,58 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_virtual_desktop_workspace
+
+Use this data source to access information about an existing Virtual Desktop Workspace.
+
+## Example Usage
+
+```hcl
+data "azurerm_virtual_desktop_workspace" "example" {
+  name                = "existing"
+  resource_group_name = "existing"
+}
+
+output "id" {
+  value = data.azurerm_virtual_desktop_workspace.example.id
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - (Required) The name of this Virtual Desktop Workspace to retrieve.
+
+* `resource_group_name` - (Required) The name of the Resource Group where the Virtual Desktop Workspace exists.
+
+## Attributes Reference
+
+In addition to the Arguments listed above - the following Attributes are exported: 
+
+* `id` - The ID of the Virtual Desktop Workspace.
+
+* `description` - The description for the Virtual Desktop Workspace.
+
+* `friendly_name` - The friendly name for the Virtual Desktop Workspace.
+
+* `location` - The Azure Region where the Virtual Desktop Workspace exists.
+
+* `public_network_access_enabled` - Is public network access enabled?
+
+* `tags` - A mapping of tags assigned to the Virtual Desktop Workspace.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the azurerm_virtual_desktop_workspace.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.DesktopVirtualization` - 2025-10-10

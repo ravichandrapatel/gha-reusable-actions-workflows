@@ -1,0 +1,97 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_document_ai_warehouse_location
+
+A location is used to initialize a project.
+
+
+To get more information about Location, see:
+
+* [API documentation](https://cloud.google.com/document-warehouse/docs/reference/rest/v1/projects.locations)
+* How-to Guides
+    * [Official Documentation](https://cloud.google.com/document-warehouse/docs/overview)
+
+## Example Usage - Document Ai Warehouse Location
+
+
+```hcl
+resource "google_document_ai_warehouse_location" "example" {
+    location = "us"
+    project_number = data.google_project.project.number
+    access_control_mode = "ACL_MODE_DOCUMENT_LEVEL_ACCESS_CONTROL_GCI"
+    database_type = "DB_INFRA_SPANNER"
+    kms_key = "dummy_key"
+    document_creator_default_role = "DOCUMENT_ADMIN"
+}
+
+data "google_project" "project" {
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `database_type` -
+  (Required)
+  The type of database used to store customer data.
+  Possible values are: `DB_INFRA_SPANNER`, `DB_CLOUD_SQL_POSTGRES`.
+
+* `access_control_mode` -
+  (Required)
+  The access control mode for accessing the customer data.
+  Possible values are: `ACL_MODE_DOCUMENT_LEVEL_ACCESS_CONTROL_GCI`, `ACL_MODE_DOCUMENT_LEVEL_ACCESS_CONTROL_BYOID`, `ACL_MODE_UNIVERSAL_ACCESS`.
+
+* `project_number` -
+  (Required)
+  The unique identifier of the project.
+
+* `location` -
+  (Required)
+  The location in which the instance is to be provisioned. It takes the form projects/{projectNumber}/locations/{location}.
+
+
+* `kms_key` -
+  (Optional)
+  The KMS key used for CMEK encryption. It is required that
+  the kms key is in the same region as the endpoint. The
+  same key will be used for all provisioned resources, if
+  encryption is available. If the kmsKey is left empty, no
+  encryption will be enforced.
+
+* `document_creator_default_role` -
+  (Optional)
+  The default role for the person who create a document.
+  Possible values are: `DOCUMENT_ADMIN`, `DOCUMENT_EDITOR`, `DOCUMENT_VIEWER`.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project_number}}/locations/{{location}}`
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 30 minutes.
+- `delete` - Default is 30 minutes.
+
+## Import
+
+This resource does not support import.

@@ -1,0 +1,143 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# azurerm_kusto_iothub_data_connection
+
+Manages a Kusto (also known as Azure Data Explorer) IotHub Data Connection
+
+## Example Usage
+
+```hcl
+resource "azurerm_resource_group" "example" {
+  name     = "example-resources"
+  location = "West Europe"
+}
+
+resource "azurerm_kusto_cluster" "example" {
+  name                = "examplekustocluster"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+
+  sku {
+    name     = "Standard_D13_v2"
+    capacity = 2
+  }
+}
+
+resource "azurerm_kusto_database" "example" {
+  name                = "example-kusto-database"
+  resource_group_name = azurerm_resource_group.example.name
+  location            = azurerm_resource_group.example.location
+  cluster_name        = azurerm_kusto_cluster.example.name
+  hot_cache_period    = "P7D"
+  soft_delete_period  = "P31D"
+}
+
+resource "azurerm_iothub" "example" {
+  name                = "exampleIoTHub"
+  resource_group_name = azurerm_resource_group.example.name
+  location            = azurerm_resource_group.example.location
+
+  sku {
+    name     = "B1"
+    capacity = "1"
+  }
+}
+
+resource "azurerm_iothub_shared_access_policy" "example" {
+  name                = "example-shared-access-policy"
+  resource_group_name = azurerm_resource_group.example.name
+  iothub_name         = azurerm_iothub.example.name
+
+  registry_read = true
+}
+
+resource "azurerm_iothub_consumer_group" "example" {
+  name                   = "example-consumer-group"
+  resource_group_name    = azurerm_resource_group.example.name
+  iothub_name            = azurerm_iothub.example.name
+  eventhub_endpoint_name = "events"
+}
+
+resource "azurerm_kusto_iothub_data_connection" "example" {
+  name                = "my-kusto-iothub-data-connection"
+  resource_group_name = azurerm_resource_group.example.name
+  location            = azurerm_resource_group.example.location
+  cluster_name        = azurerm_kusto_cluster.example.name
+  database_name       = azurerm_kusto_database.example.name
+
+  iothub_id                 = azurerm_iothub.example.id
+  consumer_group            = azurerm_iothub_consumer_group.example.name
+  shared_access_policy_name = azurerm_iothub_shared_access_policy.example.name
+  event_system_properties   = ["message-id", "sequence-number", "to"]
+
+  table_name           = "my-table"
+  mapping_rule_name    = "my-table-mapping"
+  data_format          = "JSON"
+  retrieval_start_date = "2023-06-26T12:00:00Z"
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - (Required) The name of the Kusto IotHub Data Connection to create. Changing this forces a new resource to be created.
+
+* `location` - (Required) The location where the Kusto Database should be created. Changing this forces a new resource to be created.
+
+* `resource_group_name` - (Required) Specifies the Resource Group where the Kusto Database should exist. Changing this forces a new resource to be created.
+
+* `cluster_name` - (Required) Specifies the name of the Kusto Cluster this data connection will be added to. Changing this forces a new resource to be created.
+
+* `database_name` - (Required) Specifies the name of the Kusto Database this data connection will be added to. Changing this forces a new resource to be created.
+
+* `iothub_id` - (Required) Specifies the resource id of the IotHub this data connection will use for ingestion. Changing this forces a new resource to be created.
+
+* `consumer_group` - (Required) Specifies the IotHub consumer group this data connection will use for ingestion. Changing this forces a new resource to be created.
+
+* `shared_access_policy_name` - (Required) Specifies the IotHub Shared Access Policy this data connection will use for ingestion, which must have read permission. Changing this forces a new resource to be created.
+
+* `event_system_properties` - (Optional) Specifies the System Properties that each IoT Hub message should contain. Changing this forces a new resource to be created.
+
+* `table_name` - (Optional) Specifies the target table name used for the message ingestion. Table must exist before resource is created. Changing this forces a new resource to be created.
+
+* `mapping_rule_name` - (Optional) Specifies the mapping rule used for the message ingestion. Mapping rule must exist before resource is created. Changing this forces a new resource to be created.
+
+* `data_format` - (Optional) Specifies the data format of the IoTHub messages. Allowed values: `APACHEAVRO`, `AVRO`, `CSV`, `JSON`, `MULTIJSON`, `ORC`, `PARQUET`, `PSV`, `RAW`, `SCSV`, `SINGLEJSON`, `SOHSV`, `TSV`, `TSVE`, `TXT` and `W3CLOGFILE`. Changing this forces a new resource to be created.
+
+* `database_routing_type` - (Optional) Indication for database routing information from the data connection, by default only database routing information is allowed. Allowed values: `Single`, `Multi`. Changing this forces a new resource to be created. Defaults to `Single`.
+
+* `retrieval_start_date` - (Optional) Specifies the date after which data should be retrieved from IoT Hub. When defined, the data connection retrieves existing events created since the specified retrieval start date. It can only retrieve events retained by the IoT Hub, based on its retention period. The value should be in RFC3339 format (e.g., `2023-06-26T12:00:00Z`).
+
+## Attributes Reference
+
+In addition to the Arguments listed above - the following Attributes are exported:
+
+* `id` - The ID of the Kusto IotHub Data Connection.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `create` - (Defaults to 1 hour) Used when creating the Kusto IotHub Data Connection.
+* `read` - (Defaults to 5 minutes) Used when retrieving the Kusto IotHub Data Connection.
+* `update` - (Defaults to 1 hour) Used when updating the Kusto IotHub Data Connection.
+* `delete` - (Defaults to 1 hour) Used when deleting the Kusto IotHub Data Connection.
+
+## Import
+
+Kusto IotHub Data Connections can be imported using the `resource id`, e.g.
+
+```shell
+terraform import azurerm_kusto_iothub_data_connection.example /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/group1/providers/Microsoft.Kusto/clusters/cluster1/databases/database1/dataConnections/dataConnection1
+```
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This resource uses the following Azure API Providers:
+
+* `Microsoft.Kusto` - 2024-04-13

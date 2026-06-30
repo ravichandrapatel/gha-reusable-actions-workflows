@@ -1,0 +1,115 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_resource_manager_capability
+
+An app-enabled folder is a folder within the Google Cloud resource hierarchy that has been configured for application management. This folder lets you define and manage App Hub applications. These applications are functional groupings of services and workloads that span multiple projects within that folder and its descendant projects.
+
+
+To get more information about Capability, see:
+
+* [API documentation](https://docs.cloud.google.com/resource-manager/reference/rest)
+* How-to Guides
+    * [Official Documentation](https://docs.cloud.google.com/resource-manager/docs/manage-applications)
+
+## Example Usage - Resource Manager Capability
+
+
+```hcl
+resource "google_folder" "folder" {
+  display_name     = "folder-cap"
+  parent           = "organizations/123456789"
+  deletion_protection = false
+}
+resource "time_sleep" "wait_60s" {
+  depends_on = [google_folder.folder]
+  create_duration = "60s"
+}
+resource "google_resource_manager_capability" "capability" {
+  value            = true
+  parent           = "${google_folder.folder.name}"
+  capability_name  = "app-management"
+  depends_on = [time_sleep.wait_60s]
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `parent` -
+  (Required)
+  Folder on which Capability needs to be updated in the format folders/folder_id.
+
+* `capability_name` -
+  (Required)
+  Capability name that should be updated on the folder.
+
+* `value` -
+  (Required)
+  Capability Value.
+
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `{{parent}}/capabilities/{{capability_name}}`
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 0 minutes.
+
+## Import
+
+
+Capability can be imported using any of these accepted formats:
+
+* `{{parent}}/capabilities/{{capability_name}}`
+* `{{parent}}/{{capability_name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Capability using identity values. For example:
+
+```tf
+import {
+  identity = {
+    parent = "<-required value->"
+    capability_name = "<-required value->"
+  }
+  to = google_resource_manager_capability.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Capability using one of the formats above. For example:
+
+```tf
+import {
+  id = "{{parent}}/capabilities/{{capability_name}}"
+  to = google_resource_manager_capability.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Capability can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_resource_manager_capability.default {{parent}}/capabilities/{{capability_name}}
+$ terraform import google_resource_manager_capability.default {{parent}}/{{capability_name}}
+```

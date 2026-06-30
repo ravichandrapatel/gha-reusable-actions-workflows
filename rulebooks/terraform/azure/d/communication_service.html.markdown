@@ -1,0 +1,64 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_communication_service
+
+Use this data source to access information about an existing Communication Service.
+
+## Example Usage
+
+```hcl
+data "azurerm_communication_service" "example" {
+  name                = "existing"
+  resource_group_name = "existing"
+}
+
+output "id" {
+  value = data.azurerm_communication_service.example.id
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - (Required) The name of this Communication Service.
+* 
+* `resource_group_name` - (Required) The name of the Resource Group where the Communication Service exists.
+* 
+## Attributes Reference
+
+In addition to the Arguments listed above - the following Attributes are exported: 
+
+* `id` - The ID of the Communication Service.
+
+* `data_location` - The location where the Communication service stores its data at rest.
+
+* `primary_connection_string` - The primary connection string of the Communication Service.
+
+* `primary_key` - The primary key of the Communication Service.
+
+* `secondary_connection_string` - The secondary connection string of the Communication Service.
+
+* `secondary_key` - The secondary key of the Communication Service.
+
+* `tags` - A mapping of tags assigned to the Communication Service.
+
+* `hostname` - The hostname of the Communication Service.
+
+* `immutable_resource_id` - The immutable resource id of the Communication Service.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the Communication Service.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.Communication` - 2023-03-31

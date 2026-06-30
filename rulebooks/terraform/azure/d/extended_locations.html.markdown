@@ -1,0 +1,33 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_extended_locations
+
+This data source return the available Extended Locations for a specific Azure Region.
+
+## Example Usage
+
+```hcl
+data "azurerm_extended_locations" "example" {
+  location = "West Europe"
+}
+```
+
+## Arguments Reference
+
+* `location` - The Azure location to retrieve the Extended Locations for.
+
+## Attributes Reference
+
+* `id` - The ID of Location within this Subscription.
+
+* `extended_locations` - The available extended locations for the Azure Location.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the Extended Locations.

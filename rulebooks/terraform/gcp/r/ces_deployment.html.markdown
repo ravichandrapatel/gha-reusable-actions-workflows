@@ -1,0 +1,310 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_ces_deployment
+
+Description
+
+
+
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=ces_deployment_basic&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Ces Deployment Basic
+
+
+```hcl
+resource "google_ces_app" "my-app" {
+    location     = "us"
+    display_name = "my-app"
+    app_id       = "app-id"
+    time_zone_settings {   
+        time_zone = "America/Los_Angeles"
+    }
+}
+resource "google_ces_deployment" "my-deployment" {
+    location     = "us"
+    display_name = "my-deployment"
+    app          = google_ces_app.my-app.name
+    app_version  = "projects/example-project/locations/us/apps/example-app/versions/example-version"
+    channel_profile {
+        channel_type = "API"
+        disable_barge_in_control = true
+        disable_dtmf = true
+        persona_property {
+            persona = "CHATTY"
+        }
+        profile_id = "temp_profile_id"
+        web_widget_config {
+            modality = "CHAT_AND_VOICE"
+            theme = "DARK"
+            web_widget_title = "temp_webwidget_title"
+        }
+    }
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=ces_deployment_full&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Ces Deployment Full
+
+
+```hcl
+resource "google_ces_app" "my-app" {
+    location     = "us"
+    display_name = "my-app"
+    app_id       = "app-id"
+    time_zone_settings {   
+        time_zone = "America/Los_Angeles"
+    }
+}
+resource "google_ces_deployment" "my-deployment" {
+    location     = "us"
+    display_name = "my-deployment"
+    app          = google_ces_app.my-app.name
+    app_version  = "projects/example-project/locations/us/apps/example-app/versions/example-version"
+    channel_profile {
+        channel_type = "API"
+        disable_barge_in_control = true
+        disable_dtmf = true
+        persona_property {
+            persona = "CHATTY"
+        }
+        profile_id = "temp_profile_id"
+        web_widget_config {
+            modality = "CHAT_AND_VOICE"
+            theme = "DARK"
+            web_widget_title = "temp_webwidget_title"
+            security_settings {
+                enable_public_access = true
+                enable_origin_check = true
+                allowed_origins = ["https://example.com", "https://test.com"]
+                enable_recaptcha = true
+            }
+        }
+    }
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `app_version` -
+  (Required)
+  The resource name of the app version to deploy.
+  Format:
+  projects/{project}/locations/{location}/apps/{app}/versions/{version}
+
+* `channel_profile` -
+  (Required)
+  A ChannelProfile configures the agent's behavior for a specific communication
+  channel, such as web UI or telephony.
+  Structure is [documented below](#nested_channel_profile).
+
+* `display_name` -
+  (Required)
+  Display name of the deployment.
+
+* `location` -
+  (Required)
+  Resource ID segment making up resource `name`. It identifies the resource within its parent collection as described in https://google.aip.dev/122.
+
+* `app` -
+  (Required)
+  Resource ID segment making up resource `name`. It identifies the resource within its parent collection as described in https://google.aip.dev/122.
+
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+<a name="nested_channel_profile"></a>The `channel_profile` block supports:
+
+* `channel_type` -
+  (Optional)
+  The type of the channel profile.
+  Possible values:
+  UNKNOWN
+  WEB_UI
+  API
+  TWILIO
+  GOOGLE_TELEPHONY_PLATFORM
+  CONTACT_CENTER_AS_A_SERVICE
+  FIVE9
+  CONTACT_CENTER_INTEGRATION
+
+* `disable_barge_in_control` -
+  (Optional)
+  Whether to disable user barge-in control in the conversation.
+  - **true**: User interruptions are disabled while the agent is speaking.
+  - **false**: The agent retains automatic control over when the user can
+  interrupt.
+
+* `disable_dtmf` -
+  (Optional)
+  Whether to disable DTMF (dual-tone multi-frequency).
+
+* `persona_property` -
+  (Optional)
+  Represents the persona property of a channel.
+  Structure is [documented below](#nested_channel_profile_persona_property).
+
+* `profile_id` -
+  (Optional)
+  The unique identifier of the channel profile.
+
+* `web_widget_config` -
+  (Optional)
+  Message for configuration for the web widget.
+  Structure is [documented below](#nested_channel_profile_web_widget_config).
+
+
+<a name="nested_channel_profile_persona_property"></a>The `persona_property` block supports:
+
+* `persona` -
+  (Optional)
+  The persona of the channel.
+  Possible values:
+  UNKNOWN
+  CONCISE
+  CHATTY
+
+<a name="nested_channel_profile_web_widget_config"></a>The `web_widget_config` block supports:
+
+* `modality` -
+  (Optional)
+  The modality of the web widget.
+  Possible values:
+  MODALITY_UNSPECIFIED
+  CHAT_AND_VOICE
+  VOICE_ONLY
+  CHAT_ONLY
+  CHAT_VOICE_AND_VIDEO
+
+* `theme` -
+  (Optional)
+  The theme of the web widget.
+  Possible values:
+  THEME_UNSPECIFIED
+  LIGHT
+  DARK
+
+* `web_widget_title` -
+  (Optional)
+  The title of the web widget.
+
+* `security_settings` -
+  (Optional)
+  The security settings of the web widget.
+  Structure is [documented below](#nested_channel_profile_web_widget_config_security_settings).
+
+
+<a name="nested_channel_profile_web_widget_config_security_settings"></a>The `security_settings` block supports:
+
+* `enable_public_access` -
+  (Optional)
+  Indicates whether public access to the web widget is enabled. If true, the web widget will be publicly accessible. If false, the web widget must be integrated with your own authentication and authorization system to return valid credentials for accessing the CES agent.
+
+* `enable_origin_check` -
+  (Optional)
+  Indicates whether origin check for the web widget is enabled. If true, the web widget will check the origin of the website that loads the web widget and only allow it to be loaded in the same origin or any of the allowed origins.
+
+* `allowed_origins` -
+  (Optional)
+  The origins that are allowed to host the web widget. An origin is defined by RFC 6454. If empty, all origins are allowed. A maximum of 100 origins is allowed. Example: "https://example.com"
+
+* `enable_recaptcha` -
+  (Optional)
+  Indicates whether reCAPTCHA verification for the web widget is enabled.
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{location}}/apps/{{app}}/deployments/{{name}}`
+
+* `create_time` -
+  Timestamp when this deployment was created.
+
+* `etag` -
+  Etag used to ensure the object hasn't changed during a read-modify-write
+  operation. If the etag is empty, the update will overwrite any concurrent
+  changes.
+
+* `name` -
+  Identifier. The resource name of the deployment.
+  Format:
+  projects/{project}/locations/{location}/apps/{app}/deployments/{deployment}
+
+* `update_time` -
+  Timestamp when this deployment was last updated.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Deployment can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{location}}/apps/{{app}}/deployments/{{name}}`
+* `{{project}}/{{location}}/{{app}}/{{name}}`
+* `{{location}}/{{app}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Deployment using identity values. For example:
+
+```tf
+import {
+  identity = {
+    name = "<-optional value->"
+    location = "<-required value->"
+    app = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_ces_deployment.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Deployment using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{location}}/apps/{{app}}/deployments/{{name}}"
+  to = google_ces_deployment.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Deployment can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_ces_deployment.default projects/{{project}}/locations/{{location}}/apps/{{app}}/deployments/{{name}}
+$ terraform import google_ces_deployment.default {{project}}/{{location}}/{{app}}/{{name}}
+$ terraform import google_ces_deployment.default {{location}}/{{app}}/{{name}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

@@ -1,0 +1,148 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_netapp_kmsconfig
+
+NetApp Volumes always encrypts your data at rest using volume-specific keys.
+
+A CMEK policy (customer-managed encryption key) warps such volume-specific keys in a key stored in Cloud Key Management Service (KMS).
+
+
+To get more information about kmsconfig, see:
+
+* [API documentation](https://cloud.google.com/netapp/volumes/docs/reference/rest/v1/projects.locations.kmsConfigs)
+* How-to Guides
+    * [Documentation](https://cloud.google.com/netapp/volumes/docs/configure-and-use/cmek/cmek-overview)
+
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_image=gcr.io%2Fcloudshell-images%2Fcloudshell%3Alatest&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md&cloudshell_working_dir=kmsConfig_create&open_in_editor=main.tf" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Kms Config Create
+
+
+```hcl
+resource "google_netapp_kmsconfig" "kmsConfig" {
+  name = "kms-test"
+  description="this is a test description"
+  crypto_key_name="crypto-name"
+  location="us-central1"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `crypto_key_name` -
+  (Required)
+  Resource name of the KMS key to use. Only regional keys are supported. Format: `projects/{{project}}/locations/{{location}}/keyRings/{{key_ring}}/cryptoKeys/{{key}}`.
+
+* `location` -
+  (Required)
+  Name of the policy location. CMEK policies apply to the whole region.
+
+* `name` -
+  (Required)
+  Name of the CMEK policy.
+
+
+* `description` -
+  (Optional)
+  Description for the CMEK policy.
+
+* `labels` -
+  (Optional)
+  Labels as key value pairs. Example: `{ "owner": "Bob", "department": "finance", "purpose": "testing" }`.
+
+  **Note**: This field is non-authoritative, and will only manage the labels present in your configuration.
+  Please refer to the field `effective_labels` for all of the labels present on the resource.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/{{location}}/kmsConfigs/{{name}}`
+
+* `instructions` -
+  Access to the key needs to be granted. The instructions contain gcloud commands to run to grant access.
+  To make the policy work, a CMEK policy check is required, which verifies key access.
+
+* `service_account` -
+  The Service account which needs to have access to the  provided KMS key.
+
+* `terraform_labels` -
+  The combination of labels configured directly on the resource
+   and default labels configured on the provider.
+
+* `effective_labels` -
+  All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+kmsconfig can be imported using any of these accepted formats:
+
+* `projects/{{project}}/locations/{{location}}/kmsConfigs/{{name}}`
+* `{{project}}/{{location}}/{{name}}`
+* `{{location}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import kmsconfig using identity values. For example:
+
+```tf
+import {
+  identity = {
+    location = "<-required value->"
+    name = "<-required value->"
+    project = "<-optional value->"
+  }
+  to = google_netapp_kmsconfig.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import kmsconfig using one of the formats above. For example:
+
+```tf
+import {
+  id = "projects/{{project}}/locations/{{location}}/kmsConfigs/{{name}}"
+  to = google_netapp_kmsconfig.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), kmsconfig can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_netapp_kmsconfig.default projects/{{project}}/locations/{{location}}/kmsConfigs/{{name}}
+$ terraform import google_netapp_kmsconfig.default {{project}}/{{location}}/{{name}}
+$ terraform import google_netapp_kmsconfig.default {{location}}/{{name}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

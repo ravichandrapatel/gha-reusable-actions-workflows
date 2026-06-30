@@ -1,0 +1,156 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# azurerm_private_link_service
+
+Manages a Private Link Service.
+
+-> **Note:** Private Link is now in [GA](https://docs.microsoft.com/en-gb/azure/private-link/).
+
+## Example Usage
+
+```hcl
+resource "azurerm_resource_group" "example" {
+  name     = "example-resources"
+  location = "West Europe"
+}
+
+resource "azurerm_virtual_network" "example" {
+  name                = "example-network"
+  resource_group_name = azurerm_resource_group.example.name
+  location            = azurerm_resource_group.example.location
+  address_space       = ["10.5.0.0/16"]
+}
+
+resource "azurerm_subnet" "example" {
+  name                                          = "example-subnet"
+  resource_group_name                           = azurerm_resource_group.example.name
+  virtual_network_name                          = azurerm_virtual_network.example.name
+  address_prefixes                              = ["10.5.1.0/24"]
+  enforce_private_link_service_network_policies = true
+}
+
+resource "azurerm_public_ip" "example" {
+  name                = "example-api"
+  sku                 = "Standard"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+  allocation_method   = "Static"
+}
+
+resource "azurerm_lb" "example" {
+  name                = "example-lb"
+  sku                 = "Standard"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+
+  frontend_ip_configuration {
+    name                 = azurerm_public_ip.example.name
+    public_ip_address_id = azurerm_public_ip.example.id
+  }
+}
+
+resource "azurerm_private_link_service" "example" {
+  name                = "example-privatelink"
+  resource_group_name = azurerm_resource_group.example.name
+  location            = azurerm_resource_group.example.location
+
+  auto_approval_subscription_ids              = ["00000000-0000-0000-0000-000000000000"]
+  visibility_subscription_ids                 = ["00000000-0000-0000-0000-000000000000"]
+  load_balancer_frontend_ip_configuration_ids = [azurerm_lb.example.frontend_ip_configuration[0].id]
+
+  nat_ip_configuration {
+    name                       = "primary"
+    private_ip_address         = "10.5.1.17"
+    private_ip_address_version = "IPv4"
+    subnet_id                  = azurerm_subnet.example.id
+    primary                    = true
+  }
+
+  nat_ip_configuration {
+    name                       = "secondary"
+    private_ip_address         = "10.5.1.18"
+    private_ip_address_version = "IPv4"
+    subnet_id                  = azurerm_subnet.example.id
+    primary                    = false
+  }
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - (Required) Specifies the name of this Private Link Service. Changing this forces a new resource to be created.
+
+* `resource_group_name` - (Required) The name of the Resource Group where the Private Link Service should exist. Changing this forces a new resource to be created.
+
+* `location` - (Required) Specifies the supported Azure location where the resource exists. Changing this forces a new resource to be created.
+
+* `nat_ip_configuration` - (Required) One or more (up to 8) `nat_ip_configuration` block as defined below.
+
+---
+
+* `auto_approval_subscription_ids` - (Optional) A list of Subscription UUID/GUID's that will be automatically be able to use this Private Link Service.
+
+* `destination_ip_address` - (Optional) The destination IP address of the Private Link Service.
+
+* `proxy_protocol_enabled` - (Optional) Should the Private Link Service support the Proxy Protocol? Defaults to `false`.
+
+* `fqdns` - (Optional) List of FQDNs allowed for the Private Link Service.
+
+* `load_balancer_frontend_ip_configuration_ids` - (Optional) A list of Frontend IP Configuration IDs from a Standard Load Balancer, where traffic from the Private Link Service should be routed. You can use Load Balancer Rules to direct this traffic to appropriate backend pools where your applications are running. Changing this forces a new resource to be created.
+
+* `tags` - (Optional) A mapping of tags to assign to the resource. 
+
+* `visibility_subscription_ids` - (Optional) A list of Subscription UUID/GUID's that will be able to see this Private Link Service.
+
+-> **Note:** If no Subscription IDs are specified then Azure allows every Subscription to see this Private Link Service.
+
+---
+
+The `nat_ip_configuration` block supports the following:
+
+* `name` - (Required) Specifies the name which should be used for the NAT IP Configuration.
+
+* `subnet_id` - (Required) Specifies the ID of the Subnet which should be used for the Private Link Service.
+
+-> **Note:** Verify that the Subnet's `enforce_private_link_service_network_policies` attribute is set to `true`.
+
+* `primary` - (Required) Is this is the Primary IP Configuration?
+
+* `private_ip_address` - (Optional) Specifies a Private Static IP Address for this IP Configuration.
+
+* `private_ip_address_version` - (Optional) The version of the IP Protocol which should be used. At this time the only supported value is `IPv4`. Defaults to `IPv4`.
+
+## Attributes Reference
+
+In addition to the Arguments listed above - the following Attributes are exported:
+
+* `alias` - A globally unique DNS Name for your Private Link Service. You can use this alias to request a connection to your Private Link Service.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `create` - (Defaults to 1 hour) Used when creating the Private Link Service.
+* `read` - (Defaults to 5 minutes) Used when retrieving the Private Link Service.
+* `update` - (Defaults to 1 hour) Used when updating the Private Link Service.
+* `delete` - (Defaults to 1 hour) Used when deleting the Private Link Service.
+
+## Import
+
+Private Link Services can be imported using the `resource id`, e.g.
+
+```shell
+terraform import azurerm_private_link_service.example /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/group1/providers/Microsoft.Network/privateLinkServices/service1
+```
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This resource uses the following Azure API Providers:
+
+* `Microsoft.Network` - 2025-01-01

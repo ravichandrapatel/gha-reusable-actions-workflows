@@ -12,7 +12,7 @@
 
 ## How to use this guide
 
-Read **Part I → Part IV** in order if you are new to the repository. Use individual chapters as reference once you are familiar with the workflow.
+Read **Part I → Part V** in order if you are new to the repository. Use individual chapters as reference once you are familiar with the workflow.
 
 | Part | Chapters | Focus |
 | :--- | :--- | :--- |
@@ -20,6 +20,7 @@ Read **Part I → Part IV** in order if you are new to the repository. Use indiv
 | **II — Authoring** | [2. Writing components](02-writing-components.md) · [6. Policy skips](06-inline-policy-skips.md) | Create actions/workflows; SPVS_SKIP_POLICY exceptions |
 | **III — Local development** | [3. Git hooks](03-dev-hooks.md) · [4. Testing](04-local-testing.md) | Install hooks, run scans and unit tests |
 | **IV — Release** | [5. Release checklist](05-release-checklist.md) | Verify Release Manager in GitHub Actions |
+| **V — Governance** | [7. Internal Standards Guide](07-internal-standards-guide.md) | Create and update "The Law" files |
 
 ---
 
@@ -31,6 +32,7 @@ Read **Part I → Part IV** in order if you are new to the repository. Use indiv
 4. **[Local git hooks](03-dev-hooks.md)**  
 5. **[Local testing](04-local-testing.md)**  
 6. **[Release Manager checklist](05-release-checklist.md)**  
+7. **[Internal Standards Guide](07-internal-standards-guide.md)** — Creating/Updating "The Law"
 
 ---
 
@@ -44,6 +46,7 @@ Read **Part I → Part IV** in order if you are new to the repository. Use indiv
 | Document or apply a policy skip | [Chapter 6 — Policy skips](06-inline-policy-skips.md) |
 | Understand a Conftest policy | [README — Security policies](../README.md#security-policies-spvs--conftest) |
 | Ship a release | [Chapter 5 — Release checklist](05-release-checklist.md) |
+| Create/Update "The Law" | [Chapter 7 — Internal Standards Guide](07-internal-standards-guide.md) |
 
 ---
 
@@ -57,7 +60,8 @@ docs/                          ← You are here (developer guide)
 ├── 03-dev-hooks.md
 ├── 04-local-testing.md
 ├── 05-release-checklist.md
-└── 06-inline-policy-skips.md
+├── 06-inline-policy-skips.md
+└── 07-internal-standards-guide.md
 
 README.md (repo root)          ← Architecture, policies, SemVer, CI prerequisites
 policies/

@@ -1,0 +1,135 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_dialogflow_version
+
+You can create multiple versions of your agent and publish them to separate environments.
+
+
+To get more information about Version, see:
+
+* [API documentation](https://docs.cloud.google.com/dialogflow/es/docs/reference/rest/v2/projects.agent.versions)
+* How-to Guides
+    * [Official Documentation](https://cloud.google.com/dialogflow/docs/)
+
+## Example Usage - Dialogflow Version Full
+
+
+```hcl
+resource "google_project" "project" {
+  project_id      = "my-proj"
+  name            = "my-proj"
+  org_id          = "123456789"
+  billing_account = "000000-0000000-0000000-000000"
+  deletion_policy = "DELETE"
+}
+resource "google_project_service" "dialogflow" {
+  project  = google_project.project.project_id
+  service  = "dialogflow.googleapis.com"
+}
+resource "time_sleep" "wait_enable_service_api" {
+  depends_on = [
+    google_project_service.dialogflow
+  ]
+  create_duration = "30s"
+}
+resource "google_dialogflow_agent" "basic_agent" {
+  display_name = "example_agent"
+  default_language_code = "en"
+  time_zone = "America/New_York"
+  project    = google_project.project.project_id
+  depends_on = [time_sleep.wait_enable_service_api]
+}
+resource "google_dialogflow_version" "full_version" {
+  description = "Dialogflow Version"
+  parent = "projects/${google_project.project.project_id}/agent"
+  depends_on = [google_dialogflow_agent.basic_agent]
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+
+* `parent` -
+  (Optional)
+  The Flow to create an Version for.
+  Format: projects/<Project ID>/agent.
+
+* `description` -
+  (Optional)
+  The developer-provided description of this version.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `{{parent}}/versions/{{name}}`
+
+* `name` -
+  The unique identifier of this agent version.
+
+* `version_number` -
+  The sequential number of this version.
+
+* `status` -
+  The status of this version.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 40 minutes.
+- `update` - Default is 40 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+Version can be imported using any of these accepted formats:
+
+* `{{parent}}/versions/{{name}}`
+* `{{parent}}/{{name}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Version using identity values. For example:
+
+```tf
+import {
+  identity = {
+    parent = "<-optional value->"
+    name = "<-optional value->"
+  }
+  to = google_dialogflow_version.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import Version using one of the formats above. For example:
+
+```tf
+import {
+  id = "{{parent}}/versions/{{name}}"
+  to = google_dialogflow_version.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), Version can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_dialogflow_version.default {{parent}}/versions/{{name}}
+$ terraform import google_dialogflow_version.default {{parent}}/{{name}}
+```

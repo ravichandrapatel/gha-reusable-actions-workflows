@@ -1,0 +1,145 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_active_directory_peering
+
+Creates a Peering for Managed AD instance.
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about Peering, see:
+
+* [API documentation](https://cloud.google.com/managed-microsoft-ad/reference/rest/v1beta1/projects.locations.global.peerings)
+* How-to Guides
+    * [Active Directory Domain Peering](https://cloud.google.com/managed-microsoft-ad/docs/domain-peering)
+
+## Example Usage - Active Directory Peering Basic
+
+
+```hcl
+resource "google_active_directory_peering" "ad-domain-peering" {
+    provider           = google-beta
+    domain_resource    = google_active_directory_domain.ad-domain.name
+    peering_id         = "ad-domain-peering"
+    authorized_network = google_compute_network.peered-network.id
+    deletion_protection = false
+    labels             = {
+        foo = "bar"
+    }
+}
+
+resource "google_active_directory_domain" "ad-domain" {
+    provider            = google-beta
+    domain_name         = "ad.test.hashicorptest.com"
+    locations           = ["us-central1"]
+    reserved_ip_range   = "192.168.255.0/24"
+    authorized_networks = [google_compute_network.source-network.id]
+    deletion_protection = false
+}
+
+resource "google_compute_network" "peered-network" {
+    provider = google-beta
+    project  = google_project_service.compute.project
+    name     = "ad-peered-network"
+}
+
+resource "google_compute_network" "source-network" {
+    provider = google-beta
+    name     = "ad-network"
+}
+
+resource "google_project_service" "compute" {
+    provider = google-beta
+    project  = google_project.peered-project.project_id
+    service  = "compute.googleapis.com"
+}
+
+resource "google_project" "peered-project" {
+    provider        = google-beta
+    name            = "my-peered-project"
+    project_id      = "my-peered-project"
+    org_id          = "123456789"
+    billing_account = "000000-0000000-0000000-000000"
+    deletion_policy = "DELETE"
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `authorized_network` -
+  (Required)
+  The full names of the Google Compute Engine networks to which the instance is connected. Caller needs to make sure that CIDR subnets do not overlap between networks, else peering creation will fail.
+
+* `domain_resource` -
+  (Required)
+  Full domain resource path for the Managed AD Domain involved in peering. The resource path should be in the form projects/{projectId}/locations/global/domains/{domainName}
+
+* `peering_id` -
+  (Required)
+
+
+* `labels` -
+  (Optional)
+  Resource labels that can contain user-provided metadata
+  **Note**: This field is non-authoritative, and will only manage the labels present in your configuration.
+  Please refer to the field `effective_labels` for all of the labels present on the resource.
+
+* `status` -
+  (Optional)
+  The current state of this Peering.
+
+* `status_message` -
+  (Optional)
+  Additional information about the current status of this peering, if available.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/locations/global/domains/{{peering_id}}`
+
+* `name` -
+  Unique name of the peering in this scope including projects and location using the form: projects/{projectId}/locations/global/peerings/{peeringId}.
+
+* `terraform_labels` -
+  The combination of labels configured directly on the resource
+   and default labels configured on the provider.
+
+* `effective_labels` -
+  All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+This resource does not support import.
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

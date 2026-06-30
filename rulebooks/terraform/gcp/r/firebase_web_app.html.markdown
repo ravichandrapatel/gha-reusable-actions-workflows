@@ -1,0 +1,181 @@
+---
+type: official_reference
+tool: terraform-google
+authority: external_reference
+---
+
+# google_firebase_web_app
+
+A Google Cloud Firebase web application instance
+
+~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
+See [Provider Versions](../guides/provider_versions.html.markdown) for more details on beta resources.
+
+To get more information about WebApp, see:
+
+* [API documentation](https://firebase.google.com/docs/reference/firebase-management/rest/v1beta1/projects.webApps)
+* How-to Guides
+    * [Official Documentation](https://firebase.google.com/)
+
+## Example Usage - Firebase Web App Basic
+
+
+```hcl
+resource "google_firebase_web_app" "basic" {
+	provider = google-beta
+	project = "my-project-name"
+	display_name = "Display Name Basic"
+}
+
+data "google_firebase_web_app_config" "basic" {
+  provider   = google-beta
+  web_app_id = google_firebase_web_app.basic.app_id
+}
+
+resource "google_storage_bucket" "default" {
+    provider = google-beta
+    name     = "fb-webapp-"
+    location = "US"
+}
+
+resource "google_storage_bucket_object" "default" {
+    provider = google-beta
+    bucket = google_storage_bucket.default.name
+    name = "firebase-config.json"
+
+    content = jsonencode({
+        appId              = google_firebase_web_app.basic.app_id
+        apiKey             = data.google_firebase_web_app_config.basic.api_key
+        authDomain         = data.google_firebase_web_app_config.basic.auth_domain
+        databaseURL        = lookup(data.google_firebase_web_app_config.basic, "database_url", "")
+        storageBucket      = lookup(data.google_firebase_web_app_config.basic, "storage_bucket", "")
+        messagingSenderId  = lookup(data.google_firebase_web_app_config.basic, "messaging_sender_id", "")
+        measurementId      = lookup(data.google_firebase_web_app_config.basic, "measurement_id", "")
+    })
+}
+```
+## Example Usage - Firebase Web App Custom Api Key
+
+
+```hcl
+resource "google_firebase_web_app" "default" {
+	provider = google-beta
+	project = "my-project-name"
+	display_name = "Display Name"
+	api_key_id = google_apikeys_key.web.uid
+	deletion_policy = "DELETE"
+}
+
+resource "google_apikeys_key" "web" {
+	provider = google-beta
+	project  = "my-project-name"
+	name         = "api-key"
+	display_name = "Display Name"
+
+	restrictions {
+	    browser_key_restrictions {
+	        allowed_referrers = ["*"]
+	    }
+	}
+}
+```
+
+## Argument Reference
+
+The following arguments are supported:
+
+
+* `display_name` -
+  (Required)
+  The user-assigned display name of the App.
+
+
+* `api_key_id` -
+  (Optional)
+  The globally unique, Google-assigned identifier (UID) for the Firebase API key associated with the WebApp.
+  If apiKeyId is not set during creation, then Firebase automatically associates an apiKeyId with the WebApp.
+  This auto-associated key may be an existing valid key or, if no valid key exists, a new one will be provisioned.
+
+* `project` - (Optional) The ID of the project in which the resource belongs.
+    If it is not provided, the provider project is used.
+
+* `deletion_policy` - (Optional) Whether Terraform will be prevented from destroying the resource. Defaults to DELETE.
+	When a 'terraform destroy' or 'terraform apply' would delete the resource,
+	the command will fail if this field is set to "PREVENT" in Terraform state.
+	When set to "ABANDON", the command will remove the resource from Terraform
+	management without updating or deleting the resource in the API.
+	When set to "DELETE", deleting the resource is allowed.
+
+
+## Attributes Reference
+
+In addition to the arguments listed above, the following computed attributes are exported:
+
+* `id` - an identifier for the resource with format `projects/{{project}}/webApps/{{app_id}}`
+
+* `name` -
+  The fully qualified resource name of the App, for example:
+  projects/projectId/webApps/appId
+
+* `app_id` -
+  The globally unique, Firebase-assigned identifier of the App.
+  This identifier should be treated as an opaque token, as the data format is not specified.
+
+* `app_urls` -
+  The URLs where the `WebApp` is hosted.
+
+
+## Timeouts
+
+This resource provides the following
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
+
+- `create` - Default is 20 minutes.
+- `update` - Default is 20 minutes.
+- `delete` - Default is 20 minutes.
+
+## Import
+
+
+WebApp can be imported using any of these accepted formats:
+
+* `{{project}} projects/{{project}}/webApps/{{app_id}}`
+* `projects/{{project}}/webApps/{{app_id}}`
+* `{{project}}/{{project}}/{{app_id}}`
+* `webApps/{{app_id}}`
+* `{{app_id}}`
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import WebApp using identity values. For example:
+
+```tf
+import {
+  identity = {
+    appId = "<-optional value->"
+    project = "<-optional value->"
+  }
+  to = google_firebase_web_app.default
+}
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) to import WebApp using one of the formats above. For example:
+
+```tf
+import {
+  id = "{{project}} projects/{{project}}/webApps/{{app_id}}"
+  to = google_firebase_web_app.default
+}
+```
+
+When using the [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import), WebApp can be imported using one of the formats above. For example:
+
+```
+$ terraform import google_firebase_web_app.default "{{project}} projects/{{project}}/webApps/{{app_id}}"
+$ terraform import google_firebase_web_app.default projects/{{project}}/webApps/{{app_id}}
+$ terraform import google_firebase_web_app.default {{project}}/{{project}}/{{app_id}}
+$ terraform import google_firebase_web_app.default webApps/{{app_id}}
+$ terraform import google_firebase_web_app.default {{app_id}}
+```
+
+## User Project Overrides
+
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

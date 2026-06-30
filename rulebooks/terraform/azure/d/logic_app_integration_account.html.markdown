@@ -1,0 +1,54 @@
+---
+type: official_reference
+tool: terraform-azurerm
+authority: external_reference
+---
+
+# Data Source: azurerm_logic_app_integration_account
+
+Use this data source to access information about an existing Logic App Integration Account.
+
+## Example Usage
+
+```hcl
+data "azurerm_logic_app_integration_account" "example" {
+  name                = "example-account"
+  resource_group_name = "example-resource-group"
+}
+
+output "id" {
+  value = data.azurerm_logic_app_integration_account.example.id
+}
+```
+
+## Arguments Reference
+
+The following arguments are supported:
+
+* `name` - (Required) The name of this Logic App Integration Account.
+
+* `resource_group_name` - (Required) The name of the Resource Group where the Logic App Integration Account exists.
+
+## Attributes Reference
+
+In addition to the Arguments listed above - the following Attributes are exported:
+
+* `id` - The ID of the Logic App Integration Account.
+
+* `location` - The Azure Region where the Logic App Integration Account exists.
+
+* `sku_name` - The SKU name of the Logic App Integration Account.
+
+* `tags` - A mapping of tags assigned to the Logic App Integration Account.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://developer.hashicorp.com/terraform/language/resources/configure#define-operation-timeouts) for certain actions:
+
+* `read` - (Defaults to 5 minutes) Used when retrieving the Logic App Integration Account.
+
+## API Providers
+<!-- This section is generated, changes will be overwritten -->
+This data source uses the following Azure API Providers:
+
+* `Microsoft.Logic` - 2019-05-01
