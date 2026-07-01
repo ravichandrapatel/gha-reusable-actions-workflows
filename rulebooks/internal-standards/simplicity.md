@@ -8,8 +8,7 @@ authority: internal_governance
 
 The mandatory posture for all code work: **the laziest solution that actually works** — simplest,
 shortest, most minimal. Lazy means efficient, not careless. The best code is code never written.
-Default posture is **full** (the ladder below enforced). Synthesized from the `ponytail` skill set
-([DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail/tree/main/skills)).
+Default posture is **full** (the ladder below enforced).
 
 ## 1. Intent
 - Prevent over-engineering: speculative abstractions, reinvented stdlib, needless dependencies, dead
@@ -27,8 +26,8 @@ Default posture is **full** (the ladder below enforced). Synthesized from the `p
 | **P6** | Deletion over addition | Fewest files. Shortest working diff. Boring over clever (clever is what someone decodes at 3am). |
 | **P7** | Correct over flimsy | Two equal-size options → take the one correct on edge cases. Lazy means less code, not a weaker algorithm. |
 | **P8** | Leave one check | Non-trivial logic (branch, loop, parser, money/security path) leaves ONE runnable check (an `assert`-based self-check or one small `test_*`). Trivial one-liners need none — YAGNI applies to tests too. |
-| **P9** | Mark deliberate shortcuts | Tag simplifications with a `ponytail:` comment naming the ceiling and upgrade path (e.g. `# ponytail: global lock, per-account locks if throughput matters`). |
-| **P10** | Track shortcut debt | Deferrals must be harvestable (§6). A `ponytail:` comment with no named trigger is a rot risk. |
+| **P9** | Mark deliberate shortcuts | Tag simplifications with a `shortcut:` comment naming the ceiling and upgrade path (e.g. `# shortcut: global lock, per-account locks if throughput matters`). |
+| **P10** | Track shortcut debt | Deferrals must be harvestable (§6). A `shortcut:` comment with no named trigger is a rot risk. |
 | **P11** | Review only complexity | Over-engineering review/audit (§5) is scoped to complexity; correctness, security, and performance go to a normal review pass. |
 | **P12** | Output discipline | Code first, then ≤3 short lines: what was skipped, when to add it. If the explanation is longer than the code, delete the explanation. Requested reports/walkthroughs are exempt. |
 | **P13** | Honest metrics | Never invent per-repo savings numbers — the unbuilt version has no baseline. Only counted ledgers (§6) are real figures. |
@@ -67,8 +66,8 @@ End with `net: -<N> lines (-<M> deps) possible.` Nothing to cut → `Lean alread
 A single smoke test / `assert` self-check (P8) is the minimum, never flag it for deletion.
 
 ## 6. Deliberate-Shortcut Debt Ledger
-Harvest the `ponytail:` markers so a deferral can't become permanent:
-`grep -rnE '(#|//) ?ponytail:' .` (skip `node_modules`, `.git`, build output).
+Harvest the `shortcut:` markers so a deferral can't become permanent:
+`grep -rnE '(#|//) ?shortcut:' .` (skip `node_modules`, `.git`, build output).
 One row per marker: `<file>:<line>, <what was simplified>. ceiling: <limit>. upgrade: <trigger>.`
 Any marker with no upgrade path/trigger is tagged `no-trigger` (silent rot). End with
-`<N> markers, <M> with no trigger.` Nothing found → `No ponytail: debt. Clean ledger.`
+`<N> markers, <M> with no trigger.` Nothing found → `No shortcut: debt. Clean ledger.`
