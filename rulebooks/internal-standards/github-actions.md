@@ -30,16 +30,25 @@ This document defines the mandatory standards for writing and testing GitHub Act
 
 ### 2.2 Security and Permissions
 - **Least Privilege**: Every job MUST have an explicit `permissions:` block. Default to `contents: read` at the top level and for each job.
+- **Explicit Permissions Only (No Anchors)**: Declare `permissions:` explicitly per job. NEVER use YAML anchors/aliases for `permissions` — schema validation and SPVS-style audits must see the exact scope without resolving references. Anchors are acceptable only for non-security repeated blocks (e.g. checkout steps).
 - **Secrets Masking**: If a step generates a sensitive value dynamically, call `echo "::add-mask::$VALUE"` immediately.
 - **Untrusted Inputs**: NEVER interpolate `${{ github.event... }}` or `${{ inputs... }}` directly in a `run:` block. Map them to environment variables first.
 - **SHA Pinning**: Pin third-party actions by their full **40-character commit SHA**.
 - **OIDC**: Use OIDC for cloud deployments (`id-token: write` + cloud login actions) instead of static secrets.
+- **Prohibited Patterns**: No `curl | bash` (or `wget | sh`) without checksum verification; no hardcoded tokens/secrets; no workflow-level `permissions: write-all`.
 
 ### 2.3 Hardening and Reliability
 - **Shell Hardening**: Start every bash `run:` block with `set -euo pipefail`.
 - **Timeout**: Always specify a `timeout-minutes` for jobs.
 - **Workflow Constraints**: Only one `.yml`/`.yaml` file is allowed per workflow component directory.
 - **Write Operations**: Jobs with `permissions.contents: write` must set an `environment:`.
+
+### 2.4 Commit Messages
+- Use conventional commits with a ticket prefix (e.g. `DCDT-1234 feat: ...`); this drives versioning/release.
+- Do NOT include bot names (e.g. "cursor-bot") in commit messages, and do NOT add tool trailers (e.g. `Made-with: ...`).
+
+> **Policy enforcement:** These rules are automatically verified by Conftest/SPVS policies. See the
+> [Conftest Standard](./conftest.md) for the full check catalog and the skip mechanism.
 
 ## 3. Testing and Validation
 

@@ -8,7 +8,7 @@ In this workspace, **Internal Standards ALWAYS override Official Reference files
 
 When GitHub Copilot or any engineer is looking for guidance:
 1. Check `rulebooks/internal-standards/` first.
-2. If no internal standard exists, refer to the domain-specific official reference folders within `rulebooks/` (e.g., `rulebooks/github-actions/`, `rulebooks/terraform/`, `rulebooks/kubernetes/`).
+2. If no internal standard exists, refer to the domain-specific official reference folders within `rulebooks/official/` (e.g., `rulebooks/official/github-actions/`, `rulebooks/official/terraform/`, `rulebooks/official/kubernetes/`).
 3. If there is a conflict, the internal standard is the source of truth.
 
 ## The OKF Standard

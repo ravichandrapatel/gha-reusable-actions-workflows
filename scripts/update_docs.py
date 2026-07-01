@@ -11,7 +11,7 @@ DOCS_CONFIG = {
         "repo": "https://github.com/github/docs.git",
         "sparse_path": "content/actions",
         "source_subpath": "content/actions",
-        "target_dir": "rulebooks/github-actions",
+        "target_dir": "rulebooks/official/github-actions",
         "tool_name": "github-actions",
         "cleanup_patterns": ["01-introduction.md", "02-writing-components.md", "03-dev-hooks.md", "04-local-testing.md", "05-release-checklist.md", "06-inline-policy-skips.md"]
     },
@@ -19,7 +19,7 @@ DOCS_CONFIG = {
         "repo": "https://github.com/hashicorp/web-unified-docs.git",
         "sparse_path": "content/terraform",
         "source_subpath": "content/terraform/v1.15.x/docs", # Note: Update version as needed
-        "target_dir": "rulebooks/terraform",
+        "target_dir": "rulebooks/official/terraform",
         "tool_name": "terraform",
         "subdirs": ["cli", "intro", "language"]
     },
@@ -27,35 +27,35 @@ DOCS_CONFIG = {
         "repo": "https://github.com/hashicorp/terraform-provider-aws.git",
         "sparse_path": "website/docs",
         "source_subpath": "website/docs",
-        "target_dir": "rulebooks/terraform/aws",
+        "target_dir": "rulebooks/official/terraform/aws",
         "tool_name": "terraform-aws"
     },
     "terraform-provider-azure": {
         "repo": "https://github.com/hashicorp/terraform-provider-azurerm.git",
         "sparse_path": "website/docs",
         "source_subpath": "website/docs",
-        "target_dir": "rulebooks/terraform/azure",
+        "target_dir": "rulebooks/official/terraform/azure",
         "tool_name": "terraform-azurerm"
     },
     "terraform-provider-gcp": {
         "repo": "https://github.com/hashicorp/terraform-provider-google.git",
         "sparse_path": "website/docs",
         "source_subpath": "website/docs",
-        "target_dir": "rulebooks/terraform/gcp",
+        "target_dir": "rulebooks/official/terraform/gcp",
         "tool_name": "terraform-google"
     },
     "terraform-provider-kubernetes": {
         "repo": "https://github.com/hashicorp/terraform-provider-kubernetes.git",
         "sparse_path": "docs",
         "source_subpath": "docs",
-        "target_dir": "rulebooks/terraform/kubernetes",
+        "target_dir": "rulebooks/official/terraform/kubernetes",
         "tool_name": "terraform-kubernetes"
     },
     "kubernetes-core": {
         "repo": "https://github.com/kubernetes/website.git",
         "sparse_path": "content/en/docs",
         "source_subpath": "content/en/docs",
-        "target_dir": "rulebooks/kubernetes",
+        "target_dir": "rulebooks/official/kubernetes",
         "tool_name": "kubernetes",
         "subdirs": ["concepts", "setup", "tasks", "tutorials", "reference"]
     },
@@ -63,7 +63,7 @@ DOCS_CONFIG = {
         "repo": "https://github.com/OWASP/www-project-spvs.git",
         "sparse_path": "1.5",
         "source_subpath": "1.5",
-        "target_dir": "rulebooks/owasp-spvs",
+        "target_dir": "rulebooks/official/owasp-spvs",
         "tool_name": "owasp-spvs"
     }
 }

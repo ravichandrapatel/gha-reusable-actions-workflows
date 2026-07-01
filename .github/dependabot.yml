@@ -1,7 +1,26 @@
 version: 2
 updates:
+  # Core Workflows in .github/workflows
   - package-ecosystem: "github-actions"
     directory: "/"
+    schedule:
+      interval: "daily"
+    commit-message:
+      prefix: "DCDT-0000 chore"
+    # Only update the specific workflows requested
+    allow:
+      - dependency-name: "actions/checkout"
+      - dependency-name: "actions/setup-python"
+      - dependency-name: "actions/create-github-app-token"
+      - dependency-name: "dependabot/fetch-metadata"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Composite Actions with external dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/actions/common/drift-auditor"
     schedule:
       interval: "daily"
     commit-message:
@@ -10,3 +29,32 @@ updates:
       actions:
         patterns:
           - "*"
+
+  # Pip dependencies for specific actions and root
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    commit-message:
+      prefix: "DCDT-0000 chore"
+
+  - package-ecosystem: "pip"
+    directory: "/actions/common/git-path-filter"
+    schedule:
+      interval: "daily"
+    commit-message:
+      prefix: "DCDT-0000 chore"
+
+  - package-ecosystem: "pip"
+    directory: "/actions/common/janitor-bot"
+    schedule:
+      interval: "daily"
+    commit-message:
+      prefix: "DCDT-0000 chore"
+
+  - package-ecosystem: "pip"
+    directory: "/actions/common/prbot"
+    schedule:
+      interval: "daily"
+    commit-message:
+      prefix: "DCDT-0000 chore"
