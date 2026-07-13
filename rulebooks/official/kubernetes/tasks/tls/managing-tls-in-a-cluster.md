@@ -7,10 +7,10 @@ authority: external_reference
 <!-- overview -->
 
 Kubernetes provides a `certificates.k8s.io` API, which lets you provision TLS
-certificates signed by a Certificate Authority (CA) that you control. These CA
+certificates signed by a Certificate Authority (CA) that you control. These CAs
 and certificates can be used by your workloads to establish trust.
 
-`certificates.k8s.io` API uses a protocol that is similar to the [ACME
+The `certificates.k8s.io` API uses a protocol that is similar to the [ACME
 draft](https://github.com/ietf-wg-acme/acme/).
 
 {{< note >}}
@@ -42,7 +42,7 @@ install it via your operating system's software sources, or fetch it from
 Trusting the [custom CA](#configuring-your-cluster-to-provide-signing) from an application running as a pod usually requires
 some extra application configuration. You will need to add the CA certificate
 bundle to the list of CA certificates that the TLS client or server trusts. For
-example, you would do this with a golang TLS config by parsing the certificate
+example, you would do this with a Golang TLS config by parsing the certificate
 chain and adding the parsed certificates to the `RootCAs` field in the
 [`tls.Config`](https://pkg.go.dev/crypto/tls#Config) struct.
 
@@ -65,7 +65,8 @@ The following section demonstrates how to create a TLS certificate for a
 Kubernetes service accessed through DNS.
 
 {{< note >}}
-This tutorial uses CFSSL: Cloudflare's PKI and TLS toolkit [click here](https://blog.cloudflare.com/introducing-cfssl/) to know more.
+This tutorial uses CFSSL: Cloudflare's PKI and TLS toolkit See the Cloudflare blog
+article [Introducing CFSSL - CloudFlare's PKI toolkit](https://blog.cloudflare.com/introducing-cfssl/) for more information.
 {{< /note >}}
 
 ## Create a certificate signing request
@@ -94,7 +95,7 @@ EOF
 Where `192.0.2.24` is the service's cluster IP,
 `my-svc.my-namespace.svc.cluster.local` is the service's DNS name,
 `10.0.34.2` is the pod's IP and `my-pod.my-namespace.pod.cluster.local`
-is the pod's DNS name. You should see the output similar to:
+is the pod's DNS name. You should see output similar to:
 
 ```
 2022/02/01 11:45:32 [INFO] generate received request
@@ -110,7 +111,7 @@ is still to be created.
 
 ## Create a CertificateSigningRequest object to send to the Kubernetes API
 
-Generate a CSR manifest (in YAML), and send it to the API server. You can do that by
+Generate a CSR manifest (in YAML) and send it to the API server. You can do that by
 running the following command:
 
 ```shell
@@ -137,7 +138,7 @@ A specific `signerName` must be requested.
 View documentation for [supported signer names](/docs/reference/access-authn-authz/certificate-signing-requests/#signers)
 for more information.
 
-The CSR should now be visible from the API in a Pending state. You can see
+The CSR should now be visible in the API in a Pending state. You can see
 it by running:
 
 ```shell
@@ -166,7 +167,7 @@ Events: <none>
 ## Get the CertificateSigningRequest approved {#get-the-certificate-signing-request-approved}
 
 Approving the [certificate signing request](/docs/reference/access-authn-authz/certificate-signing-requests/)
-is either done by an automated approval process or on a one off basis by a cluster
+is either done by an automated approval process or on a one-off basis by a cluster
 administrator. If you're authorized to approve a certificate request, you can do that
 manually using `kubectl`; for example:
 
@@ -305,7 +306,7 @@ kubectl create secret tls server --cert server.crt --key server-key.pem
 secret/server created
 ```
 
-Finally, you can populate `ca.pem` into a {{< glossary_tooltip text="ConfigMap" term_id="configmap" >}}
+Finally, you can store `ca.pem` in a {{< glossary_tooltip text="ConfigMap" term_id="configmap" >}}
 and use it as the trust root to verify the serving certificate:
 
 ```shell
@@ -333,7 +334,7 @@ that fall on the approver **and** the repercussions of issuing a specific certif
 before you grant the `approve` permission.
 {{< /caution >}}
 
-Whether a machine or a human using kubectl as above, the role of the _approver_ is
+Whether the approver is a machine or a human using kubectl as above, the role of the _approver_ is
 to verify that the CSR satisfies two requirements:
 
 1. The subject of the CSR controls the private key used to sign the CSR. This
