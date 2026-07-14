@@ -240,6 +240,45 @@ configure_repo_hooks() {
     fi
 }
 
+# INTENT: Configure global commit-msg hook for Git.
+# INPUT: None.
+# OUTPUT: None.
+# SIDE_EFFECTS: Configures git global core.hooksPath and installs the hook.
+configure_global_commit_hook() {
+    local repo_root hooks_dir hook_src
+    
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        _log "Not inside a git repository — skipping global commit-hook configuration."
+        return 0
+    fi
+
+    repo_root="$(git rev-parse --show-toplevel)"
+    hooks_dir="${HOME}/.git-templates/hooks"
+    hook_src="${repo_root}/policies/scripts/hooks/commit-msg"
+    lib_src="${repo_root}/policies/scripts/commit_message_lib.sh"
+    
+    _log "Configuring global commit-msg hook..."
+    mkdir -p "${hooks_dir}"
+    
+    if [[ ! -f "${hook_src}" ]]; then
+        _log "WARNING: Hook source ${hook_src} not found — skipping global config."
+        return 0
+    fi
+
+    if [[ ! -f "${lib_src}" ]]; then
+        _log "WARNING: Library source ${lib_src} not found — skipping global config."
+        return 0
+    fi
+    
+    cp "${hook_src}" "${hooks_dir}/commit-msg"
+    cp "${lib_src}" "${hooks_dir}/commit_message_lib.sh"
+    chmod +x "${hooks_dir}/commit-msg"
+    chmod +x "${hooks_dir}/commit_message_lib.sh"
+    
+    git config --global core.hooksPath "${hooks_dir}"
+    _log "Global git core.hooksPath set to ${hooks_dir}"
+}
+
 # 1. Machine-wide tooling
 install_python_tools
 install_actionlint
@@ -252,7 +291,10 @@ bandit --version
 conftest --version
 actionlint -version
 
-# 2. Optional repo pre-commit install (commit-msg is global, not repo-level)
+# 2. Global commit-msg hook configuration
+configure_global_commit_hook
+
+# 3. Optional repo pre-commit install
 configure_repo_hooks
 
 _log "Success! Hook tooling is installed."

@@ -1,9 +1,0 @@
----
-type: official_reference
-tool: kubernetes
-authority: external_reference
----
-
-Allow using systemd watchdog to monitor the health status of kubelet.
-See [Kubelet Systemd Watchdog](/docs/reference/node/systemd-watchdog/)
-for more details.

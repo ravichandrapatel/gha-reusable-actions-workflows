@@ -1,0 +1,290 @@
+[
+  {
+    "id": "kernel/modules/github-actions",
+    "path": "kernel/modules/github-actions.md",
+    "title": "GitHub Actions Module",
+    "description": "Core domain module for composite actions, reusable workflows, Release Manager, and SPVS policy governance in gha-reusable-actions-workflows.",
+    "tags": [
+      "kernel",
+      "module",
+      "github-actions",
+      "spvs"
+    ],
+    "type": "Module"
+  },
+  {
+    "id": "kernel/vendors/owasp",
+    "path": "kernel/vendors/owasp.md",
+    "title": "OWASP Vendor Extension",
+    "description": "OWASP SPVS alignment and Dependency-Check action constraints for the GitHub Actions module.",
+    "tags": [
+      "kernel",
+      "vendor",
+      "owasp",
+      "spvs",
+      "security"
+    ],
+    "type": "Vendor"
+  },
+  {
+    "id": "standards/gha-commit-subjects",
+    "path": "standards/gha-commit-subjects.md",
+    "title": "GHA Commit Subjects",
+    "description": "Ticket-prefixed conventional commit subjects required for hooks and SemVer bumps.",
+    "tags": [
+      "standard",
+      "github-actions",
+      "commits",
+      "semver"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "standards/gha-component-layout",
+    "path": "standards/gha-component-layout.md",
+    "title": "GHA Component Layout",
+    "description": "Required directory contract for composite actions and reusable workflows in the monorepo.",
+    "tags": [
+      "standard",
+      "github-actions",
+      "layout",
+      "monorepo"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "standards/gha-spvs-yaml",
+    "path": "standards/gha-spvs-yaml.md",
+    "title": "GHA SPVS YAML",
+    "description": "OWASP SPVS Conftest policy catalog for workflow and composite action YAML (MUST pass, no soft-fail).",
+    "tags": [
+      "standard",
+      "github-actions",
+      "spvs",
+      "conftest",
+      "security"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "standards/metadata-headers",
+    "path": "standards/metadata-headers.md",
+    "title": "Metadata Headers",
+    "description": "Required metadata blocks on every new file, function, and class across all languages.",
+    "tags": [
+      "standard",
+      "code-quality",
+      "documentation",
+      "conventions"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "standards/okf-prompt-injection",
+    "path": "standards/okf-prompt-injection.md",
+    "title": "OKF Prompt Injection",
+    "description": "Binding rule \u2014 agents MUST inject slim Prompt Cards from the vault, never paste the whole brain or full standards into generation context.",
+    "tags": [
+      "standard",
+      "okf",
+      "prompting",
+      "tokens",
+      "aegis"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "standards/simplicity-first",
+    "path": "standards/simplicity-first.md",
+    "title": "Simplicity First (Rule #1)",
+    "description": "The Laziness Ladder \u2014 always choose the simplest, shortest, minimal solution that works. Overrides complexity in design, code, and vault structure.",
+    "tags": [
+      "standard",
+      "simplicity",
+      "laziness-ladder",
+      "principles"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "vault/concepts/component-tagging",
+    "path": "vault/concepts/component-tagging.md",
+    "title": "Component Tagging",
+    "description": "safe_name derivation and versioned vs stable tag conventions for GHA components.",
+    "tags": [
+      "github-actions",
+      "tagging",
+      "release",
+      "concepts"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "vault/concepts/extending-aegis",
+    "path": "vault/concepts/extending-aegis.md",
+    "title": "Extending Aegis",
+    "description": "How to grow this empty framework with your own modules, vendors, standards, and vault knowledge.",
+    "tags": [
+      "aegis-system",
+      "getting-started",
+      "framework"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "vault/concepts/gha-yaml-anchors",
+    "path": "vault/concepts/gha-yaml-anchors.md",
+    "title": "GHA YAML Anchors",
+    "description": "Reuse env, steps, or jobs inside one GitHub Actions workflow with YAML anchors (&) and aliases (*) \u2014 no merge keys.",
+    "tags": [
+      "github-actions",
+      "yaml",
+      "anchors",
+      "workflow",
+      "reuse"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "vault/concepts/minimal-okf-prompt-cards",
+    "path": "vault/concepts/minimal-okf-prompt-cards.md",
+    "title": "Minimal OKF Prompt Cards",
+    "description": "Inject a short SPVS checklist + pin cache into agent prompts \u2014 not the full standard \u2014 for one-shot Conftest-pass.",
+    "tags": [
+      "github-actions",
+      "okf",
+      "prompting",
+      "tokens",
+      "spvs"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "vault/concepts/release-manager-modes",
+    "path": "vault/concepts/release-manager-modes.md",
+    "title": "Release Manager Modes",
+    "description": "release, promote, and rollback semantics for the gha-reusable-actions-workflows Release Manager.",
+    "tags": [
+      "github-actions",
+      "release-manager",
+      "concepts"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "vault/concepts/semver-from-commits",
+    "path": "vault/concepts/semver-from-commits.md",
+    "title": "SemVer from Commits",
+    "description": "How ticket conventional commits map to SemVer bumps for component tags.",
+    "tags": [
+      "github-actions",
+      "semver",
+      "commits",
+      "concepts"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "vault/concepts/spvs-lifecycle",
+    "path": "vault/concepts/spvs-lifecycle.md",
+    "title": "SPVS Lifecycle",
+    "description": "OWASP SPVS Plan/Integrate/Release/Operate stages mapped onto this monorepo's controls.",
+    "tags": [
+      "github-actions",
+      "spvs",
+      "lifecycle",
+      "concepts"
+    ],
+    "type": "Concept"
+  },
+  {
+    "id": "vault/playbooks/author-gha-composite-action",
+    "path": "vault/playbooks/author-gha-composite-action.md",
+    "title": "Author GHA Composite Action",
+    "description": "Scaffold and validate a new composite action under actions/{category}/{name}/.",
+    "tags": [
+      "github-actions",
+      "playbook",
+      "authoring"
+    ],
+    "type": "Playbook"
+  },
+  {
+    "id": "vault/playbooks/bootstrap-spvs-dev-environment",
+    "path": "vault/playbooks/bootstrap-spvs-dev-environment.md",
+    "title": "Bootstrap SPVS Dev Environment",
+    "description": "Install local hooks and scanners for gha-reusable-actions-workflows development.",
+    "tags": [
+      "github-actions",
+      "spvs",
+      "playbook",
+      "bootstrap"
+    ],
+    "type": "Playbook"
+  },
+  {
+    "id": "vault/playbooks/maintain-aegis-system",
+    "path": "vault/playbooks/maintain-aegis-system.md",
+    "title": "Maintain aegis-system",
+    "description": "How to add or update concepts, playbooks, references, scripts, and skills in the aegis-system OKF vault \u2014 with post-change verification.",
+    "tags": [
+      "aegis-system",
+      "ingest",
+      "maintenance",
+      "okf",
+      "procedure"
+    ],
+    "type": "Playbook"
+  },
+  {
+    "id": "vault/playbooks/release-gha-component",
+    "path": "vault/playbooks/release-gha-component.md",
+    "title": "Release GHA Component",
+    "description": "Run Release Manager mode release/promote/rollback for a monorepo component.",
+    "tags": [
+      "github-actions",
+      "playbook",
+      "release"
+    ],
+    "type": "Playbook"
+  },
+  {
+    "id": "vault/playbooks/run-gha-local-policy-tests",
+    "path": "vault/playbooks/run-gha-local-policy-tests.md",
+    "title": "Run GHA Local Policy Tests",
+    "description": "Execute Conftest verify/scan and policy unit tests for the monorepo.",
+    "tags": [
+      "github-actions",
+      "playbook",
+      "conftest",
+      "testing"
+    ],
+    "type": "Playbook"
+  },
+  {
+    "id": "vault/references/gha-reusable-readme",
+    "path": "vault/references/gha-reusable-readme.md",
+    "title": "gha-reusable-actions-workflows README",
+    "description": "Cached pointer to the monorepo README \u2014 architecture, SPVS catalog, release lifecycle.",
+    "tags": [
+      "github-actions",
+      "readme",
+      "reference"
+    ],
+    "type": "Reference"
+  },
+  {
+    "id": "vault/systems/gha-reusable-actions-workflows",
+    "path": "vault/systems/gha-reusable-actions-workflows.md",
+    "title": "gha-reusable-actions-workflows",
+    "description": "Monorepo for reusable GitHub Actions, reusable workflows, SPVS Conftest policies, and Release Manager lifecycle.",
+    "tags": [
+      "github-actions",
+      "spvs",
+      "release-manager",
+      "monorepo",
+      "system"
+    ],
+    "type": "System"
+  }
+]

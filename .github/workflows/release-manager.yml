@@ -2,7 +2,7 @@
 # FILE_NAME: release-manager.yml
 # DESCRIPTION: Release, Promote, and Rollback manager for actions and workflows.
 # ALIGNMENT: OWASP SPVS (Secure Pipeline Verification Standard) 1.0
-# VERSION: 1.8.0
+# VERSION: 1.8.1
 # EXIT_CODES/SIGNALS: 0 on success, 1 on failure.
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -25,7 +25,7 @@ on:
           - promote   # Update stable tag (name-v1) to version
           - rollback  # Revert stable tag (name-v1) to previous version
       version:
-        description: 'Optional for release (auto-derived); Required for promote/rollback to select specific version'
+        description: 'Optional. Release: auto-derived if empty. Promote/rollback: defaults to latest versioned tag if empty (pass explicitly to target a specific X.Y.Z).'
         required: false
         type: string
 
@@ -86,7 +86,17 @@ jobs:
           fi
 
           NAME=$(basename "$COMPONENT_PATH")
-          SAFE_NAME=$(echo "$NAME" | tr '/' '-')
+          # Tag prefix stays basename for existing tags; reject duplicate basenames across categories.
+          SAFE_NAME="$NAME"
+          DUP_HITS=()
+          while IFS= read -r -d '' hit; do
+            DUP_HITS+=("$hit")
+          done < <(find actions workflows -mindepth 2 -maxdepth 2 -type d -name "$NAME" -print0 2>/dev/null || true)
+          if [[ ${#DUP_HITS[@]} -gt 1 ]]; then
+            echo "[ERR-T-02c] Ambiguous basename '$NAME' used by multiple components: ${DUP_HITS[*]}" >&2
+            echo "[ERR-T-02c] Rename one component or release cannot choose a unique tag prefix." >&2
+            exit 1
+          fi
 
           # [T-02a] Discover workflow file if type is workflow
           WORKFLOW_FILE_OUTPUT=""
@@ -209,7 +219,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -240,13 +249,16 @@ jobs:
           sudo install -m 755 actionlint /usr/local/bin/actionlint
           rm -f "${ACTIONLINT_ARCHIVE}" actionlint
           
-          echo "[DBG-016] Installing Conftest (pinned release)"
+          echo "[DBG-016] Installing Conftest (pinned release + checksum)"
           CONFTEST_VERSION="0.56.0"
-          curl -fsSL -o conftest.tar.gz \
-            "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
-          tar xzf conftest.tar.gz conftest
+          CONFTEST_SHA256="620f41640d63bbde1646a108ce2816ba54c980466ceebb7e754dda2d508e8cd5"
+          CONFTEST_ARCHIVE="conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
+          curl -fsSL -o "${CONFTEST_ARCHIVE}" \
+            "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/${CONFTEST_ARCHIVE}"
+          echo "${CONFTEST_SHA256}  ${CONFTEST_ARCHIVE}" | sha256sum -c -
+          tar xzf "${CONFTEST_ARCHIVE}" conftest
           sudo install -m 755 conftest /usr/local/bin/conftest
-          rm -f conftest.tar.gz conftest
+          rm -f "${CONFTEST_ARCHIVE}" conftest
           
           echo "[DBG-016a] Verifying tool installations"
           bandit --version
@@ -308,7 +320,7 @@ jobs:
           else
             scan_file="$COMPONENT_PATH/$WF_FILE"
             if [[ ! -f "$scan_file" ]]; then
-              echo "[ERR-T-06] Workflow file not found: $scan_file" >&2
+              echo "[ERR-T-06b] Workflow file not found: $scan_file" >&2
               exit 1
             fi
             echo "[DBG-019a] Scanning workflow: $scan_file"
@@ -324,10 +336,11 @@ jobs:
           COMPONENT_PATH: ${{ github.event.inputs.component_path }}
         run: |
           set -euo pipefail
-          # [T-07] Running bandit on Python files
+          # [T-07] Running bandit on Python files (recursive under component)
           echo "[DBG-021] Checking for Python files in $COMPONENT_PATH"
-          if ls "$COMPONENT_PATH"/*.py >/dev/null 2>&1; then
-            echo "[DBG-022] Starting Bandit scan"
+          mapfile -t PY_FILES < <(find "$COMPONENT_PATH" -type f -name '*.py' -print | sort || true)
+          if [[ ${#PY_FILES[@]} -gt 0 ]]; then
+            echo "[DBG-022] Starting Bandit scan (${#PY_FILES[@]} file(s))"
             bandit -r "$COMPONENT_PATH"
             echo "[DBG-023] Bandit scan completed successfully"
           else
@@ -339,11 +352,12 @@ jobs:
           COMPONENT_PATH: ${{ github.event.inputs.component_path }}
         run: |
           set -euo pipefail
-          # [T-08] Running shellcheck on shell scripts
+          # [T-08] Running shellcheck on shell scripts (recursive under component)
           echo "[DBG-025] Checking for Shell scripts in $COMPONENT_PATH"
-          if ls "$COMPONENT_PATH"/*.sh >/dev/null 2>&1; then
-            echo "[DBG-026] Starting Shellcheck scan"
-            shellcheck "$COMPONENT_PATH"/*.sh
+          mapfile -t SH_FILES < <(find "$COMPONENT_PATH" -type f -name '*.sh' -print | sort || true)
+          if [[ ${#SH_FILES[@]} -gt 0 ]]; then
+            echo "[DBG-026] Starting Shellcheck scan (${#SH_FILES[@]} file(s))"
+            shellcheck "${SH_FILES[@]}"
             echo "[DBG-027] Shellcheck scan completed successfully"
           else
             echo "[DBG-028] No shell scripts found, skipping Shellcheck."
@@ -386,12 +400,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Setup Python
-        if: github.event.inputs.mode == 'promote'
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
-        with:
-          python-version: '3.12'
-
       - name: Execute Release/Promote/Rollback
         id: execute_step
         shell: bash
@@ -412,6 +420,11 @@ jobs:
           STABLE_TAG="${SAFE_NAME}-v1"
           VERSION_TAG="${SAFE_NAME}-${VERSION}"
 
+          sync_main_with_retry() {
+            # Reduce race with concurrent merges on main before push
+            git pull --rebase origin main
+          }
+
           if [[ "$MODE" == "release" ]]; then
             if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
               # [T-12] Syncing workflow to .github/workflows/ (Do this in release so tag includes it)
@@ -421,8 +434,13 @@ jobs:
               mkdir -p .github/workflows
               cp "$SRC_WF" "$DEST_WF"
               git add "$DEST_WF"
-              git commit -m "Sync workflow: $COMPONENT_NAME to $VERSION" || echo "[DBG-036] No changes to commit for workflow sync"
-              git push origin main
+              if git diff --cached --quiet; then
+                echo "[DBG-036] No changes to commit for workflow sync"
+              else
+                git commit -m "DCDT-0000 chore(release): sync workflow ${COMPONENT_NAME} to ${VERSION}"
+                sync_main_with_retry
+                git push origin main
+              fi
               echo "[DBG-037] Successfully synced workflow to main"
             fi
 
@@ -448,10 +466,19 @@ jobs:
 
           elif [[ "$MODE" == "rollback" ]]; then
             echo "[DBG-038] Starting rollback for $STABLE_TAG"
-            # Find previous versioned tag
-            PREV_TAG=$(git tag -l "${SAFE_NAME}-[0-9]*" | sort -V | grep -B1 "$VERSION_TAG" | head -n1 || true)
+            # Previous versioned tag via sorted list index (not grep -B1)
+            mapfile -t VERSION_TAGS < <(git tag -l "${SAFE_NAME}-[0-9]*" | sort -V)
+            PREV_TAG=""
+            for i in "${!VERSION_TAGS[@]}"; do
+              if [[ "${VERSION_TAGS[$i]}" == "$VERSION_TAG" ]]; then
+                if [[ "$i" -gt 0 ]]; then
+                  PREV_TAG="${VERSION_TAGS[$((i - 1))]}"
+                fi
+                break
+              fi
+            done
             if [[ -z "$PREV_TAG" || "$PREV_TAG" == "$VERSION_TAG" ]]; then
-              echo "[ERR-T-06] No previous version found for rollback." >&2
+              echo "[ERR-T-07] No previous version found for rollback from $VERSION_TAG." >&2
               exit 1
             fi
             echo "[DBG-039] Identified previous version: $PREV_TAG"
@@ -464,8 +491,13 @@ jobs:
               cp "$COMPONENT_PATH/$WF_FILE" "$DEST_WF"
               git checkout HEAD -- "$COMPONENT_PATH/$WF_FILE" # Restore current state of source
               git add "$DEST_WF"
-              git commit -m "Rollback workflow: $COMPONENT_NAME to $PREV_TAG" || echo "[DBG-042] No changes to commit for workflow rollback"
-              git push origin main
+              if git diff --cached --quiet; then
+                echo "[DBG-042] No changes to commit for workflow rollback"
+              else
+                git commit -m "DCDT-0000 chore(release): rollback workflow ${COMPONENT_NAME} to ${PREV_TAG}"
+                sync_main_with_retry
+                git push origin main
+              fi
               echo "[DBG-043] Successfully restored workflow file to main"
             fi
 
