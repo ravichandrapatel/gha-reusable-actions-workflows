@@ -19,7 +19,7 @@ You need a new composite GitHub Action in the monorepo.
 # Steps
 
 1. Create `actions/{category}/{name}/` with `action.yml` and `readme.md`.
-2. When an agent authors the action, assemble a **Prompt Pack** with `python3 _okf_knowledge/kernel/okf.py card` on layout + SPVS (+ pins) — see [OKF Prompt Injection](/standards/okf-prompt-injection.md) and [Minimal OKF Prompt Cards](/vault/concepts/minimal-okf-prompt-cards.md). **MUST NOT** paste full standards.
+2. When an agent authors the action, assemble a **Prompt Pack** with `python3 _okf_knowledge/kernel/okf.py card` on layout + SPVS (+ pins) — see [OKF Prompt Injection](/standards/okf-prompt-injection.md). **MUST NOT** paste full standards.
 3. Follow SPVS shell/env patterns: `set -euo pipefail`, map inputs via `env`, pin third-party `uses:` to SHA.
 4. Keep `readme.md` short (inputs/outputs + one usage example).
 5. Run Conftest composite scan:
@@ -54,7 +54,7 @@ PR subject: ticket-prefixed conventional commit.
 
 # Related
 
-- Concept: [Minimal OKF Prompt Cards](/vault/concepts/minimal-okf-prompt-cards.md)
+- Standard: [OKF Prompt Injection](/standards/okf-prompt-injection.md)
 - Standard: [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [GHA component layout](/standards/gha-component-layout.md)
-- Module: [GitHub Actions](/kernel/modules/github-actions.md)
+- Concept: [GitHub Actions](/vault/concepts/github-actions.md)
 - System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)

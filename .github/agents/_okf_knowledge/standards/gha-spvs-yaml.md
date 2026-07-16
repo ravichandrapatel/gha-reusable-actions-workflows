@@ -57,7 +57,6 @@ SPVS MUST (workflow/composite):
 
 ## Related
 
-- Vendor: [OWASP](/kernel/vendors/owasp.md)
 - Concept: [SPVS lifecycle](/vault/concepts/spvs-lifecycle.md)
 - Standard: [OKF Prompt Injection](/standards/okf-prompt-injection.md)
 - System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)

@@ -1,0 +1,842 @@
+# Reusable 8-stage CI pipeline
+# Stages: build-preprocess → build-test-lint → owasp → sonarqube → sonarqube-gate
+#         → publish-to-nexus / docker-build-publish → notification-email
+name: CI Pipeline 8-Stage
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        description: JDK version for build and OWASP Dependency-Check
+        type: string
+        required: false
+        default: "17"
+      node-version:
+        description: Node.js version when package-manager is npm/yarn/pnpm
+        type: string
+        required: false
+        default: "20"
+      package-manager:
+        description: Build toolchain (maven | gradle | npm | yarn | pnpm)
+        type: string
+        required: false
+        default: "maven"
+      build-command:
+        description: Override compile/package command (empty = toolchain default)
+        type: string
+        required: false
+        default: ""
+      test-command:
+        description: Override test command (empty = toolchain default)
+        type: string
+        required: false
+        default: ""
+      lint-command:
+        description: Optional lint command (skipped when empty)
+        type: string
+        required: false
+        default: ""
+      artifact-path:
+        description: Path(s) to upload as build artifacts (newline-separated ok)
+        type: string
+        required: false
+        default: "target/*.jar"
+      docker-context:
+        description: Docker build context directory
+        type: string
+        required: false
+        default: "."
+      docker-file:
+        description: Dockerfile path relative to repository root
+        type: string
+        required: false
+        default: "Dockerfile"
+      docker-image:
+        description: Image name without registry/tag (e.g. my-service)
+        type: string
+        required: true
+      docker-registry:
+        description: Container registry host
+        type: string
+        required: false
+        default: "docker.io"
+      image-tag:
+        description: Image tag (defaults to github.sha)
+        type: string
+        required: false
+        default: ""
+      nexus-repository-url:
+        description: Nexus repository URL for artifact publish
+        type: string
+        required: true
+      nexus-repository-id:
+        description: Maven/Gradle repository id for Nexus credentials
+        type: string
+        required: false
+        default: "nexus"
+      sonar-host-url:
+        description: SonarQube server URL
+        type: string
+        required: true
+      sonar-project-key:
+        description: SonarQube project key
+        type: string
+        required: true
+      sonar-sources:
+        description: Sonar sources path
+        type: string
+        required: false
+        default: "src"
+      owasp-fail-on-cvss:
+        description: Dependency-Check fail threshold (CVSS)
+        type: string
+        required: false
+        default: "11"
+      working-directory:
+        description: Subdirectory containing the project
+        type: string
+        required: false
+        default: "."
+      notification-to:
+        description: Email recipient for pipeline notification
+        type: string
+        required: false
+        default: ""
+      cache-key-suffix:
+        description: Optional suffix to bust caches
+        type: string
+        required: false
+        default: "v1"
+    secrets:
+      SONAR_TOKEN:
+        description: SonarQube authentication token
+        required: true
+      NEXUS_USERNAME:
+        description: Nexus publish username
+        required: true
+      NEXUS_PASSWORD:
+        description: Nexus publish password
+        required: true
+      DOCKER_USERNAME:
+        description: Container registry username
+        required: true
+      DOCKER_PASSWORD:
+        description: Container registry password or token
+        required: true
+      SMTP_HOST:
+        description: SMTP host for notification-email
+        required: false
+      SMTP_PORT:
+        description: SMTP port
+        required: false
+      SMTP_USERNAME:
+        description: SMTP username
+        required: false
+      SMTP_PASSWORD:
+        description: SMTP password
+        required: false
+      SMTP_FROM:
+        description: From address for notification email
+        required: false
+    outputs:
+      build-artifact-name:
+        description: Name of the uploaded build artifact
+        value: ${{ jobs.build-test-lint.outputs.artifact-name }}
+      image-uri:
+        description: Published container image URI
+        value: ${{ jobs.docker-build-publish.outputs.image-uri }}
+      sonar-quality-gate:
+        description: SonarQube quality gate status (OK/ERROR/etc.)
+        value: ${{ jobs.sonarqube-gate.outputs.quality-gate-status }}
+      pipeline-conclusion:
+        description: Overall conclusion reported by notification job
+        value: ${{ jobs.notification-email.outputs.conclusion }}
+
+permissions:
+  contents: read
+  packages: read
+  pull-requests: read
+
+env:
+  BUILD_ARTIFACT_NAME: build-output
+  OWASP_REPORT_ARTIFACT: owasp-dependency-check
+  OWASP_REPORT_DIR: reports/owasp
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. build-preprocess — resolve versions, restore caches, prepare workspace
+  # ---------------------------------------------------------------------------
+  build-preprocess:
+    name: Build preprocess
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      image-tag: ${{ steps.meta.outputs.image-tag }}
+      cache-key: ${{ steps.meta.outputs.cache-key }}
+      package-manager: ${{ steps.meta.outputs.package-manager }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Compute metadata
+        id: meta
+        shell: bash
+        env:
+          INPUT_IMAGE_TAG: ${{ inputs.image-tag }}
+          INPUT_PACKAGE_MANAGER: ${{ inputs.package-manager }}
+          INPUT_CACHE_KEY_SUFFIX: ${{ inputs.cache-key-suffix }}
+          RUNNER_OS: ${{ runner.os }}
+        run: |
+          set -euo pipefail
+          TAG="${INPUT_IMAGE_TAG}"
+          if [[ -z "${TAG}" ]]; then
+            TAG="${GITHUB_SHA}"
+          fi
+          echo "image-tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "package-manager=${INPUT_PACKAGE_MANAGER}" >> "${GITHUB_OUTPUT}"
+          echo "cache-key=${RUNNER_OS}-${INPUT_PACKAGE_MANAGER}-${INPUT_CACHE_KEY_SUFFIX}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up JDK
+        if: inputs.package-manager == 'maven' || inputs.package-manager == 'gradle'
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+
+      - name: Set up Node.js
+        if: inputs.package-manager == 'npm' || inputs.package-manager == 'yarn' || inputs.package-manager == 'pnpm'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Cache Maven repository
+        if: inputs.package-manager == 'maven'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-m2-${{ inputs.cache-key-suffix }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-m2-${{ inputs.cache-key-suffix }}-
+            ${{ runner.os }}-m2-
+
+      - name: Cache Gradle
+        if: inputs.package-manager == 'gradle'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ inputs.cache-key-suffix }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-${{ inputs.cache-key-suffix }}-
+            ${{ runner.os }}-gradle-
+
+      - name: Cache npm
+        if: inputs.package-manager == 'npm'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ inputs.cache-key-suffix }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-${{ inputs.cache-key-suffix }}-
+            ${{ runner.os }}-npm-
+
+      - name: Cache Dependency-Check data
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.dependency-check/data
+          key: ${{ runner.os }}-owasp-dc-${{ inputs.cache-key-suffix }}-${{ hashFiles('**/pom.xml', '**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml', '**/build.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-owasp-dc-${{ inputs.cache-key-suffix }}-
+            ${{ runner.os }}-owasp-dc-
+
+      - name: Upload workspace stamp
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: preprocess-meta
+          path: |
+            ${{ inputs.working-directory }}
+          retention-days: 1
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # 2. build-test-lint — single build; tests + lint; upload build artifacts
+  # ---------------------------------------------------------------------------
+  build-test-lint:
+    name: Build, test, lint
+    needs: [build-preprocess]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      artifact-name: ${{ steps.pack.outputs.artifact-name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up JDK
+        if: needs.build-preprocess.outputs.package-manager == 'maven' || needs.build-preprocess.outputs.package-manager == 'gradle'
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+
+      - name: Set up Node.js
+        if: needs.build-preprocess.outputs.package-manager == 'npm' || needs.build-preprocess.outputs.package-manager == 'yarn' || needs.build-preprocess.outputs.package-manager == 'pnpm'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Restore Maven cache
+        if: needs.build-preprocess.outputs.package-manager == 'maven'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-m2-${{ inputs.cache-key-suffix }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-m2-${{ inputs.cache-key-suffix }}-
+            ${{ runner.os }}-m2-
+
+      - name: Restore Gradle cache
+        if: needs.build-preprocess.outputs.package-manager == 'gradle'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ inputs.cache-key-suffix }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-${{ inputs.cache-key-suffix }}-
+            ${{ runner.os }}-gradle-
+
+      - name: Restore npm cache
+        if: needs.build-preprocess.outputs.package-manager == 'npm'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ inputs.cache-key-suffix }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-${{ inputs.cache-key-suffix }}-
+            ${{ runner.os }}-npm-
+
+      - name: Build once
+        id: build
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        env:
+          PACKAGE_MANAGER: ${{ needs.build-preprocess.outputs.package-manager }}
+          BUILD_COMMAND: ${{ inputs.build-command }}
+        run: |
+          set -euo pipefail
+          PM="${PACKAGE_MANAGER}"
+          CMD="${BUILD_COMMAND}"
+          if [[ -n "${CMD}" ]]; then
+            eval "${CMD}"
+            exit 0
+          fi
+          case "${PM}" in
+            maven)  mvn -B -DskipTests package ;;
+            gradle) ./gradlew assemble -x test ;;
+            npm)    npm ci && npm run build --if-present ;;
+            yarn)   yarn install --frozen-lockfile && yarn build ;;
+            pnpm)   pnpm install --frozen-lockfile && pnpm run build ;;
+            *)      echo "Unsupported package-manager: ${PM}" >&2; exit 1 ;;
+          esac
+
+      - name: Test
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        env:
+          PACKAGE_MANAGER: ${{ needs.build-preprocess.outputs.package-manager }}
+          TEST_COMMAND: ${{ inputs.test-command }}
+        run: |
+          set -euo pipefail
+          PM="${PACKAGE_MANAGER}"
+          CMD="${TEST_COMMAND}"
+          if [[ -n "${CMD}" ]]; then
+            eval "${CMD}"
+            exit 0
+          fi
+          case "${PM}" in
+            maven)  mvn -B test ;;
+            gradle) ./gradlew test ;;
+            npm)    npm test --if-present ;;
+            yarn)   yarn test ;;
+            pnpm)   pnpm test ;;
+          esac
+
+      - name: Lint
+        if: inputs.lint-command != ''
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        env:
+          LINT_COMMAND: ${{ inputs.lint-command }}
+        run: |
+          set -euo pipefail
+          eval "${LINT_COMMAND}"
+
+      - name: Stage artifact paths
+        id: pack
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        env:
+          ARTIFACT_PATH: ${{ inputs.artifact-path }}
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-artifacts
+          while IFS= read -r pattern; do
+            [[ -z "${pattern}" ]] && continue
+            # shellcheck disable=SC2086
+            for f in ${pattern}; do
+              if [[ -e "${f}" ]]; then
+                cp -a "${f}" .ci-artifacts/
+              fi
+            done
+          done <<< "${ARTIFACT_PATH}"
+          if [[ -z "$(ls -A .ci-artifacts 2>/dev/null || true)" ]]; then
+            echo "No files matched artifact-path; creating placeholder marker"
+            echo "built-at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .ci-artifacts/BUILD_MARKER.txt
+          fi
+          echo "artifact-name=${BUILD_ARTIFACT_NAME}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ env.BUILD_ARTIFACT_NAME }}
+          path: ${{ inputs.working-directory }}/.ci-artifacts/
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 3. owasp — Dependency-Check; upload report for Sonar import
+  # ---------------------------------------------------------------------------
+  owasp:
+    name: OWASP Dependency-Check
+    needs: [build-preprocess, build-test-lint]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+
+      - name: Restore Dependency-Check data cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.dependency-check/data
+          key: ${{ runner.os }}-owasp-dc-${{ inputs.cache-key-suffix }}-${{ hashFiles('**/pom.xml', '**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml', '**/build.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-owasp-dc-${{ inputs.cache-key-suffix }}-
+            ${{ runner.os }}-owasp-dc-
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ env.BUILD_ARTIFACT_NAME }}
+          path: ${{ inputs.working-directory }}/.ci-artifacts
+
+      - name: Run OWASP Dependency-Check
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        env:
+          SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
+          OWASP_FAIL_ON_CVSS: ${{ inputs.owasp-fail-on-cvss }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${OWASP_REPORT_DIR}"
+          DC_VERSION="9.2.0"
+          CACHE_DIR="${HOME}/.dependency-check"
+          mkdir -p "${CACHE_DIR}/data" "${CACHE_DIR}/bin"
+          if [[ ! -x "${CACHE_DIR}/bin/dependency-check/bin/dependency-check.sh" ]]; then
+            curl -sSL \
+              "https://github.com/jeremylong/DependencyCheck/releases/download/v${DC_VERSION}/dependency-check-${DC_VERSION}-release.zip" \
+              -o /tmp/dependency-check.zip
+            unzip -q /tmp/dependency-check.zip -d "${CACHE_DIR}/bin"
+          fi
+          "${CACHE_DIR}/bin/dependency-check/bin/dependency-check.sh" \
+            --project "${SONAR_PROJECT_KEY}" \
+            --scan . \
+            --format HTML \
+            --format JSON \
+            --format XML \
+            --out "${OWASP_REPORT_DIR}" \
+            --data "${CACHE_DIR}/data" \
+            --failOnCVSS "${OWASP_FAIL_ON_CVSS}" \
+            --enableExperimental || {
+              echo "Dependency-Check completed with findings or non-zero exit; reports retained"
+            }
+          ls -la "${OWASP_REPORT_DIR}"
+
+      - name: Upload OWASP report artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ env.OWASP_REPORT_ARTIFACT }}
+          path: ${{ inputs.working-directory }}/${{ env.OWASP_REPORT_DIR }}/
+          retention-days: 14
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 4. sonarqube — analysis; import OWASP XML as external dependency-check report
+  # ---------------------------------------------------------------------------
+  sonarqube:
+    name: SonarQube analysis
+    needs: [build-test-lint, owasp]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ env.BUILD_ARTIFACT_NAME }}
+          path: ${{ inputs.working-directory }}/.ci-artifacts
+
+      - name: Download OWASP report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ env.OWASP_REPORT_ARTIFACT }}
+          path: ${{ inputs.working-directory }}/${{ env.OWASP_REPORT_DIR }}
+
+      - name: SonarQube scan (import OWASP)
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
+          SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
+          SONAR_SOURCES: ${{ inputs.sonar-sources }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          OWASP_XML="$(find "${OWASP_REPORT_DIR}" -name 'dependency-check-report.xml' | head -n1)"
+          if [[ -z "${OWASP_XML}" ]]; then
+            echo "OWASP XML report not found under ${OWASP_REPORT_DIR}" >&2
+            exit 1
+          fi
+          SCANNER_VERSION="5.0.1.3006"
+          SCANNER_DIR="${HOME}/.sonar-scanner"
+          if [[ ! -x "${SCANNER_DIR}/bin/sonar-scanner" ]]; then
+            curl -sSL \
+              "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux.zip" \
+              -o /tmp/sonar-scanner.zip
+            unzip -q /tmp/sonar-scanner.zip -d "${HOME}"
+            mv "${HOME}/sonar-scanner-${SCANNER_VERSION}-linux" "${SCANNER_DIR}"
+          fi
+          "${SCANNER_DIR}/bin/sonar-scanner" \
+            -Dsonar.projectKey="${SONAR_PROJECT_KEY}" \
+            -Dsonar.sources="${SONAR_SOURCES}" \
+            -Dsonar.host.url="${SONAR_HOST_URL}" \
+            -Dsonar.token="${SONAR_TOKEN}" \
+            -Dsonar.dependencyCheck.xmlReportPath="${OWASP_XML}" \
+            -Dsonar.dependencyCheck.htmlReportPath="${OWASP_REPORT_DIR}/dependency-check-report.html" \
+            -Dsonar.dependencyCheck.jsonReportPath="${OWASP_REPORT_DIR}/dependency-check-report.json"
+
+  # ---------------------------------------------------------------------------
+  # 5. sonarqube-gate — quality gate MUST pass before publish stages
+  # ---------------------------------------------------------------------------
+  sonarqube-gate:
+    name: SonarQube quality gate
+    needs: [sonarqube]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      quality-gate-status: ${{ steps.gate.outputs.status }}
+    steps:
+      - name: Wait for quality gate
+        id: gate
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
+          SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
+          PYTHONUNBUFFERED: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT_KEY="${SONAR_PROJECT_KEY}"
+          for i in $(seq 1 30); do
+            RESP="$(curl -sS -u "${SONAR_TOKEN}:" \
+              "${SONAR_HOST_URL%/}/api/qualitygates/project_status?projectKey=${PROJECT_KEY}")"
+            STATUS="$(printf '%s' "${RESP}" | python3 -u -c 'import sys,json; print(json.load(sys.stdin).get("projectStatus",{}).get("status","NONE"))' 2>/dev/null || echo NONE)"
+            echo "Attempt ${i}: quality gate status=${STATUS}"
+            if [[ "${STATUS}" == "OK" ]]; then
+              echo "status=${STATUS}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+            if [[ "${STATUS}" == "ERROR" || "${STATUS}" == "WARN" ]]; then
+              echo "status=${STATUS}" >> "${GITHUB_OUTPUT}"
+              echo "Quality gate failed: ${STATUS}" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "status=TIMEOUT" >> "${GITHUB_OUTPUT}"
+          echo "Timed out waiting for SonarQube quality gate" >&2
+          exit 1
+
+  # ---------------------------------------------------------------------------
+  # 6. publish-to-nexus — only after quality gate
+  # ---------------------------------------------------------------------------
+  publish-to-nexus:
+    name: Publish to Nexus
+    needs: [build-test-lint, sonarqube-gate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up JDK
+        if: inputs.package-manager == 'maven' || inputs.package-manager == 'gradle'
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+          server-id: ${{ inputs.nexus-repository-id }}
+          server-username: NEXUS_USERNAME
+          server-password: NEXUS_PASSWORD
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ env.BUILD_ARTIFACT_NAME }}
+          path: ${{ inputs.working-directory }}/.ci-artifacts
+
+      - name: Publish artifacts to Nexus
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+          PACKAGE_MANAGER: ${{ inputs.package-manager }}
+          NEXUS_REPOSITORY_ID: ${{ inputs.nexus-repository-id }}
+          NEXUS_REPOSITORY_URL: ${{ inputs.nexus-repository-url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PM="${PACKAGE_MANAGER}"
+          case "${PM}" in
+            maven)
+              mvn -B deploy -DskipTests \
+                -DaltDeploymentRepository="${NEXUS_REPOSITORY_ID}::default::${NEXUS_REPOSITORY_URL}"
+              ;;
+            gradle)
+              ./gradlew publish -x test \
+                -PnexusUrl="${NEXUS_REPOSITORY_URL}" \
+                -PnexusUsername="${NEXUS_USERNAME}" \
+                -PnexusPassword="${NEXUS_PASSWORD}"
+              ;;
+            npm|yarn|pnpm)
+              shopt -s nullglob
+              files=(.ci-artifacts/*)
+              if [[ ${#files[@]} -eq 0 ]]; then
+                echo "No artifacts to publish" >&2
+                exit 1
+              fi
+              for f in "${files[@]}"; do
+                base="$(basename "${f}")"
+                curl -sfS -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" \
+                  --upload-file "${f}" \
+                  "${NEXUS_REPOSITORY_URL%/}/${base}"
+                echo "Published ${base}"
+              done
+              ;;
+            *)
+              echo "Unsupported package-manager for Nexus: ${PM}" >&2
+              exit 1
+              ;;
+          esac
+
+  # ---------------------------------------------------------------------------
+  # 7. docker-build-publish — consumes build artifacts; after quality gate
+  # ---------------------------------------------------------------------------
+  docker-build-publish:
+    name: Docker build and publish
+    needs: [build-preprocess, build-test-lint, sonarqube-gate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      image-uri: ${{ steps.push.outputs.image-uri }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Download build artifacts into Docker context
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ env.BUILD_ARTIFACT_NAME }}
+          path: ${{ inputs.docker-context }}/.ci-artifacts
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Login to registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ inputs.docker-registry }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        id: push
+        env:
+          IMAGE_TAG: ${{ needs.build-preprocess.outputs.image-tag }}
+          DOCKER_REGISTRY: ${{ inputs.docker-registry }}
+          DOCKER_IMAGE: ${{ inputs.docker-image }}
+          DOCKER_FILE: ${{ inputs.docker-file }}
+          DOCKER_CONTEXT: ${{ inputs.docker-context }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE_URI="${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${IMAGE_TAG}"
+          docker buildx build \
+            --file "${DOCKER_FILE}" \
+            --tag "${IMAGE_URI}" \
+            --build-arg BUILD_ARTIFACT_DIR=.ci-artifacts \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            --push \
+            "${DOCKER_CONTEXT}"
+          echo "image-uri=${IMAGE_URI}" >> "${GITHUB_OUTPUT}"
+
+  # ---------------------------------------------------------------------------
+  # 8. notification-email — always runs
+  # ---------------------------------------------------------------------------
+  notification-email:
+    name: Notification email
+    needs:
+      - build-preprocess
+      - build-test-lint
+      - owasp
+      - sonarqube
+      - sonarqube-gate
+      - publish-to-nexus
+      - docker-build-publish
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      conclusion: ${{ steps.summary.outputs.conclusion }}
+    steps:
+      - name: Summarize pipeline
+        id: summary
+        shell: bash
+        env:
+          BP: ${{ needs.build-preprocess.result }}
+          BTL: ${{ needs.build-test-lint.result }}
+          OW: ${{ needs.owasp.result }}
+          SQ: ${{ needs.sonarqube.result }}
+          GATE: ${{ needs.sonarqube-gate.result }}
+          NX: ${{ needs.publish-to-nexus.result }}
+          DK: ${{ needs.docker-build-publish.result }}
+          IMAGE_TAG: ${{ needs.build-preprocess.outputs.image-tag }}
+          QG_STATUS: ${{ needs.sonarqube-gate.outputs.quality-gate-status }}
+          IMAGE_URI: ${{ needs.docker-build-publish.outputs.image-uri }}
+        run: |
+          set -euo pipefail
+          echo "build-preprocess=${BP}"
+          echo "build-test-lint=${BTL}"
+          echo "owasp=${OW}"
+          echo "sonarqube=${SQ}"
+          echo "sonarqube-gate=${GATE}"
+          echo "publish-to-nexus=${NX}"
+          echo "docker-build-publish=${DK}"
+          if [[ "${BP}" == success && "${BTL}" == success && "${OW}" == success \
+                && "${SQ}" == success && "${GATE}" == success \
+                && "${NX}" == success && "${DK}" == success ]]; then
+            CONCLUSION="success"
+          else
+            CONCLUSION="failure"
+          fi
+          echo "conclusion=${CONCLUSION}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "### CI Pipeline 8-Stage"
+            echo ""
+            echo "| Job | Result |"
+            echo "|-----|--------|"
+            echo "| build-preprocess | ${BP} |"
+            echo "| build-test-lint | ${BTL} |"
+            echo "| owasp | ${OW} |"
+            echo "| sonarqube | ${SQ} |"
+            echo "| sonarqube-gate | ${GATE} |"
+            echo "| publish-to-nexus | ${NX} |"
+            echo "| docker-build-publish | ${DK} |"
+            echo ""
+            echo "**Overall:** ${CONCLUSION}"
+            echo "**Image tag:** ${IMAGE_TAG}"
+            echo "**Quality gate:** ${QG_STATUS}"
+            echo "**Image URI:** ${IMAGE_URI}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Send email notification
+        if: inputs.notification-to != ''
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          MAIL_TO: ${{ inputs.notification-to }}
+          CONCLUSION: ${{ steps.summary.outputs.conclusion }}
+          SUBJECT: "[${{ steps.summary.outputs.conclusion }}] ${{ github.repository }} CI Pipeline 8-Stage (${{ github.sha }})"
+          BODY: |
+            Repository: ${{ github.repository }}
+            Ref: ${{ github.ref }}
+            SHA: ${{ github.sha }}
+            Workflow: ${{ github.workflow }}
+            Conclusion: ${{ steps.summary.outputs.conclusion }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PYTHONUNBUFFERED: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${SMTP_HOST:-}" ]]; then
+            echo "SMTP_HOST not set; skipping email send (job summary already written)"
+            exit 0
+          fi
+          export PORT="${SMTP_PORT:-587}"
+          export FROM_ADDR="${SMTP_FROM:-github-actions@localhost}"
+          python3 -u - <<'PY'
+          import os, smtplib, ssl
+          from email.message import EmailMessage
+          msg = EmailMessage()
+          msg["Subject"] = os.environ["SUBJECT"]
+          msg["From"] = os.environ["FROM_ADDR"]
+          msg["To"] = os.environ["MAIL_TO"]
+          msg.set_content(os.environ["BODY"])
+          host = os.environ["SMTP_HOST"]
+          port = int(os.environ["PORT"])
+          user = os.environ.get("SMTP_USERNAME") or ""
+          password = os.environ.get("SMTP_PASSWORD") or ""
+          context = ssl.create_default_context()
+          with smtplib.SMTP(host, port, timeout=60) as smtp:
+              smtp.ehlo()
+              try:
+                  smtp.starttls(context=context)
+                  smtp.ehlo()
+              except smtplib.SMTPException:
+                  pass
+              if user:
+                  smtp.login(user, password)
+              smtp.send_message(msg)
+          print("Notification email sent")
+          PY

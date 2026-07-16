@@ -1,5 +1,12 @@
 # Brain Update Log
 
+## 2026-07-17
+
+* **D12 / okf.py v1.2:** Token counting (tiktoken optional), secret scan on scrape, `.okfignore` + `okf.config.json`, `pack` (md/json/xml cards-only), `lookup --json`, shared `assemble_prompt_pack`, reference compress. ADR v1.6.
+* **Concept dedupe:** Deleted `vault/concepts/owasp.md` (Podman/Dependency-Check folded into `spvs-lifecycle.md`) and `vault/concepts/minimal-okf-prompt-cards.md` (pin-cache / one-shot guidance folded into `standards/okf-prompt-injection.md`). Slimmed `github-actions.md` to a domain router.
+* **Removed Module/Vendor slots:** Deleted `kernel/modules/` and `kernel/vendors/` (unused by `okf.py` runtime). Relocated GHA domain routing to `vault/concepts/github-actions.md`. Updated AGENTS.md, maintain/extending indexes, ADR v1.5. Kernel walk keeps only `profiles/`.
+* **Rule #2 + D11**: Agent retrieval procedure (ladder, freshness, grader access) in `standards/okf-prompt-injection.md` only. `ADR.md` D11 records the architecture split (knowledge plane vs corpus plane) — not a runbook. `AGENTS.md` Rule #1 stays a thin pointer.
+
 ## 2026-07-14
 
 * **SINGLE-FILE KERNEL**: Merged all nine kernel scripts into one `kernel/okf.py` v1.0.0 with subcommands `lookup`, `card`, `compile`, `lint`, `enrich`, `optimize`, `scrape`, `serve` (behavior unchanged; serve now runs lint/compile in-process instead of subprocess). Old scripts removed; every doc/standard/playbook/CI/HTML reference updated to the `okf.py <subcommand>` form.

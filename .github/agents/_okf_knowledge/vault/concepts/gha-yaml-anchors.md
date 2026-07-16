@@ -88,7 +88,7 @@ Tiny duplication? Skip anchors (Simplicity First).
 
 ## Related
 
-- Module: [GitHub Actions](/kernel/modules/github-actions.md)
+- Concept: [GitHub Actions](/vault/concepts/github-actions.md)
 - System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)
 - Standard: [GHA component layout](/standards/gha-component-layout.md)
 

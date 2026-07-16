@@ -37,6 +37,6 @@ FORBIDDEN: trees outside actions|workflows; multi workflow YAML per dir
 ## Related
 
 - System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)
-- Module: [GitHub Actions](/kernel/modules/github-actions.md)
+- Concept: [GitHub Actions](/vault/concepts/github-actions.md)
 - Playbook: [Author composite action](/vault/playbooks/author-gha-composite-action.md)
 - Standard: [Simplicity First](/standards/simplicity-first.md), [OKF Prompt Injection](/standards/okf-prompt-injection.md)

@@ -1,0 +1,9 @@
+{
+  "github.copilot.chat.agenticWorkflow.maxToolLoops": 2,
+  "github.copilot.chat.agenticWorkflow.requireUserApprovalForTools": [
+    "terminal.runCommand",
+    "workspace.editFiles"
+  ],
+  "github.copilot.chat.defaultModel": "gpt-4o-mini",
+  "github.copilot.chat.usePredictiveBuffering": true
+}

@@ -9,7 +9,7 @@ status: active
 
 # gha-reusable-actions-workflows
 
-Agent package: `.github/agents/` (`AGENTS.md` + `_okf_knowledge/` co-located with `aegis.agent.md`)
+Workspace path: `/home/ghost/workspace-latest/gha-reusable-actions-workflows`
 
 Monorepo that publishes composite GitHub Actions and reusable workflows under an OWASP SPVS-aligned release plane (Validate -> Security -> Execute).
 
@@ -62,9 +62,8 @@ Needs GitHub App secrets RELEASE_APP_ID / RELEASE_APP_PRIVATE_KEY.
 
 ## Related
 
-- Module: [GitHub Actions](/kernel/modules/github-actions.md)
-- Vendor: [OWASP](/kernel/vendors/owasp.md)
-- Standards: [GHA commit subjects](/standards/gha-commit-subjects.md), [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [GHA component layout](/standards/gha-component-layout.md)
-- Concepts: [Release Manager modes](/vault/concepts/release-manager-modes.md), [SemVer from commits](/vault/concepts/semver-from-commits.md), [SPVS lifecycle](/vault/concepts/spvs-lifecycle.md), [GHA YAML Anchors](/vault/concepts/gha-yaml-anchors.md), [Minimal OKF Prompt Cards](/vault/concepts/minimal-okf-prompt-cards.md)
+- Concept: [GitHub Actions](/vault/concepts/github-actions.md)
+- Standards: [GHA commit subjects](/standards/gha-commit-subjects.md), [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [GHA component layout](/standards/gha-component-layout.md), [OKF Prompt Injection](/standards/okf-prompt-injection.md)
+- Concepts: [Release Manager modes](/vault/concepts/release-manager-modes.md), [SemVer from commits](/vault/concepts/semver-from-commits.md), [SPVS lifecycle](/vault/concepts/spvs-lifecycle.md), [GHA YAML Anchors](/vault/concepts/gha-yaml-anchors.md)
 - Playbooks: [Release component](/vault/playbooks/release-gha-component.md), [Bootstrap SPVS env](/vault/playbooks/bootstrap-spvs-dev-environment.md)
 - Reference: [Repo README](/vault/references/gha-reusable-readme.md)
