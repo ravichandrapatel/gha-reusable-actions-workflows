@@ -330,60 +330,70 @@ jobs:
               - 'package.json'
 ```
 
-## Test coverage (what we validated)
+## Test coverage (real-world — GitHub Actions via `gh`)
 
-The implementation in this repo has been validated end-to-end in a dedicated `git-path-filter` test repository across:
+Automated e2e lives in [`.github/workflows/git-path-filter-e2e.yml`](../../../.github/workflows/git-path-filter-e2e.yml).  
+Validated **2026-07-20** on `ravichandrapatel/gha-reusable-actions-workflows` using `gh workflow run` / PR / merge (not local mocks).
 
-- **Ref handling**
-  - SHA vs SHA diffs (happy path).
-  - `base == source` → no changes.
-  - Zero-SHA base (all zeros) → treat all files in source as added.
-  - Event-driven ref selection with `auto_detect_refs` for:
-    - `push` to feature branches (`feature/*`) vs default branch.
-    - `pull_request` (head vs base).
-    - `push` to `main` after **squash merge**, **merge commit**, and **rebase & merge**.
-    - `workflow_dispatch` on any branch vs default branch.
+### Event matrix (auto_detect)
 
-- **Change types (A/M/D)**
-  - Added, modified, and deleted files detected correctly.
-  - `change_types: 'A,M'` excludes deletes.
-  - `change_types: 'D'` isolates deletes.
+| # | Event | Branch | Result | Evidence |
+| --- | --- | --- | --- | --- |
+| A1 | `push` | `test/git-path-filter-e2e` | **PASS** | [run 29736362052](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736362052) |
+| A2 | `pull_request` | → `main` (PR #9) | **PASS** | [run 29736364509](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736364509) |
+| A3 | `workflow_dispatch` | feature branch | **PASS** | [run 29736388275](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736388275) |
+| A4 | `push` | `main` (merge PR #9) | **PASS** | [run 29736420714](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736420714) |
+| A5 | `workflow_dispatch` | **`main` (post-merge)** | **PASS** | [run 29736430286](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736430286) |
 
-- **Pattern engine**
-  - `**` globstar with deep nested paths.
-  - Brace expansion `{a,b}`.
-  - `!` negation with **last-match-wins** semantics.
-  - `_unmatched` list for files not matched by any group.
-  - `every_file_matches` true when all considered files fall into a group.
+**A5 detail (the original bug):** manual run on `main` previously compared `main`↔`main` or failed resolving `sha^`. Live log:
 
-- **Working directory**
-  - Only paths under `working_directory` are considered.
-  - Patterns are matched relative to `working_directory`.
+```text
+[GIT-PATH-FILTER] auto_detect event=workflow_dispatch
+  source=9aa8f640e3a4592b8b5afeed9e969832948e29b3
+  base=1b3a013e7548b7165514b8d8961ad0c1387a49e7
+```
 
-These scenarios are exercised via real Git commits, branches, and GitHub Actions workflows (push, PR, and workflow_dispatch) using the same `main.py` and `action.yml` shipped here.
+Both refs are plain 40-char SHAs (first parent resolved locally). Groups detected: `action`, `fixtures`, `readme`, `workflow`.
+
+### Explicit suite (B–H) — all PASS on every green run above
+
+| # | Scenario | Assertion |
+| --- | --- | --- |
+| B | SHA vs parent (manual refs) | Diff + group match succeeds |
+| C | `base == source` | `changes == []`, no `has_changes` |
+| D | `change_types: A,M` | Runs without error; status filter applied |
+| E | `!` negation last-match-wins | `readme.md` excluded from `code` group |
+| F | `working_directory` | Only paths under action dir match `py`/`yml`/`docs` |
+| G | Zero-SHA base (`0{40}`) | Source files listed as Added |
+| H | Input `base=<sha>^` | Resolves without re-shallowing the clone |
+
+### Fixes proven by this run
+
+1. **`workflow_dispatch` on default branch** — resolve first parent to a **plain SHA** in `action.yml` (never pass `sha^` into `git fetch`).
+2. **`fetch_ref` must not use `--depth=N`** on an existing full checkout — that re-shallowed runners and dropped parents (`Could not resolve ref '…^'`).
+3. **Caller must use `actions/checkout` with `fetch-depth: 0`.**
+
+### Re-run locally with `gh`
+
+```bash
+# Feature / current branch
+gh workflow run git-path-filter-e2e.yml --ref "$(git branch --show-current)"
+gh run watch --exit-status
+
+# Manual on main (post-merge)
+gh workflow run git-path-filter-e2e.yml --ref main
+gh run list --workflow=git-path-filter-e2e.yml --branch main --limit 3
+```
 
 ### Git errors and debug notes
 
-When running this action with `debug: 'true'`, you may see log lines like:
+When running with `debug: 'true'`, you may see `[DBG-922] Git command failed: …`. Those are often **ignored probe attempts** (alternate ref forms). Investigate only when:
 
-- `[GIT-PATH-FILTER] [DBG-922] Git command failed: fatal: Needed a single revision`
-- Other `[DBG-92x]` messages coming from internal `git` calls.
+- The action exits non-zero, or
+- You see `Unexpected error: Could not resolve ref …`, or
+- `changes_json` is missing expected files.
 
-In most cases these are **debug-only breadcrumbs**, not hard failures:
-
-- The action calls `git` in multiple ways (for example, trying different ref formats) and some of those attempts can legitimately fail.
-- When `ignore_error=True` is used internally, failures are logged but the action continues and still computes the final `changes_json`.
-
-You should investigate further when:
-
-- The action returns a **non-zero exit code**, or
-- `changes_json` is unexpectedly empty or missing expected files.
-
-In those cases, the debug logs (including `[DBG-922]` messages and any `ValueError` about unresolved refs) provide the context needed to fix the underlying ref or fetch configuration—for example:
-
-- Missing `fetch-depth: 0` in `actions/checkout`.
-- Wrong ref name (e.g. using `origin/main` instead of `main`).
-- Refs not fetched from `origin` before the action runs.
+Common causes: missing `fetch-depth: 0`; wrong ref (`origin/main` instead of `main`); passing bare `sha^` without the fixed `main.py` / auto-detect parent resolution.
 
 ### Example test jobs
 
