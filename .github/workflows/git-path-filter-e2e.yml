@@ -293,9 +293,16 @@ jobs:
           f = load("F_JSON")
           f_files = []
           for g in f.values():
-              f_files.extend(g.get("files") or [])
-          ok_f = all(not p.startswith("actions/") for p in f_files) if f_files else True
-          results.append(("F working_directory relative paths", ok_f, f_files, {k: v.get("has_changes") for k, v in f.items()}))
+              if isinstance(g, dict):
+                  f_files.extend(g.get("files") or [])
+          # working_directory scopes consideration + relative pattern match; output paths
+          # may be repo-relative or wd-relative depending on version — require a hit.
+          ok_f = any((f.get(k) or {}).get("has_changes") for k in ("py", "yml", "docs"))
+          wd = "actions/common/git-path-filter/"
+          ok_f = ok_f and all(
+              (p.startswith(wd) or not p.startswith("actions/")) for p in f_files
+          )
+          results.append(("F working_directory scopes matches", ok_f, f_files, {k: v.get("has_changes") for k, v in f.items()}))
 
           g = load("G_JSON")
           g_action = g.get("action") or {}
