@@ -1,0 +1,2 @@
+# kustomize helm chart pull cache (under base controller/runner)
+components/base/**/charts/

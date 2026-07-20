@@ -1,0 +1,68 @@
+# gha-runner-scale-set 0.14.2
+# Namespace is set by the overlay (`namespace:`), not here.
+# githubConfigSecret is an *existing* Secret name (created by ESO). No tokens in Git.
+
+githubConfigUrl: https://github.com/REPLACE_ORG_OR_ENTERPRISE
+
+githubConfigSecret: github-arc-github-config
+
+controllerServiceAccount:
+  name: github-arc-gha-rs-controller
+
+## GitHub Actions runner group + scale set name (runs-on: <runnerScaleSetName>)
+runnerGroup: default
+runnerScaleSetName: github-arc-runners
+
+minRunners: 0
+maxRunners: 5
+
+## Listener pod (AutoscalingListener) — image + resources separate from ephemeral runners.
+## Keep container name "listener" so ARC merges these onto the listener container.
+listenerTemplate:
+  spec:
+    securityContext:
+      fsGroup: 123
+    containers:
+      - name: listener
+        image: ghcr.io/actions/gha-runner-scale-set-controller:0.14.2
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 123
+
+## Ephemeral runner pods — image + resources separate from the listener.
+template:
+  spec:
+    securityContext:
+      fsGroup: 123
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:2.334.0
+        command:
+          - /home/runner/run.sh
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "2"
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 123

@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: github-arc
+
+resources:
+  - ../../../base
+  - ../../../base/cluster
+  - ../../../base/controller
+  - ../../../base/runner
+
+patches:
+  - target:
+      version: v1
+      kind: ServiceAccount
+      name: github-arc-eso
+    patch: |-
+      - op: replace
+        path: /metadata/annotations/eks.amazonaws.com~1role-arn
+        value: arn:aws:iam::REPLACE_ACCOUNT_ID:role/rosa-rosashared-prod-github-arc-eso
+
+  - target:
+      group: external-secrets.io
+      version: v1beta1
+      kind: SecretStore
+      name: aws-secretsmanager-github-arc
+    patch: |-
+      - op: replace
+        path: /spec/provider/aws/region
+        value: us-east-1
+
+  - target:
+      group: external-secrets.io
+      version: v1beta1
+      kind: ExternalSecret
+      name: github-arc-github-config
+    patch: |-
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: rosa/rosashared-prod/github-arc
+
+  - target:
+      group: actions.github.com
+      version: v1alpha1
+      kind: AutoscalingRunnerSet
+      name: github-arc-runners
+    patch: |-
+      - op: replace
+        path: /spec/githubConfigUrl
+        value: https://github.com/REPLACE_ORG_OR_ENTERPRISE
+      - op: replace
+        path: /spec/minRunners
+        value: 1
+      - op: replace
+        path: /spec/maxRunners
+        value: 20

@@ -1,0 +1,18 @@
+# Binds runner SA (created by gha-runner-scale-set Helm chart) to custom SCC.
+# metadata.namespace + subject.namespace come from overlay `namespace:` / patches.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-arc-scc
+  labels:
+    app.kubernetes.io/part-of: github-arc
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:github-arc
+subjects:
+  - kind: ServiceAccount
+    name: github-arc-runners-gha-rs-no-permission
+    # Keep in sync with overlay `namespace:`
+    namespace: github-arc

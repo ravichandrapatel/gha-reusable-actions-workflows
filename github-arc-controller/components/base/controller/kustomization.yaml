@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Requires: kustomize build --enable-helm  (ArgoCD: kustomize.buildOptions: --enable-helm)
+# Do not set helmCharts.namespace here — overlay `namespace:` is passed to Helm as --namespace.
+helmCharts:
+  - name: gha-runner-scale-set-controller
+    repo: oci://ghcr.io/actions/actions-runner-controller-charts
+    version: 0.14.2
+    releaseName: github-arc-controller
+    valuesFile: 0.14.2/values.yaml
