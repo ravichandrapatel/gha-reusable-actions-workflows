@@ -2,70 +2,413 @@
 
 ![Git Path Filter logo](logo.png)
 
-A robust, Python-based GitHub Composite Action for detecting file changes in a repository. It compares two git refs (branch, tag, or SHA) and reports which changed files match your YAML-defined pattern groups—so you can run jobs only when relevant paths change.
+Composite action that compares two git refs and reports which **path groups** changed (YAML globs, `**`, `!` last-match-wins). Use it to gate CI jobs so only affected components run.
 
-This action is **reusable**: host it in a central repo and reference it from any workflow (same org or `actions/checkout` + path).
-
-## Overview & context
-
-- **Purpose**: Detect which path groups changed between two refs so workflows can run only the necessary jobs.
-- **Scope**: Composite action wrapping a Python detector; supports `pull_request`, `push`, and `workflow_dispatch` (manual or auto ref detection).
-- **Primary users**: Platform/DevOps and app teams building monorepo or multi-component CI pipelines.
-- **Success criteria**: Correct `changes` / `changes_json` outputs for the event, enabling downstream jobs to gate reliably.
+**Path in this repo:** `actions/common/git-path-filter`  
+**E2E workflow:** [`.github/workflows/git-path-filter-e2e.yml`](../../../.github/workflows/git-path-filter-e2e.yml)  
+**Latest real-world results:** [`E2E_RESULTS_2026-07-20.md`](E2E_RESULTS_2026-07-20.md)
 
 ---
 
-## Metadata dashboard
+## Quick start (recommended)
 
-| Attribute | Value |
+```yaml
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      changes: ${{ steps.gpf.outputs.changes }}
+      changes_json: ${{ steps.gpf.outputs.changes_json }}
+    steps:
+      # REQUIRED: full history (manual/main and sha^ resolve need parents)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect path changes
+        id: gpf
+        uses: ./actions/common/git-path-filter
+        with:
+          auto_detect_refs: 'true'
+          debug: 'false'
+          pattern_filter: |
+            backend:
+              - 'src/api/**'
+              - 'requirements.txt'
+            frontend:
+              - 'src/web/**'
+              - 'package.json'
+            docs:
+              - '**/*.md'
+              - '!**/node_modules/**'
+
+  backend:
+    needs: detect-changes
+    if: >-
+      needs.detect-changes.outputs.changes_json != '' &&
+      fromJSON(needs.detect-changes.outputs.changes_json).backend.has_changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - run: echo "Run backend CI"
+```
+
+With `auto_detect_refs: 'true'` you do **not** need to pass `source_branch` / `base_ref_branch` — the action picks them from the GitHub event.
+
+---
+
+## Choose your scenario
+
+| Your trigger | Where you run | What gets compared | Set this |
+| --- | --- | --- | --- |
+| **Pull request** | PR → `main` | PR head branch → PR base branch | `auto_detect_refs: 'true'` |
+| **Push to feature** | `feature/*` | feature branch → default branch | `auto_detect_refs: 'true'` |
+| **Push to `main`** (after merge) | `main` | `github.sha` → `github.event.before` (or first parent) | `auto_detect_refs: 'true'` |
+| **Manual run on feature** | Actions UI → feature branch | feature → default branch | `auto_detect_refs: 'true'` |
+| **Manual run on `main`** | Actions UI → `main` | tip SHA → **first-parent SHA** (not `main`↔`main`) | `auto_detect_refs: 'true'` + `fetch-depth: 0` |
+| **Custom / tags / release** | any | whatever you pass | set `source_branch` + `base_ref_branch` explicitly |
+| **Brand-new branch push** | first push | all files in source (zero-SHA base) | auto or pass `before` (may be `0{40}`) |
+
+### Hard requirements
+
+1. **`fetch-depth: 0`** on `actions/checkout` (full history).
+2. Prefer **`auto_detect_refs: 'true'`** for PR / push / `workflow_dispatch`.
+3. Do **not** pass `origin/` prefixes (`main`, not `origin/main`).
+4. After a merge, the **`push`** event is the best signal for “what just landed”; a later manual run on `main` only diffs the **tip commit** vs its first parent.
+
+---
+
+## How `auto_detect_refs` picks refs
+
+| `github.event_name` | Source | Base |
+| --- | --- | --- |
+| `pull_request` | `github.head_ref` | `github.base_ref` |
+| `push` to default/`main` | `github.sha` | `github.event.before` if set and non-zero; else first parent of `sha` (plain 40-char SHA) |
+| `push` to other branch | branch name | default branch |
+| `workflow_dispatch` on default/`main` | `github.sha` | first parent of `sha` (plain SHA — never raw `sha^` into fetch) |
+| `workflow_dispatch` on other branch | `github.ref_name` | default branch |
+
+Outputs `source_ref` / `base_ref` show what was actually used (useful in logs / summaries).
+
+---
+
+## Scenario guides
+
+### 1. Pull request
+
+**Use when:** PR opened/updated against `main` (or other base).
+
+```yaml
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+      - id: gpf
+        uses: ./actions/common/git-path-filter
+        with:
+          auto_detect_refs: 'true'
+          pattern_filter: |
+            app:
+              - 'apps/my-service/**'
+```
+
+Compares **PR head → PR base** (full PR file set).
+
+---
+
+### 2. Push to `main` (after squash / rebase / merge commit)
+
+**Use when:** code lands on `main` via any GitHub merge method.
+
+```yaml
+on:
+  push:
+    branches: [main]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+      - id: gpf
+        uses: ./actions/common/git-path-filter
+        with:
+          auto_detect_refs: 'true'
+          pattern_filter: |
+            app:
+              - 'apps/**'
+```
+
+| Merge method on GitHub | Tip shape | What push compares |
+| --- | --- | --- |
+| **Squash** | 1 parent | `sha` → `before` (previous `main`) |
+| **Rebase and merge** | 1 parent | `sha` → `before` |
+| **Merge commit** | 2 parents | `sha` → `before` (pre-merge `main`) |
+
+All three were validated live — see [Merge strategies](#merge-strategies-validated) below.
+
+---
+
+### 3. Push to a feature branch
+
+**Use when:** pushing to `feature/*` before or without a PR.
+
+```yaml
+on:
+  push:
+    branches: ['feature/**']
+
+# auto_detect: source = feature branch name, base = default branch
+```
+
+Shows “what would this branch change vs `main`?”.
+
+---
+
+### 4. Manual run (`workflow_dispatch`)
+
+#### 4a. On a feature branch
+
+Actions → workflow → **Run workflow** → select **feature** branch.
+
+- Source: feature branch  
+- Base: default branch (`main`)  
+- Good for dry-runs before opening a PR.
+
+#### 4b. On `main` (post-merge re-run)
+
+Actions → workflow → **Run workflow** → select **`main`**.
+
+- Source: current tip SHA  
+- Base: **first-parent SHA** (resolved to a plain 40-char hash)  
+- Sees files from the **tip commit** (e.g. the merge/squash commit), not an empty `main`↔`main` diff.
+
+```yaml
+on:
+  workflow_dispatch:
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0   # mandatory for first-parent resolve
+      - id: gpf
+        uses: ./actions/common/git-path-filter
+        with:
+          auto_detect_refs: 'true'
+          debug: 'true'    # optional while verifying
+          pattern_filter: |
+            app:
+              - 'apps/**'
+```
+
+**Tip:** Prefer the automatic **`push`** after merge for production gating; use manual on `main` for re-runs / debugging.
+
+---
+
+### 5. Combined workflow (PR + push + manual)
+
+One job, one `auto_detect_refs: 'true'` — covers all three events:
+
+```yaml
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      changes_json: ${{ steps.gpf.outputs.changes_json }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+      - id: gpf
+        uses: ./actions/common/git-path-filter
+        with:
+          auto_detect_refs: 'true'
+          pattern_filter: |
+            backend:
+              - 'src/api/**'
+            frontend:
+              - 'src/web/**'
+```
+
+You do **not** need a hand-written “Set refs” step when `auto_detect_refs` is true.
+
+---
+
+### 6. Explicit refs (no auto-detect)
+
+**Use when:** tags, releases, comparing arbitrary SHAs, or local/debug.
+
+```yaml
+- id: gpf
+  uses: ./actions/common/git-path-filter
+  with:
+    source_branch: ${{ github.sha }}
+    base_ref_branch: ${{ github.event.before }}
+    # or: base_ref_branch: 'v1.2.0'
+    pattern_filter: |
+      charts:
+        - 'deploy/helm/**'
+```
+
+| Goal | `source_branch` | `base_ref_branch` |
+| --- | --- | --- |
+| This commit vs previous | `${{ github.sha }}` | `${{ github.event.before }}` |
+| Tag vs previous tag | `v1.3.0` | `v1.2.0` |
+| Empty (smoke) | same SHA | same SHA → `changes: []` |
+| New branch (all files) | branch or SHA | `0000000000000000000000000000000000000000` |
+
+---
+
+### 7. New-branch push (zero SHA)
+
+GitHub may set `github.event.before` to forty zeros. The action treats that as “no base” and lists **all files** in the source ref as added (`A`).
+
+---
+
+### 8. Filter by change type (A / M / D)
+
+```yaml
+with:
+  auto_detect_refs: 'true'
+  change_types: 'A,M'   # ignore deletes
+  pattern_filter: |
+    app:
+      - 'apps/**'
+```
+
+| Value | Meaning |
 | --- | --- |
-| **Owner / Lead** | @[Name] |
-| **Service Status** | Alpha / Beta / Production |
-| **Repository / Code** | `devtools-landingzone/actions/git-path-filter` |
-| **Dependencies** | Git CLI, Python 3, PyYAML, wcmatch |
-| **Slack / Support** | #[Channel-Name] |
+| `A` | Added |
+| `M` | Modified (also type-change) |
+| `D` | Deleted |
+| `A,M` | Added + modified only |
 
-## Features
+---
 
--   **Ref-agnostic**: Works with branches, tags, or SHAs (no `origin/` prefix). Supports `pull_request`, `push`, and `workflow_dispatch`.
--   **Git**: Fetches with `git fetch origin <ref> --depth=1 --no-tags`; uses `git diff --name-status` for change types (A/M/D). **Zero-SHA guard**: when base is all zeros (new-branch push), lists all files in the source ref.
--   **Globbing**: Via [wcmatch](https://pypi.org/project/wcmatch/): `**` (recursive), `*`, `?`, `[...]`, `[!a-z]`, brace expansion `{a,b}`; robust edge cases.
--   **Negation**: `!` prefix with **last-match-wins** (sequential override).
--   **Status**: Git status preserved where useful: `R` (rename), `C` (copy), `T` (type change → M); others normalized to `A`/`M`/`D`.
--   **Change types**: Optional filter by status (`A`, `M`, `D`).
--   **Working directory**: Optional base path; only paths under it are considered; patterns are matched relative to it.
--   **Outputs**: `has_changes`, `files`, `every_file_matches` per group; `_unmatched` for files not in any group.
--   **Dependencies**: PyYAML, wcmatch (pinned in `requirements.txt`). CLI: `--debug` for verbose include/exclude logging.
+### 9. Working directory (monorepo slice)
+
+Only consider paths under a subdirectory; patterns match **relative** to that dir:
+
+```yaml
+with:
+  auto_detect_refs: 'true'
+  working_directory: 'services/payments'
+  pattern_filter: |
+    code:
+      - '**/*.py'
+    charts:
+      - 'helm/**'
+```
+
+A change only under `.github/workflows/` will **not** match when `working_directory` is `services/payments` (by design).
+
+---
+
+### 10. Negation (`!`) — last match wins
+
+Patterns are applied in order; the **last** matching pattern decides include/exclude:
+
+```yaml
+pattern_filter: |
+  code:
+    - 'src/**'
+    - '!src/**/*.md'
+    - '!src/**/testdata/**'
+```
+
+---
+
+### 11. Downstream job gating
+
+```yaml
+jobs:
+  detect-changes:
+    # ... produces outputs.changes_json
+
+  deploy-frontend:
+    needs: detect-changes
+    if: >-
+      needs.detect-changes.outputs.changes_json != '' &&
+      fromJSON(needs.detect-changes.outputs.changes_json).frontend.has_changes
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "frontend changed"
+```
+
+`changes` is a JSON array of group names that have changes, e.g. `["backend","docs"]`.
+
+---
 
 ## Inputs
 
-| Input | Description | Required | Default |
-| :--- | :--- | :--- | :--- |
-| `source_branch` | Source/head ref (branch name, tag, or SHA). Ignored when `auto_detect_refs` is `'true'`. | **Yes** | — |
-| `base_ref_branch` | Base ref to compare against (no `origin/` prefix). Ignored when `auto_detect_refs` is `'true'`. | **Yes** | — |
-| `pattern_filter` | YAML string: key → list of globs; `!` = exclude (last match wins). | **Yes** | — |
-| `github_token` | Token for `git fetch`. | No | `${{ github.token }}` |
-| `change_types` | Comma-separated `A,M,D` to consider only those statuses. | No | `''` |
-| `debug` | `true` to log include/exclude reason per file. | No | `false` |
-| `working_directory` | Base path; only paths under this dir are considered; matching is relative to it. | No | `''` |
-| `auto_detect_refs` | When `'true'`, the action derives `source` / `base` from the GitHub event (`push`, `pull_request`, `workflow_dispatch`). | No | `'false'` |
+| Input | Required | Default | Description |
+| --- | :---: | --- | --- |
+| `pattern_filter` | **Yes** | — | YAML map: group → list of globs (`!` = exclude) |
+| `auto_detect_refs` | No | `false` | Derive source/base from the GitHub event |
+| `source_branch` | If auto_detect is false | `''` | Head ref (branch, tag, or SHA) |
+| `base_ref_branch` | If auto_detect is false | `''` | Base ref (no `origin/` prefix) |
+| `github_token` | No | `${{ github.token }}` | Token for git fetch |
+| `change_types` | No | `''` | `A`, `M`, `D` filter (comma-separated) |
+| `working_directory` | No | `''` | Scope + relative pattern root |
+| `debug` | No | `false` | Per-file include/exclude logs |
 
 ## Outputs
 
 | Output | Description |
-| :--- | :--- |
-| `changes` | JSON array of group keys that have changes. e.g. `["backend", "docs"]` |
-| `changes_json` | Full object: per group `has_changes`, `files`, `every_file_matches`; plus `_unmatched`. |
+| --- | --- |
+| `changes` | JSON array of group keys with changes, e.g. `["backend"]` |
+| `changes_json` | Full map: per group `has_changes`, `files`, `every_file_matches`; plus `_unmatched` |
+| `source_ref` | Resolved source actually used |
+| `base_ref` | Resolved base actually used |
 
-### Output structure (`changes_json`)
-
-Paths are POSIX (forward slashes).
+### `changes_json` shape
 
 ```json
 {
   "backend": {
     "has_changes": true,
-    "files": ["src/api/main.py", "requirements.txt"],
+    "files": ["src/api/main.py"],
     "every_file_matches": false
   },
   "frontend": {
@@ -75,7 +418,7 @@ Paths are POSIX (forward slashes).
   },
   "_unmatched": {
     "has_changes": true,
-    "files": ["readme.md"],
+    "files": ["README.md"],
     "every_file_matches": false
   }
 }
@@ -83,348 +426,58 @@ Paths are POSIX (forward slashes).
 
 ---
 
-## How to use in all scenarios
+## Features
 
-You can either:
+- Ref-agnostic: branch, tag, or SHA  
+- `pull_request` / `push` / `workflow_dispatch` via `auto_detect_refs`  
+- Globstar `**`, braces `{a,b}`, negation `!` (last-match-wins)  
+- Optional `change_types` and `working_directory`  
+- Zero-SHA base → list all files in source as added  
+- Parent syntax (`sha^`) resolved safely (no destructive shallow fetch)
 
-- Manually set **source** / **base** refs (existing examples below), or
-- Let the action **auto-detect** them per event by setting `auto_detect_refs: 'true'` and only providing `pattern_filter`.
+---
 
-In both cases, always use **checkout with `fetch-depth: 0`** so the workflow has history for diffing.
+## Merge strategies validated
 
-### 1. Pull request (PR to target branch)
+Real PRs into `main` (2026-07-20), each followed by **push e2e** + **`workflow_dispatch` on `main`**:
 
-Compare the **PR head** to the **PR base branch**.
-
-| Ref | Value |
-| --- | ----- |
-| Source | `github.head_ref` (branch name of the PR head) |
-| Base | `github.base_ref` (branch the PR targets, e.g. `main`) |
-
-```yaml
-on:
-  pull_request:
-    branches: [main]
-
-jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      changes: ${{ steps.changes.outputs.changes }}
-      changes_json: ${{ steps.changes.outputs.changes_json }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect changes (git-path-filter)
-        id: changes
-        uses: ./devtools-landingzone/actions/git-path-filter
-        with:
-          auto_detect_refs: 'true'
-          pattern_filter: |
-            backend:
-              - 'src/**/*.py'
-            frontend:
-              - 'src/**/*.js'
-```
-
-### 2. Push (e.g. merge to default branch)
-
-Compare the **merge commit** (current SHA) to the **previous commit** or the default branch (e.g. for the first push to a new branch, or when `before` is missing).
-
-| Ref | Value |
-| --- | ----- |
-| Source | `github.sha` (commit that triggered the run) |
-| Base | `github.event.before` if present, else `github.event.repository.default_branch` |
-
-```yaml
-on:
-  push:
-    branches: [main]
-
-jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      changes: ${{ steps.changes.outputs.changes }}
-      changes_json: ${{ steps.changes.outputs.changes_json }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set refs for push
-        id: refs
-        run: |
-          echo "source=${{ github.sha }}" >> $GITHUB_OUTPUT
-          echo "base=${{ github.event.before || github.event.repository.default_branch }}" >> $GITHUB_OUTPUT
-
-      - name: Detect changes (git-path-filter)
-        id: changes
-        uses: ./devtools-landingzone/actions/git-path-filter
-        with:
-          auto_detect_refs: 'true'
-          pattern_filter: |
-            app:
-              - '**/*.tfvars'
-```
-
-### 3. Manual run (`workflow_dispatch`)
-
-| Where you run it | Source | Base | Why |
+| Merge type | PR | Push | Manual on `main` |
 | --- | --- | --- | --- |
-| Feature / non-default branch | `github.ref_name` | default branch | Pre-PR: “what would this branch change vs main?” |
-| **Default branch (`main`)** | `github.sha` | **resolved first-parent SHA** (plain 40-char) | `main` vs `main` is always empty. Auto-detect resolves `HEAD^` locally — never passes `sha^` into fetch (that fails). |
+| Squash | [#10](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/pull/10) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736621988) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736643541) |
+| Rebase and merge | [#11](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/pull/11) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736694806) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736716796) |
+| Merge commit | [#12](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/pull/12) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736763123) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736783883) |
 
-**Important:** After merging a feature branch into `main`, prefer the **`push`** event (uses `before` → `sha`) for the merge itself. A later `workflow_dispatch` on `main` only sees the **tip commit’s** diff vs its first parent — not the whole feature branch history if more commits landed since.
+On merge commits, manual dispatch uses **first parent** as base (pre-merge `main`). Full tables: [`E2E_RESULTS_2026-07-20.md`](E2E_RESULTS_2026-07-20.md).
 
-**Required:** `actions/checkout` with `fetch-depth: 0`. Shallow clones cannot resolve the first parent → `Could not resolve ref`.
+---
 
-```yaml
-on:
-  workflow_dispatch:
+## Troubleshooting
 
-jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      changes: ${{ steps.changes.outputs.changes }}
-      changes_json: ${{ steps.changes.outputs.changes_json }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| `Could not resolve ref` / unexpected error | Shallow checkout | `fetch-depth: 0` |
+| Manual on `main` → no changes | Comparing `main`↔`main` (old behavior) | Use current action + `auto_detect_refs: 'true'` |
+| Manual on `main` misses whole feature | Tip-only diff | Prefer **push** event for the merge; or compare explicit SHAs |
+| `working_directory` shows 0 hits | Changes outside that dir | Expected; widen `working_directory` or patterns |
+| Want verbose logs | — | `debug: 'true'` |
 
-      - name: Detect changes (git-path-filter)
-        id: changes
-        uses: ./devtools-landingzone/actions/git-path-filter
-        with:
-          auto_detect_refs: 'true'
-          pattern_filter: |
-            tfvars:
-              - '**/*.tfvars'
-```
+`[DBG-922] Git command failed: …` in debug mode is often an ignored probe (alternate ref form), not a hard failure — investigate only when the step exits non-zero.
 
-### 4. One workflow: PR, push, and manual
+### Re-run e2e with `gh`
 
-Use one job and either:
-
-- Set source/base in a previous step based on the event name (existing pattern), or
-- Simply set `auto_detect_refs: 'true'` and let the action derive refs.
-
-```yaml
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      changes: ${{ steps.changes.outputs.changes }}
-      changes_json: ${{ steps.changes.outputs.changes_json }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set refs for detection
-        id: refs
-        run: |
-          # Prefer auto_detect_refs: 'true' instead of this step.
-          # Kept as an explicit equivalent of the composite's auto-detect logic.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "source=${{ github.head_ref }}" >> $GITHUB_OUTPUT
-            echo "base=${{ github.base_ref }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" = "push" ]; then
-            echo "source=${{ github.sha }}" >> $GITHUB_OUTPUT
-            echo "base=${{ github.event.before }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref_name }}" = "${{ github.event.repository.default_branch }}" ]; then
-            # Resolve parent to a plain SHA — do not pass 'sha^' (fetch cannot use it)
-            echo "source=${{ github.sha }}" >> $GITHUB_OUTPUT
-            echo "base=$(git rev-parse ${{ github.sha }}^)" >> $GITHUB_OUTPUT
-          else
-            echo "source=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-            echo "base=${{ github.event.repository.default_branch }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Detect changes (git-path-filter)
-        id: changes
-        uses: ./devtools-landingzone/actions/git-path-filter
-        with:
-          auto_detect_refs: 'true'
-          pattern_filter: |
-            tfvars:
-              - '**/*.tfvars'
-```
-
-### 5. New-branch push (zero base)
-
-When the base ref is the **zero SHA** (`0{40}`), the action does not run a diff; it lists **all files** in the source ref (e.g. new branch). Your “Set refs” step can pass `github.event.before` as base; GitHub may send the zero SHA for new-branch pushes.
-
-### 6. Downstream jobs: run only when a group has changes
-
-Use `changes_json` and `fromJSON()` in the job `if` condition:
-
-```yaml
-  run-backend-tests:
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.changes_json != '' && fromJSON(needs.detect-changes.outputs.changes_json).backend.has_changes
-    steps:
-      - uses: actions/checkout@v4
-      - run: ./run-backend-tests.sh
-```
-
-Optional: filter by change type (e.g. only added or modified):
-
-```yaml
-      - name: Detect changes (git-path-filter)
-        id: changes
-        uses: ./devtools-landingzone/actions/git-path-filter
-        with:
-          auto_detect_refs: 'true'
-          change_types: 'A,M'
-          pattern_filter: |
-            backend:
-              - 'src/**/*.py'
+```bash
+gh workflow run git-path-filter-e2e.yml --ref main
+gh run watch --exit-status
+gh run list --workflow=git-path-filter-e2e.yml --branch main --limit 5
 ```
 
 ---
 
-## Full example: monorepo backend/frontend
+## Metadata
 
-```yaml
-name: CI
-
-on:
-  pull_request:
-    branches: [main]
-
-jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      changes: ${{ steps.changes.outputs.changes }}
-      changes_json: ${{ steps.changes.outputs.changes_json }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect changes
-        id: changes
-        uses: ./devtools-landingzone/actions/git-path-filter
-        with:
-          auto_detect_refs: 'true'
-          pattern_filter: |
-            backend:
-              - 'src/api/**/*.py'
-              - 'requirements.txt'
-            frontend:
-              - 'src/webapp/**/*.js'
-              - 'package.json'
-```
-
-## Test coverage (real-world — GitHub Actions via `gh`)
-
-Automated e2e lives in [`.github/workflows/git-path-filter-e2e.yml`](../../../.github/workflows/git-path-filter-e2e.yml).  
-Validated **2026-07-20** on `ravichandrapatel/gha-reusable-actions-workflows` using `gh workflow run` / PR / merge (not local mocks).
-
-### Event matrix (auto_detect)
-
-| # | Event | Branch | Result | Evidence |
-| --- | --- | --- | --- | --- |
-| A1 | `push` | `test/git-path-filter-e2e` | **PASS** | [run 29736362052](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736362052) |
-| A2 | `pull_request` | → `main` (PR #9) | **PASS** | [run 29736364509](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736364509) |
-| A3 | `workflow_dispatch` | feature branch | **PASS** | [run 29736388275](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736388275) |
-| A4 | `push` | `main` (merge PR #9) | **PASS** | [run 29736420714](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736420714) |
-| A5 | `workflow_dispatch` | **`main` (post-merge)** | **PASS** | [run 29736430286](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736430286) |
-
-**A5 detail (the original bug):** manual run on `main` previously compared `main`↔`main` or failed resolving `sha^`. Live log:
-
-```text
-[GIT-PATH-FILTER] auto_detect event=workflow_dispatch
-  source=9aa8f640e3a4592b8b5afeed9e969832948e29b3
-  base=1b3a013e7548b7165514b8d8961ad0c1387a49e7
-```
-
-Both refs are plain 40-char SHAs (first parent resolved locally). Groups detected: `action`, `fixtures`, `readme`, `workflow`.
-
-### Merge strategies into `main` (push + manual dispatch)
-
-All three GitHub merge methods were exercised with real PRs (`gh pr merge --squash` / `--rebase` / `--merge`). After each merge: e2e `push` on `main` **and** `workflow_dispatch` on `main`.
-
-| Merge type | PR | Tip parents | Push e2e | Manual dispatch on `main` | Dispatch auto_detect |
-| --- | --- | :---: | --- | --- | --- |
-| **Squash** | [#10](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/pull/10) | 1 (linear) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736621988) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736643541) | `source=e38ca3c…` `base=4e1904e…` |
-| **Rebase and merge** | [#11](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/pull/11) | 1 (linear) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736694806) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736716796) | `source=f2fa4e2…` `base=e38ca3c…` |
-| **Merge commit** | [#12](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/pull/12) | 2 (merge) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736763123) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736783883) | `source=f12420e…` `base=f2fa4e2…` (first parent) |
-
-Notes:
-- Squash / rebase land as single-parent commits; dispatch diffs tip vs `tip^` (= previous `main`).
-- Merge commit has two parents; auto-detect uses **first parent** (`main` before the merge), which is the correct “what this merge brought onto main” view for path filtering.
-
-### Explicit suite (B–H) — all PASS on every green run above
-
-| # | Scenario | Assertion |
-| --- | --- | --- |
-| B | SHA vs parent (manual refs) | Diff + group match succeeds |
-| C | `base == source` | `changes == []`, no `has_changes` |
-| D | `change_types: A,M` | Runs without error; status filter applied |
-| E | `!` negation last-match-wins | `readme.md` excluded from `code` group |
-| F | `working_directory` | Only paths under action dir match `py`/`yml`/`docs` |
-| G | Zero-SHA base (`0{40}`) | Source files listed as Added |
-| H | Input `base=<sha>^` | Resolves without re-shallowing the clone |
-
-### Fixes proven by this run
-
-1. **`workflow_dispatch` on default branch** — resolve first parent to a **plain SHA** in `action.yml` (never pass `sha^` into `git fetch`).
-2. **`fetch_ref` must not use `--depth=N`** on an existing full checkout — that re-shallowed runners and dropped parents (`Could not resolve ref '…^'`).
-3. **Caller must use `actions/checkout` with `fetch-depth: 0`.**
-
-### Re-run locally with `gh`
-
-```bash
-# Feature / current branch
-gh workflow run git-path-filter-e2e.yml --ref "$(git branch --show-current)"
-gh run watch --exit-status
-
-# Manual on main (post-merge)
-gh workflow run git-path-filter-e2e.yml --ref main
-gh run list --workflow=git-path-filter-e2e.yml --branch main --limit 3
-```
-
-### Git errors and debug notes
-
-When running with `debug: 'true'`, you may see `[DBG-922] Git command failed: …`. Those are often **ignored probe attempts** (alternate ref forms). Investigate only when:
-
-- The action exits non-zero, or
-- You see `Unexpected error: Could not resolve ref …`, or
-- `changes_json` is missing expected files.
-
-Common causes: missing `fetch-depth: 0`; wrong ref (`origin/main` instead of `main`); passing bare `sha^` without the fixed `main.py` / auto-detect parent resolution.
-
-### Example test jobs
-
-```yaml
-run-backend-tests:
-  runs-on: ubuntu-latest
-  needs: detect-changes
-  if: needs.detect-changes.outputs.changes_json != '' && fromJSON(needs.detect-changes.outputs.changes_json).backend.has_changes
-  steps:
-    - uses: actions/checkout@v4
-    - run: echo "Backend tests..."
-
-run-frontend-tests:
-  runs-on: ubuntu-latest
-  needs: detect-changes
-  if: needs.detect-changes.outputs.changes_json != '' && fromJSON(needs.detect-changes.outputs.changes_json).frontend.has_changes
-  steps:
-    - uses: actions/checkout@v4
-    - run: echo "Frontend tests..."
-```
+| Attribute | Value |
+| --- | --- |
+| **Owner / Lead** | Platform / DevOps |
+| **Repository path** | `actions/common/git-path-filter` |
+| **Dependencies** | Git, Python 3, PyYAML, wcmatch (`requirements.txt`) |
+| **E2E** | `.github/workflows/git-path-filter-e2e.yml` |
