@@ -13,11 +13,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 # used with list args only, no shell
 import subprocess  # nosec B404
 import sys
 from pathlib import Path
 from typing import Any
+
+# Parent/ancestor suffix on a SHA or ref: abc123^ , abc123^2 , abc123~1
+# Suffix may be bare '^' / '~' (no trailing digits) — use * not +.
+_REV_SUFFIX_RE = re.compile(r"^(?P<root>[0-9a-fA-F]{7,40}|.+?)(?P<suffix>[~^][0-9]*)$")
 
 import yaml
 from wcmatch import glob as wc_glob
@@ -147,26 +152,54 @@ def run_git_cmd(args: list[str], ignore_error: bool = False, cwd: str | None = N
         raise
 
 
+def split_rev_suffix(ref: str) -> tuple[str, str]:
+    """INTENT: Split 'abc123^' / 'main~1' into (root, suffix). INPUT: ref. OUTPUT: (root, suffix|''). SIDE_EFFECTS: None."""
+    m = _REV_SUFFIX_RE.match(ref.strip())
+    if not m:
+        return ref.strip(), ""
+    return m.group("root"), m.group("suffix")
+
+
 def fetch_ref(ref: str) -> None:
-    """INTENT: Fetch a single ref from origin with depth=1, no tags (ref-agnostic). INPUT: ref (str). OUTPUT: None. SIDE_EFFECTS: subprocess."""
-    # [T-03] git fetch origin <ref> --depth=1 --no-tags
-    if len(ref) == 40 and ref == ZERO_SHA:
+    """INTENT: Fetch a single ref from origin (ref-agnostic). Parent syntax (sha^) fetches the tip then deepens.
+    INPUT: ref (str). OUTPUT: None. SIDE_EFFECTS: subprocess."""
+    # [T-03] git fetch origin <root> — never fetch 'sha^' as a remote name
+    root, suffix = split_rev_suffix(ref)
+    if len(root) == 40 and root == ZERO_SHA:
         return
-    run_git_cmd(["git", "fetch", "origin", ref, "--depth=1", "--no-tags"], ignore_error=True)
+    depth = "2" if suffix else "1"
+    run_git_cmd(["git", "fetch", "origin", root, f"--depth={depth}", "--no-tags"], ignore_error=True)
+    if suffix:
+        run_git_cmd(["git", "fetch", "origin", "--deepen=1", "--no-tags"], ignore_error=True)
 
 
 def resolve_ref(ref: str) -> str:
     """INTENT: Resolve ref to a revision Git can use (SHA or origin/ref). After fetch, branch names exist as origin/<ref>.
+    Supports parent syntax (sha^, sha~1) by resolving the tip then applying the suffix locally.
     INPUT: ref (str). OUTPUT: str (SHA or ref). SIDE_EFFECTS: subprocess."""
     if is_zero_sha(ref):
         return ref
-    # Try ref as-is (local branch, tag, SHA), then origin/ref (after fetch; needed when run manually with no local branch)
-    for candidate in (ref, f"origin/{ref}"):
+    root, suffix = split_rev_suffix(ref)
+    # Try ref as-is (local branch, tag, SHA, sha^), then origin/root[+suffix]
+    candidates = [ref, f"origin/{ref}"]
+    if suffix:
+        candidates = [ref, f"{root}{suffix}", f"origin/{root}{suffix}"]
+    for candidate in candidates:
         try:
             return run_git_cmd(["git", "rev-parse", "--verify", candidate])
         except subprocess.CalledProcessError:
             continue
-    raise ValueError(f"Could not resolve ref '{ref}'; run with --debug and ensure refs are fetched (e.g. git fetch origin {ref})")
+    if suffix:
+        for tip in (root, f"origin/{root}"):
+            try:
+                tip_sha = run_git_cmd(["git", "rev-parse", "--verify", tip])
+                return run_git_cmd(["git", "rev-parse", "--verify", f"{tip_sha}{suffix}"])
+            except subprocess.CalledProcessError:
+                continue
+    raise ValueError(
+        f"Could not resolve ref '{ref}'; run with --debug and ensure refs are fetched "
+        f"(checkout fetch-depth: 0; e.g. git fetch origin {root})"
+    )
 
 
 def is_zero_sha(ref: str) -> bool:

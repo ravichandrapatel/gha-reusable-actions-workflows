@@ -172,12 +172,14 @@ jobs:
 
 ### 3. Manual run (`workflow_dispatch`)
 
-Compare the **current branch** (ref name) to the **default branch**. Use when running the workflow manually (e.g. on a feature branch before opening a PR).
+| Where you run it | Source | Base | Why |
+| --- | --- | --- | --- |
+| Feature / non-default branch | `github.ref_name` | default branch | Pre-PR: “what would this branch change vs main?” |
+| **Default branch (`main`)** | `github.sha` | **resolved first-parent SHA** (plain 40-char) | `main` vs `main` is always empty. Auto-detect resolves `HEAD^` locally — never passes `sha^` into fetch (that fails). |
 
-| Ref | Value |
-| --- | ----- |
-| Source | `github.ref_name` (branch or tag that was checked out) |
-| Base | `github.event.repository.default_branch` (e.g. `main`) |
+**Important:** After merging a feature branch into `main`, prefer the **`push`** event (uses `before` → `sha`) for the merge itself. A later `workflow_dispatch` on `main` only sees the **tip commit’s** diff vs its first parent — not the whole feature branch history if more commits landed since.
+
+**Required:** `actions/checkout` with `fetch-depth: 0`. Shallow clones cannot resolve the first parent → `Could not resolve ref`.
 
 ```yaml
 on:
@@ -233,15 +235,21 @@ jobs:
       - name: Set refs for detection
         id: refs
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "source=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-            echo "base=${{ github.event.repository.default_branch }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+          # Prefer auto_detect_refs: 'true' instead of this step.
+          # Kept as an explicit equivalent of the composite's auto-detect logic.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "source=${{ github.head_ref }}" >> $GITHUB_OUTPUT
             echo "base=${{ github.base_ref }}" >> $GITHUB_OUTPUT
-          else
+          elif [ "${{ github.event_name }}" = "push" ]; then
             echo "source=${{ github.sha }}" >> $GITHUB_OUTPUT
-            echo "base=${{ github.event.before || github.event.repository.default_branch }}" >> $GITHUB_OUTPUT
+            echo "base=${{ github.event.before }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref_name }}" = "${{ github.event.repository.default_branch }}" ]; then
+            # Resolve parent to a plain SHA — do not pass 'sha^' (fetch cannot use it)
+            echo "source=${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "base=$(git rev-parse ${{ github.sha }}^)" >> $GITHUB_OUTPUT
+          else
+            echo "source=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "base=${{ github.event.repository.default_branch }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Detect changes (git-path-filter)

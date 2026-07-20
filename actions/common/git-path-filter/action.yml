@@ -10,11 +10,13 @@ name: 'Git Path Filter'
 description: 'Detects files changes between two refs (YAML glob groups, ** and ! last-match-wins); ref-agnostic, pull_request and push'
 inputs:
   source_branch:
-    description: 'Source/head ref (branch, tag, or SHA; e.g. github.head_ref or github.sha)'
-    required: true
+    description: 'Source/head ref (branch, tag, or SHA). Required when auto_detect_refs is false; ignored when true.'
+    required: false
+    default: ''
   base_ref_branch:
-    description: 'Base ref (branch, tag, or SHA; no origin/ prefix)'
-    required: true
+    description: 'Base ref (branch, tag, or SHA; no origin/ prefix). Required when auto_detect_refs is false; ignored when true.'
+    required: false
+    default: ''
   pattern_filter:
     description: 'YAML string defining filter groups (key -> list of globs; ! = exclude)'
     required: true
@@ -69,6 +71,25 @@ runs:
       run: |
         set -euo pipefail
 
+        # Resolve first parent to a plain 40-char SHA. Never pass "sha^" to main.py —
+        # git fetch origin cannot fetch parent syntax, and GITHUB_OUTPUT/^ are fragile.
+        resolve_first_parent() {
+          local tip="$1"
+          local parent=""
+          git fetch --no-tags --deepen=1 origin 2>/dev/null || true
+          git fetch --no-tags origin "${tip}" 2>/dev/null || true
+          if parent="$(git rev-parse --verify "${tip}^" 2>/dev/null)"; then
+            printf '%s\n' "${parent}"
+            return 0
+          fi
+          if parent="$(git rev-parse --verify "${tip}~1" 2>/dev/null)"; then
+            printf '%s\n' "${parent}"
+            return 0
+          fi
+          echo "::error::[GIT-PATH-FILTER] Could not resolve parent of ${tip}. Use actions/checkout with fetch-depth: 0 (full history)." >&2
+          return 1
+        }
+
         source_ref=""
         base_ref=""
 
@@ -76,18 +97,30 @@ runs:
           source_ref="${HEAD_REF}"
           base_ref="${BASE_REF}"
         elif [ "${EVENT_NAME}" = "push" ]; then
-          if [ "${REF}" = "refs/heads/main" ]; then
+          if [ "${REF}" = "refs/heads/${DEFAULT_BRANCH}" ] || [ "${REF}" = "refs/heads/main" ]; then
             source_ref="${SHA}"
-            base_ref="${BEFORE:-${DEFAULT_BRANCH}}"
+            if [ -n "${BEFORE}" ] && [ "${BEFORE}" != "0000000000000000000000000000000000000000" ]; then
+              base_ref="${BEFORE}"
+            else
+              base_ref="$(resolve_first_parent "${SHA}")"
+            fi
           else
             branch="${REF#refs/heads/}"
             source_ref="${branch}"
             base_ref="${DEFAULT_BRANCH}"
           fi
         else
-          source_ref="${REF_NAME}"
-          base_ref="${DEFAULT_BRANCH}"
+          # workflow_dispatch / schedule / etc.
+          if [ "${REF_NAME}" = "${DEFAULT_BRANCH}" ] || [ "${REF_NAME}" = "main" ]; then
+            source_ref="${SHA}"
+            base_ref="$(resolve_first_parent "${SHA}")"
+          else
+            source_ref="${REF_NAME}"
+            base_ref="${DEFAULT_BRANCH}"
+          fi
         fi
+
+        echo "[GIT-PATH-FILTER] auto_detect event=${EVENT_NAME} source=${source_ref} base=${base_ref}"
 
         {
           echo "source=${source_ref}"

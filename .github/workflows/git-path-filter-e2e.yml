@@ -1,0 +1,324 @@
+# =============================================================================
+# FILE_NAME: git-path-filter-e2e.yml
+# DESCRIPTION: Real-world e2e scenarios for actions/common/git-path-filter
+# VERSION: 1.0.0
+# AUTHORS: Platform / DevOps
+# =============================================================================
+
+name: git-path-filter e2e
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'actions/common/git-path-filter/**'
+      - '.github/workflows/git-path-filter-e2e.yml'
+      - 'actions/common/git-path-filter/e2e-fixtures/**'
+  push:
+    branches:
+      - main
+      - 'test/git-path-filter-e2e'
+      - 'test/gpf-**'
+    paths:
+      - 'actions/common/git-path-filter/**'
+      - '.github/workflows/git-path-filter-e2e.yml'
+      - 'actions/common/git-path-filter/e2e-fixtures/**'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  scenario-auto-detect:
+    name: A — auto_detect (${{ github.event_name }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.1.7
+        with:
+          fetch-depth: 0
+
+      - name: Run git-path-filter (auto_detect)
+        id: gpf
+        uses: ./actions/common/git-path-filter
+        with:
+          auto_detect_refs: 'true'
+          debug: 'true'
+          pattern_filter: |
+            action:
+              - 'actions/common/git-path-filter/**'
+              - '!.github/**'
+            workflow:
+              - '.github/workflows/git-path-filter-e2e.yml'
+            fixtures:
+              - 'actions/common/git-path-filter/e2e-fixtures/**'
+            readme:
+              - 'actions/common/git-path-filter/readme.md'
+              - '**/readme.md'
+              - '**/README.md'
+
+      - name: Assert auto_detect succeeded
+        env:
+          CHANGES: ${{ steps.gpf.outputs.changes }}
+          CHANGES_JSON: ${{ steps.gpf.outputs.changes_json }}
+          SOURCE_REF: ${{ steps.gpf.outputs.source_ref }}
+          BASE_REF: ${{ steps.gpf.outputs.base_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PYTHONUNBUFFERED: '1'
+        run: |
+          set -euo pipefail
+          echo "event=${EVENT_NAME} ref_name=${REF_NAME}"
+          echo "source_ref=${SOURCE_REF}"
+          echo "base_ref=${BASE_REF}"
+          echo "changes=${CHANGES}"
+          echo "changes_json=${CHANGES_JSON}"
+
+          test -n "${SOURCE_REF}"
+          test -n "${BASE_REF}"
+          # Parent syntax must never leak into resolved base (plain SHA or branch name only)
+          if [[ "${BASE_REF}" == *'^'* ]] || [[ "${BASE_REF}" == *'~'* ]]; then
+            echo "::error::base_ref still has parent syntax: ${BASE_REF}"
+            exit 1
+          fi
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ] && { [ "${REF_NAME}" = "main" ] || [ "${REF_NAME}" = "${DEFAULT_BRANCH}" ]; }; then
+            echo "${SOURCE_REF}" | grep -Eq '^[0-9a-f]{40}$'
+            echo "${BASE_REF}" | grep -Eq '^[0-9a-f]{40}$'
+            test "${SOURCE_REF}" != "${BASE_REF}"
+          fi
+          python3 -u - <<'PY'
+          import json, os
+          raw = os.environ.get("CHANGES_JSON") or "{}"
+          data = json.loads(raw)
+          assert isinstance(data, dict), data
+          print("groups:", sorted(data.keys()))
+          PY
+
+          {
+            echo "### A — auto_detect (${EVENT_NAME})"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| event | \`${EVENT_NAME}\` |"
+            echo "| ref_name | \`${REF_NAME}\` |"
+            echo "| source_ref | \`${SOURCE_REF}\` |"
+            echo "| base_ref | \`${BASE_REF}\` |"
+            echo "| changes | \`${CHANGES}\` |"
+            echo ""
+            echo '```json'
+            echo "${CHANGES_JSON}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  scenario-suite:
+    name: B–G — explicit suite
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.1.7
+        with:
+          fetch-depth: 0
+
+      - name: Prepare SHAs
+        id: sha
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if ! PARENT_SHA="$(git rev-parse HEAD~1 2>/dev/null)"; then
+            echo "::error::Need fetch-depth:0 and at least 2 commits"
+            exit 1
+          fi
+          echo "head=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+          echo "parent=${PARENT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "head=${HEAD_SHA} parent=${PARENT_SHA}"
+
+      - name: B — SHA vs parent (manual refs)
+        id: b
+        uses: ./actions/common/git-path-filter
+        with:
+          source_branch: ${{ steps.sha.outputs.head }}
+          base_ref_branch: ${{ steps.sha.outputs.parent }}
+          debug: 'true'
+          pattern_filter: |
+            action:
+              - 'actions/common/git-path-filter/**'
+            other:
+              - '**/*'
+              - '!actions/common/git-path-filter/**'
+
+      - name: C — base == source → empty changes
+        id: c
+        uses: ./actions/common/git-path-filter
+        with:
+          source_branch: ${{ steps.sha.outputs.head }}
+          base_ref_branch: ${{ steps.sha.outputs.head }}
+          debug: 'true'
+          pattern_filter: |
+            action:
+              - 'actions/common/git-path-filter/**'
+
+      - name: D — change_types A,M only
+        id: d
+        uses: ./actions/common/git-path-filter
+        with:
+          source_branch: ${{ steps.sha.outputs.head }}
+          base_ref_branch: ${{ steps.sha.outputs.parent }}
+          change_types: 'A,M'
+          debug: 'true'
+          pattern_filter: |
+            action:
+              - 'actions/common/git-path-filter/**'
+
+      - name: E — negation last-match-wins
+        id: e
+        uses: ./actions/common/git-path-filter
+        with:
+          source_branch: ${{ steps.sha.outputs.head }}
+          base_ref_branch: ${{ steps.sha.outputs.parent }}
+          debug: 'true'
+          pattern_filter: |
+            code:
+              - 'actions/common/git-path-filter/**'
+              - '!actions/common/git-path-filter/readme.md'
+              - '!actions/common/git-path-filter/**/*.md'
+
+      - name: F — working_directory
+        id: f
+        uses: ./actions/common/git-path-filter
+        with:
+          source_branch: ${{ steps.sha.outputs.head }}
+          base_ref_branch: ${{ steps.sha.outputs.parent }}
+          working_directory: 'actions/common/git-path-filter'
+          debug: 'true'
+          pattern_filter: |
+            py:
+              - '**/*.py'
+            yml:
+              - '**/*.yml'
+              - '**/*.yaml'
+            docs:
+              - '**/*.md'
+
+      - name: G — zero-SHA base (all files in source as Added)
+        id: g
+        uses: ./actions/common/git-path-filter
+        with:
+          source_branch: ${{ steps.sha.outputs.head }}
+          base_ref_branch: '0000000000000000000000000000000000000000'
+          change_types: 'A'
+          debug: 'true'
+          pattern_filter: |
+            action:
+              - 'actions/common/git-path-filter/main.py'
+              - 'actions/common/git-path-filter/action.yml'
+
+      - name: Prepare sha^ base (parent-suffix input)
+        id: hbase
+        env:
+          HEAD_SHA: ${{ steps.sha.outputs.head }}
+        run: |
+          set -euo pipefail
+          # Deliberately pass parent syntax; action/main.py must resolve it.
+          {
+            echo "base<<EOF"
+            echo "${HEAD_SHA}^"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: H — parent-suffix safety (sha^ must resolve if passed)
+        id: h
+        uses: ./actions/common/git-path-filter
+        with:
+          source_branch: ${{ steps.sha.outputs.head }}
+          base_ref_branch: ${{ steps.hbase.outputs.base }}
+          debug: 'true'
+          pattern_filter: |
+            action:
+              - 'actions/common/git-path-filter/**'
+
+      - name: Assert suite + write summary
+        env:
+          B_CHANGES: ${{ steps.b.outputs.changes }}
+          B_JSON: ${{ steps.b.outputs.changes_json }}
+          C_CHANGES: ${{ steps.c.outputs.changes }}
+          C_JSON: ${{ steps.c.outputs.changes_json }}
+          D_JSON: ${{ steps.d.outputs.changes_json }}
+          E_JSON: ${{ steps.e.outputs.changes_json }}
+          F_JSON: ${{ steps.f.outputs.changes_json }}
+          G_JSON: ${{ steps.g.outputs.changes_json }}
+          H_JSON: ${{ steps.h.outputs.changes_json }}
+          H_BASE: ${{ steps.h.outputs.base_ref }}
+          HEAD_SHA: ${{ steps.sha.outputs.head }}
+          PARENT_SHA: ${{ steps.sha.outputs.parent }}
+          PYTHONUNBUFFERED: '1'
+        run: |
+          set -euo pipefail
+          python3 -u - <<'PY'
+          import json, os, sys
+
+          def load(name):
+              raw = os.environ.get(name) or "{}"
+              try:
+                  return json.loads(raw)
+              except Exception as e:
+                  print(f"FAIL parse {name}: {e}\n{raw[:500]}", file=sys.stderr)
+                  raise
+
+          results = []
+
+          b = load("B_JSON")
+          ok_b = isinstance(b, dict) and "action" in b
+          results.append(("B SHA vs parent", ok_b, os.environ.get("B_CHANGES"), b.get("action", {})))
+
+          c = load("C_JSON")
+          c_changes = json.loads(os.environ.get("C_CHANGES") or "[]")
+          ok_c = c_changes == [] and all(not v.get("has_changes") for v in c.values())
+          results.append(("C base==source empty", ok_c, c_changes, {k: v.get("has_changes") for k, v in c.items()}))
+
+          d = load("D_JSON")
+          ok_d = isinstance(d, dict)
+          results.append(("D change_types A,M", ok_d, None, d.get("action", {})))
+
+          e = load("E_JSON")
+          files = (e.get("code") or {}).get("files") or []
+          ok_e = all(not f.endswith("readme.md") for f in files)
+          results.append(("E negation excludes readme", ok_e, files, e.get("code", {})))
+
+          f = load("F_JSON")
+          f_files = []
+          for g in f.values():
+              f_files.extend(g.get("files") or [])
+          ok_f = all(not p.startswith("actions/") for p in f_files) if f_files else True
+          results.append(("F working_directory relative paths", ok_f, f_files, {k: v.get("has_changes") for k, v in f.items()}))
+
+          g = load("G_JSON")
+          g_action = g.get("action") or {}
+          ok_g = g_action.get("has_changes") is True and len(g_action.get("files") or []) >= 1
+          results.append(("G zero-SHA base lists source files", ok_g, g_action.get("files"), g_action))
+
+          h = load("H_JSON")
+          ok_h = isinstance(h, dict)
+          results.append(("H sha^ parent suffix resolves", ok_h, os.environ.get("H_BASE"), h.get("action", {})))
+
+          print(json.dumps([{"name": n, "pass": p} for n, p, *_ in results], indent=2))
+          failed = [n for n, p, *_ in results if not p]
+          summary = ["### B–H explicit suite", "", "| Scenario | Result |", "| --- | --- |"]
+          for n, p, extra, detail in results:
+              summary.append(f"| {n} | {'PASS' if p else 'FAIL'} |")
+          summary.append("")
+          summary.append(f"- HEAD: `{os.environ['HEAD_SHA']}`")
+          summary.append(f"- PARENT: `{os.environ['PARENT_SHA']}`")
+          path = os.environ["GITHUB_STEP_SUMMARY"]
+          with open(path, "a", encoding="utf-8") as fh:
+              fh.write("\n".join(summary) + "\n")
+          if failed:
+              print("FAILED:", failed, file=sys.stderr)
+              sys.exit(1)
+          print("ALL SUITE ASSERTIONS PASSED")
+          PY
