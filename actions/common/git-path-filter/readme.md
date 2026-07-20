@@ -355,6 +355,20 @@ Validated **2026-07-20** on `ravichandrapatel/gha-reusable-actions-workflows` us
 
 Both refs are plain 40-char SHAs (first parent resolved locally). Groups detected: `action`, `fixtures`, `readme`, `workflow`.
 
+### Merge strategies into `main` (push + manual dispatch)
+
+All three GitHub merge methods were exercised with real PRs (`gh pr merge --squash` / `--rebase` / `--merge`). After each merge: e2e `push` on `main` **and** `workflow_dispatch` on `main`.
+
+| Merge type | PR | Tip parents | Push e2e | Manual dispatch on `main` | Dispatch auto_detect |
+| --- | --- | :---: | --- | --- | --- |
+| **Squash** | [#10](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/pull/10) | 1 (linear) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736621988) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736643541) | `source=e38ca3c…` `base=4e1904e…` |
+| **Rebase and merge** | [#11](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/pull/11) | 1 (linear) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736694806) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736716796) | `source=f2fa4e2…` `base=e38ca3c…` |
+| **Merge commit** | [#12](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/pull/12) | 2 (merge) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736763123) | [PASS](https://github.com/ravichandrapatel/gha-reusable-actions-workflows/actions/runs/29736783883) | `source=f12420e…` `base=f2fa4e2…` (first parent) |
+
+Notes:
+- Squash / rebase land as single-parent commits; dispatch diffs tip vs `tip^` (= previous `main`).
+- Merge commit has two parents; auto-detect uses **first parent** (`main` before the merge), which is the correct “what this merge brought onto main” view for path filtering.
+
 ### Explicit suite (B–H) — all PASS on every green run above
 
 | # | Scenario | Assertion |
