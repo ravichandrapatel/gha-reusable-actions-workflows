@@ -134,9 +134,19 @@ jobs:
             echo "::error::Need fetch-depth:0 and at least 2 commits"
             exit 1
           fi
-          echo "head=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
-          echo "parent=${PARENT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "head=${HEAD_SHA} parent=${PARENT_SHA}"
+          # Deeper base so working_directory scenarios see action-file deltas
+          # (tip commit may only touch .github/workflows).
+          if DEEP_SHA="$(git rev-parse HEAD~5 2>/dev/null)"; then
+            true
+          else
+            DEEP_SHA="$(git rev-parse HEAD~1)"
+          fi
+          {
+            echo "head=${HEAD_SHA}"
+            echo "parent=${PARENT_SHA}"
+            echo "deep=${DEEP_SHA}"
+          } >> "$GITHUB_OUTPUT"
+          echo "head=${HEAD_SHA} parent=${PARENT_SHA} deep=${DEEP_SHA}"
 
       - name: B — SHA vs parent (manual refs)
         id: b
@@ -193,7 +203,7 @@ jobs:
         uses: ./actions/common/git-path-filter
         with:
           source_branch: ${{ steps.sha.outputs.head }}
-          base_ref_branch: ${{ steps.sha.outputs.parent }}
+          base_ref_branch: ${{ steps.sha.outputs.deep }}
           working_directory: 'actions/common/git-path-filter'
           debug: 'true'
           pattern_filter: |
