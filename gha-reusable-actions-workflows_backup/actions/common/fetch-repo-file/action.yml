@@ -1,0 +1,153 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Fetch a single file via GitHub Contents API (no raw.githubusercontent).
+# VERSION: 1.0.0
+# AUTHORS: Platform / DevOps
+# =============================================================================
+
+name: 'Fetch Repo File'
+description: 'Download a repository file via the GitHub Contents API with token auth and retries'
+
+inputs:
+  repository:
+    description: 'Source repository as owner/repo'
+    required: true
+  path:
+    description: 'File path inside the source repository'
+    required: true
+  ref:
+    description: 'Git ref (branch, tag, or SHA)'
+    required: false
+    default: 'main'
+  destination:
+    description: 'Path on the runner where the file will be written'
+    required: true
+  github_token:
+    description: 'Token with contents:read on the source repository'
+    required: false
+    default: ${{ github.token }}
+  max_attempts:
+    description: 'Maximum attempts for transient API failures (404/5xx)'
+    required: false
+    default: '5'
+  retry_sleep_seconds:
+    description: 'Initial sleep between retries in seconds (doubles each attempt)'
+    required: false
+    default: '2'
+
+outputs:
+  destination:
+    description: 'Destination path written on the runner'
+    value: ${{ steps.fetch.outputs.destination }}
+  sha:
+    description: 'Git blob SHA returned by the Contents API'
+    value: ${{ steps.fetch.outputs.sha }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Fetch file via Contents API
+      id: fetch
+      shell: bash
+      env:
+        REPOSITORY: ${{ inputs.repository }}
+        FILE_PATH: ${{ inputs.path }}
+        REF: ${{ inputs.ref }}
+        DESTINATION: ${{ inputs.destination }}
+        GH_TOKEN: ${{ inputs.github_token }}
+        MAX_ATTEMPTS: ${{ inputs.max_attempts }}
+        RETRY_SLEEP_SECONDS: ${{ inputs.retry_sleep_seconds }}
+      run: |
+        set -euo pipefail
+        # [T-01] Authenticated Contents API fetch with retry (no raw.githubusercontent)
+        if [[ "${REPOSITORY}" != */* || "${REPOSITORY}" == */*/* ]]; then
+          echo "ERROR: repository must be owner/repo, got: ${REPOSITORY}" >&2
+          exit 1
+        fi
+        if [[ -z "${FILE_PATH}" || -z "${DESTINATION}" ]]; then
+          echo "ERROR: path and destination are required" >&2
+          exit 1
+        fi
+        if [[ -z "${GH_TOKEN}" ]]; then
+          echo "ERROR: github_token is empty" >&2
+          exit 1
+        fi
+        if ! command -v gh >/dev/null 2>&1; then
+          echo "ERROR: gh CLI is required on the runner" >&2
+          exit 1
+        fi
+        if ! command -v jq >/dev/null 2>&1; then
+          echo "ERROR: jq is required on the runner" >&2
+          exit 1
+        fi
+
+        ATTEMPTS="${MAX_ATTEMPTS}"
+        SLEEP_SECS="${RETRY_SLEEP_SECONDS}"
+        if ! [[ "${ATTEMPTS}" =~ ^[1-9][0-9]*$ ]]; then
+          echo "ERROR: max_attempts must be a positive integer" >&2
+          exit 1
+        fi
+        if ! [[ "${SLEEP_SECS}" =~ ^[0-9]+$ ]]; then
+          echo "ERROR: retry_sleep_seconds must be a non-negative integer" >&2
+          exit 1
+        fi
+
+        API_PATH="repos/${REPOSITORY}/contents/${FILE_PATH}"
+        TMP_JSON="$(mktemp)"
+        TMP_ERR="$(mktemp)"
+        cleanup() { rm -f "${TMP_JSON}" "${TMP_ERR}"; }
+        trap cleanup EXIT
+
+        attempt=1
+        while true; do
+          echo "Fetching ${REPOSITORY}@${REF}:${FILE_PATH} (attempt ${attempt}/${ATTEMPTS})"
+          set +e
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "${API_PATH}?ref=${REF}" \
+            >"${TMP_JSON}" 2>"${TMP_ERR}"
+          GH_RC=$?
+          set -e
+
+          if [[ "${GH_RC}" -eq 0 ]]; then
+            break
+          fi
+
+          echo "WARN: Contents API failed (rc=${GH_RC}): $(cat "${TMP_ERR}")" >&2
+          if [[ "${attempt}" -ge "${ATTEMPTS}" ]]; then
+            echo "ERROR: exhausted ${ATTEMPTS} attempts fetching ${API_PATH}?ref=${REF}" >&2
+            exit 1
+          fi
+          sleep "${SLEEP_SECS}"
+          SLEEP_SECS=$((SLEEP_SECS * 2))
+          if [[ "${SLEEP_SECS}" -gt 60 ]]; then
+            SLEEP_SECS=60
+          fi
+          attempt=$((attempt + 1))
+        done
+
+        TYPE="$(jq -r '.type // empty' "${TMP_JSON}")"
+        if [[ "${TYPE}" != "file" ]]; then
+          echo "ERROR: path is not a file (type=${TYPE:-unknown})" >&2
+          exit 1
+        fi
+        ENCODING="$(jq -r '.encoding // empty' "${TMP_JSON}")"
+        if [[ "${ENCODING}" != "base64" ]]; then
+          echo "ERROR: unexpected encoding: ${ENCODING:-empty}" >&2
+          exit 1
+        fi
+        SHA="$(jq -r '.sha // empty' "${TMP_JSON}")"
+        if [[ -z "${SHA}" ]]; then
+          echo "ERROR: Contents API response missing sha" >&2
+          exit 1
+        fi
+
+        mkdir -p "$(dirname "${DESTINATION}")"
+        # GitHub may wrap base64 with newlines
+        jq -r '.content' "${TMP_JSON}" | tr -d '\n' | base64 --decode >"${DESTINATION}"
+
+        {
+          echo "destination=${DESTINATION}"
+          echo "sha=${SHA}"
+        } >>"${GITHUB_OUTPUT}"
+        echo "Wrote ${DESTINATION} (sha=${SHA})"

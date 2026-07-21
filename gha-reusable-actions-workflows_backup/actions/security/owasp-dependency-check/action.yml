@@ -1,0 +1,645 @@
+# OWASP Dependency-Check Action. Runs the pre-built image with Podman only (no Docker).
+# Use on a runner that has Podman (e.g. ARC runner pod). Proxy options are not exposed.
+# See: https://dependency-check.github.io/DependencyCheck/dependency-check-cli/arguments.html
+
+name: 'OWASP Dependency Check'
+description: 'Run OWASP Dependency-Check using pre-built image (Podman only; no proxy options)'
+branding:
+  icon: 'shield'
+  color: 'red'
+
+inputs:
+  # Required / main
+  project:
+    required: true
+    description: 'Project name'
+  path:
+    required: true
+    description: 'Path to scan (relative to workspace)'
+  format:
+    required: true
+    description: 'Report format (HTML, XML, CSV, JSON, JUNIT, SARIF, JENKINS, GITLAB, ALL)'
+  out:
+    required: false
+    default: 'reports'
+    description: 'Output folder relative to workspace'
+  image:
+    required: false
+    default: ''
+    description: 'OWASP Dependency-Check image (default: GHCR image from this repo)'
+
+  # Boolean options (pass flag when true; default false unless noted)
+  enableRetired:
+    required: false
+    default: false
+    description: 'Enable retired analyzers'
+  enableExperimental:
+    required: false
+    default: false
+    description: 'Enable experimental analyzers'
+  prettyPrint:
+    required: false
+    default: false
+    description: 'Pretty-print JSON/XML reports'
+  noupdate:
+    required: false
+    default: true
+    description: 'Disable NVD/suppressions update (set false to allow update)'
+  updateonly:
+    required: false
+    default: false
+    description: 'Only run update phase, no scan'
+  disableKnownExploited:
+    required: false
+    default: false
+    description: 'Disable Known Exploited Vulnerability analyzer'
+  disableFileName:
+    required: false
+    default: false
+    description: 'Disable File Name Analyzer'
+  disablePyDist:
+    required: false
+    default: false
+    description: 'Disable Python Distribution Analyzer'
+  disablePyPkg:
+    required: false
+    default: false
+    description: 'Disable Python Package Analyzer'
+  disableMSBuild:
+    required: false
+    default: false
+    description: 'Disable MS Build Project Analyzer'
+  disableNodeJS:
+    required: false
+    default: false
+    description: 'Disable Node.js Package Analyzer'
+  disableYarnAudit:
+    required: false
+    default: false
+    description: 'Disable Yarn Audit Analyzer'
+  disablePnpmAudit:
+    required: false
+    default: false
+    description: 'Disable pnpm Audit Analyzer'
+  disableNodeAudit:
+    required: false
+    default: false
+    description: 'Disable Node Audit Analyzer'
+  disableNodeAuditCache:
+    required: false
+    default: false
+    description: 'Disable Node Audit Analyzer cache'
+  nodeAuditSkipDevDependencies:
+    required: false
+    default: false
+    description: 'Node Audit: skip devDependencies'
+  nodePackageSkipDevDependencies:
+    required: false
+    default: false
+    description: 'Node Package Analyzer: skip devDependencies'
+  disableRetireJS:
+    required: false
+    default: false
+    description: 'Disable RetireJS Analyzer'
+  retireJsForceUpdate:
+    required: false
+    default: false
+    description: 'RetireJS update regardless of noupdate'
+  retirejsFilterNonVulnerable:
+    required: false
+    default: false
+    description: 'Filter out non-vulnerable JS files from report'
+  disableRubygems:
+    required: false
+    default: false
+    description: 'Disable Ruby Gemspec Analyzer'
+  disableBundleAudit:
+    required: false
+    default: false
+    description: 'Disable Ruby Bundler Audit Analyzer'
+  disableCocoapodsAnalyzer:
+    required: false
+    default: false
+    description: 'Disable Cocoapods Analyzer'
+  disableCarthageAnalyzer:
+    required: false
+    default: false
+    description: 'Disable Carthage Analyzer'
+  disableSwiftPackageManagerAnalyzer:
+    required: false
+    default: false
+    description: 'Disable Swift Package Manager Analyzer'
+  disableSwiftPackageResolvedAnalyzer:
+    required: false
+    default: false
+    description: 'Disable Swift Package Resolved Analyzer'
+  disableAutoconf:
+    required: false
+    default: false
+    description: 'Disable Autoconf Analyzer'
+  disableOpenSSL:
+    required: false
+    default: false
+    description: 'Disable OpenSSLCertificates Analyzer'
+  disableCmake:
+    required: false
+    default: false
+    description: 'Disable Cmake Analyzer'
+  disableArchive:
+    required: false
+    default: false
+    description: 'Disable Archive Analyzer'
+  disableJar:
+    required: false
+    default: false
+    description: 'Disable Jar Analyzer'
+  disableComposer:
+    required: false
+    default: false
+    description: 'Disable PHP Composer Analyzer'
+  composerSkipDev:
+    required: false
+    default: false
+    description: 'Composer: skip packages-dev'
+  disableCpan:
+    required: false
+    default: false
+    description: 'Disable Perl CPAN Analyzer'
+  disableDart:
+    required: false
+    default: false
+    description: 'Disable Dart Analyzer'
+  disableOssIndex:
+    required: false
+    default: false
+    description: 'Disable OSS Index Analyzer'
+  disableOssIndexCache:
+    required: false
+    default: false
+    description: 'Disable OSS Index cache'
+  disableCentral:
+    required: false
+    default: false
+    description: 'Disable Central Analyzer'
+  disableCentralCache:
+    required: false
+    default: false
+    description: 'Disable Central Analyzer cache'
+  enableNexus:
+    required: false
+    default: false
+    description: 'Enable Nexus Analyzer'
+  enableArtifactory:
+    required: false
+    default: false
+    description: 'Enable Artifactory Analyzer'
+  disableNuspec:
+    required: false
+    default: false
+    description: 'Disable .NET Nuget Nuspec Analyzer'
+  disableNugetconf:
+    required: false
+    default: false
+    description: 'Disable .NET Nuget packages.config Analyzer'
+  disableAssembly:
+    required: false
+    default: false
+    description: 'Disable .NET Assembly Analyzer'
+  disableGolangDep:
+    required: false
+    default: false
+    description: 'Disable Go Dependency Analyzer'
+  disableGolangMod:
+    required: false
+    default: false
+    description: 'Disable Go Mod Analyzer'
+  disableMixAudit:
+    required: false
+    default: false
+    description: 'Disable Elixir mix audit Analyzer'
+  disablePoetry:
+    required: false
+    default: false
+    description: 'Disable Poetry Analyzer'
+  disableVersionCheck:
+    required: false
+    default: false
+    description: 'Disable dependency-check version check'
+  purge:
+    required: false
+    default: false
+    description: 'Delete local NVD copy (force refresh)'
+  disableHostedSuppressions:
+    required: false
+    default: false
+    description: 'Disable hosted suppressions file'
+  hostedSuppressionsForceUpdate:
+    required: false
+    default: false
+    description: 'Hosted suppressions update regardless of noupdate'
+
+  # Value options (pass --name value only when non-empty)
+  failOnCVSS:
+    required: false
+    default: ''
+    description: 'Fail if CVSS >= this (0-10)'
+  junitFailOnCVSS:
+    required: false
+    default: ''
+    description: 'JUNIT CVSS threshold for failure'
+  log:
+    required: false
+    default: ''
+    description: 'Log file path (relative to workspace)'
+  suppression:
+    required: false
+    default: ''
+    description: 'Suppression XML path(s), comma-separated (relative to workspace or URL)'
+  exclude:
+    required: false
+    default: ''
+    description: 'Path pattern(s) to exclude, comma-separated'
+  symLink:
+    required: false
+    default: ''
+    description: 'Depth to follow symbolic links (default 0)'
+  nvdApiKey:
+    required: false
+    default: ''
+    description: 'NVD API key'
+  nvdApiEndpoint:
+    required: false
+    default: ''
+    description: 'NVD API endpoint URL'
+  nvdMaxRetryCount:
+    required: false
+    default: ''
+    description: 'NVD API max retry count'
+  nvdApiDelay:
+    required: false
+    default: ''
+    description: 'NVD API delay in ms'
+  nvdApiResultsPerPage:
+    required: false
+    default: ''
+    description: 'NVD API results per page'
+  nvdDatafeed:
+    required: false
+    default: ''
+    description: 'NVD data feed URL'
+  nvdUser:
+    required: false
+    default: ''
+    description: 'NVD basic auth user'
+  nvdPassword:
+    required: false
+    default: ''
+    description: 'NVD basic auth password'
+  nvdBearerToken:
+    required: false
+    default: ''
+    description: 'NVD bearer token'
+  nvdValidForHours:
+    required: false
+    default: ''
+    description: 'Hours before NVD update check'
+  hints:
+    required: false
+    default: ''
+    description: 'XML hints file path (relative to workspace)'
+  propertyfile:
+    required: false
+    default: ''
+    description: 'Properties file path (relative to workspace)'
+  kevURL:
+    required: false
+    default: ''
+    description: 'CISA Known Exploited Vulnerabilities feed URL'
+  kevUser:
+    required: false
+    default: ''
+    description: 'KEV basic auth user'
+  kevPassword:
+    required: false
+    default: ''
+    description: 'KEV basic auth password'
+  kevBearerToken:
+    required: false
+    default: ''
+    description: 'KEV bearer token'
+  yarn:
+    required: false
+    default: ''
+    description: 'Path to yarn'
+  pnpm:
+    required: false
+    default: ''
+    description: 'Path to pnpm'
+  retireJsUrl:
+    required: false
+    default: ''
+    description: 'RetireJS repository URL'
+  retireJsUrlUser:
+    required: false
+    default: ''
+    description: 'RetireJS basic auth user'
+  retirejsUrlPassword:
+    required: false
+    default: ''
+    description: 'RetireJS basic auth password'
+  retirejsUrlBearerToken:
+    required: false
+    default: ''
+    description: 'RetireJS bearer token'
+  retirejsFilter:
+    required: false
+    default: ''
+    description: 'RetireJS content filter regex (comma-separated for multiple)'
+  zipExtensions:
+    required: false
+    default: ''
+    description: 'Comma-separated file extensions treated as ZIP'
+  dotnet:
+    required: false
+    default: ''
+    description: 'Path to dotnet'
+  go:
+    required: false
+    default: ''
+    description: 'Path to go'
+  bundleAudit:
+    required: false
+    default: ''
+    description: 'Path to bundle-audit'
+  bundleAuditWorkingDirectory:
+    required: false
+    default: ''
+    description: 'Working directory for bundle-audit'
+  connectionString:
+    required: false
+    default: ''
+    description: 'Database connection string'
+  dbDriverName:
+    required: false
+    default: ''
+    description: 'Database driver class name'
+  dbDriverPath:
+    required: false
+    default: ''
+    description: 'Database driver path'
+  dbPassword:
+    required: false
+    default: ''
+    description: 'Database password'
+  dbUser:
+    required: false
+    default: ''
+    description: 'Database user'
+  data:
+    required: false
+    default: ''
+    description: 'Data directory'
+  hostedSuppressionsValidForHours:
+    required: false
+    default: ''
+    description: 'Hours before hosted suppressions update'
+  hostedSuppressionsUrl:
+    required: false
+    default: ''
+    description: 'Hosted suppressions URL'
+  hostedSuppressionsUser:
+    required: false
+    default: ''
+    description: 'Hosted suppressions basic auth user'
+  hostedSuppressionsPassword:
+    required: false
+    default: ''
+    description: 'Hosted suppressions basic auth password'
+  hostedSuppressionsBearerToken:
+    required: false
+    default: ''
+    description: 'Hosted suppressions bearer token'
+  suppressionUser:
+    required: false
+    default: ''
+    description: 'Suppression file basic auth user'
+  suppressionPassword:
+    required: false
+    default: ''
+    description: 'Suppression file basic auth password'
+  suppressionBearerToken:
+    required: false
+    default: ''
+    description: 'Suppression file bearer token'
+  centralUrl:
+    required: false
+    default: ''
+    description: 'Maven Central URL'
+  centralUsername:
+    required: false
+    default: ''
+    description: 'Central basic auth username'
+  centralPassword:
+    required: false
+    default: ''
+    description: 'Central basic auth password'
+  centralBearerToken:
+    required: false
+    default: ''
+    description: 'Central bearer token'
+  artifactoryUrl:
+    required: false
+    default: ''
+    description: 'Artifactory server URL'
+  artifactoryParallelAnalysis:
+    required: false
+    default: ''
+    description: 'Artifactory parallel analysis (true/false)'
+  artifactoryUsername:
+    required: false
+    default: ''
+    description: 'Artifactory username'
+  artifactoryApiToken:
+    required: false
+    default: ''
+    description: 'Artifactory API token'
+  artifactoryBearerToken:
+    required: false
+    default: ''
+    description: 'Artifactory bearer token'
+  nexus:
+    required: false
+    default: ''
+    description: 'Nexus server URL'
+  nexusUser:
+    required: false
+    default: ''
+    description: 'Nexus username'
+  nexusPass:
+    required: false
+    default: ''
+    description: 'Nexus password'
+  ossIndexUsername:
+    required: false
+    default: ''
+    description: 'OSS Index username'
+  ossIndexPassword:
+    required: false
+    default: ''
+    description: 'OSS Index password'
+  ossIndexRemoteErrorWarnOnly:
+    required: false
+    default: ''
+    description: 'OSS Index remote error warn only (true/false)'
+  ossIndexUrl:
+    required: false
+    default: ''
+    description: 'OSS Index URL'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set image
+      id: image
+      shell: bash
+      env:
+        INPUT_IMAGE: ${{ inputs.image }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        if [ -n "${INPUT_IMAGE}" ]; then
+          echo "image=${INPUT_IMAGE}" >> "$GITHUB_OUTPUT"
+        else
+          echo "image=ghcr.io/${GITHUB_REPOSITORY}/owasp-dependency-check:latest" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Run Dependency-Check
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        IMAGE: ${{ steps.image.outputs.image }}
+        project: ${{ inputs.project }}
+        path: ${{ inputs.path }}
+        format: ${{ inputs.format }}
+        out: ${{ inputs.out }}
+        image: ${{ inputs.image }}
+        enableRetired: ${{ inputs.enableRetired }}
+        enableExperimental: ${{ inputs.enableExperimental }}
+        prettyPrint: ${{ inputs.prettyPrint }}
+        noupdate: ${{ inputs.noupdate }}
+        updateonly: ${{ inputs.updateonly }}
+        disableKnownExploited: ${{ inputs.disableKnownExploited }}
+        disableFileName: ${{ inputs.disableFileName }}
+        disablePyDist: ${{ inputs.disablePyDist }}
+        disablePyPkg: ${{ inputs.disablePyPkg }}
+        disableMSBuild: ${{ inputs.disableMSBuild }}
+        disableNodeJS: ${{ inputs.disableNodeJS }}
+        disableYarnAudit: ${{ inputs.disableYarnAudit }}
+        disablePnpmAudit: ${{ inputs.disablePnpmAudit }}
+        disableNodeAudit: ${{ inputs.disableNodeAudit }}
+        disableNodeAuditCache: ${{ inputs.disableNodeAuditCache }}
+        nodeAuditSkipDevDependencies: ${{ inputs.nodeAuditSkipDevDependencies }}
+        nodePackageSkipDevDependencies: ${{ inputs.nodePackageSkipDevDependencies }}
+        disableRetireJS: ${{ inputs.disableRetireJS }}
+        retireJsForceUpdate: ${{ inputs.retireJsForceUpdate }}
+        retirejsFilterNonVulnerable: ${{ inputs.retirejsFilterNonVulnerable }}
+        disableRubygems: ${{ inputs.disableRubygems }}
+        disableBundleAudit: ${{ inputs.disableBundleAudit }}
+        disableCocoapodsAnalyzer: ${{ inputs.disableCocoapodsAnalyzer }}
+        disableCarthageAnalyzer: ${{ inputs.disableCarthageAnalyzer }}
+        disableSwiftPackageManagerAnalyzer: ${{ inputs.disableSwiftPackageManagerAnalyzer }}
+        disableSwiftPackageResolvedAnalyzer: ${{ inputs.disableSwiftPackageResolvedAnalyzer }}
+        disableAutoconf: ${{ inputs.disableAutoconf }}
+        disableOpenSSL: ${{ inputs.disableOpenSSL }}
+        disableCmake: ${{ inputs.disableCmake }}
+        disableArchive: ${{ inputs.disableArchive }}
+        disableJar: ${{ inputs.disableJar }}
+        disableComposer: ${{ inputs.disableComposer }}
+        composerSkipDev: ${{ inputs.composerSkipDev }}
+        disableCpan: ${{ inputs.disableCpan }}
+        disableDart: ${{ inputs.disableDart }}
+        disableOssIndex: ${{ inputs.disableOssIndex }}
+        disableOssIndexCache: ${{ inputs.disableOssIndexCache }}
+        disableCentral: ${{ inputs.disableCentral }}
+        disableCentralCache: ${{ inputs.disableCentralCache }}
+        enableNexus: ${{ inputs.enableNexus }}
+        enableArtifactory: ${{ inputs.enableArtifactory }}
+        disableNuspec: ${{ inputs.disableNuspec }}
+        disableNugetconf: ${{ inputs.disableNugetconf }}
+        disableAssembly: ${{ inputs.disableAssembly }}
+        disableGolangDep: ${{ inputs.disableGolangDep }}
+        disableGolangMod: ${{ inputs.disableGolangMod }}
+        disableMixAudit: ${{ inputs.disableMixAudit }}
+        disablePoetry: ${{ inputs.disablePoetry }}
+        disableVersionCheck: ${{ inputs.disableVersionCheck }}
+        purge: ${{ inputs.purge }}
+        disableHostedSuppressions: ${{ inputs.disableHostedSuppressions }}
+        hostedSuppressionsForceUpdate: ${{ inputs.hostedSuppressionsForceUpdate }}
+        failOnCVSS: ${{ inputs.failOnCVSS }}
+        junitFailOnCVSS: ${{ inputs.junitFailOnCVSS }}
+        log: ${{ inputs.log }}
+        suppression: ${{ inputs.suppression }}
+        exclude: ${{ inputs.exclude }}
+        symLink: ${{ inputs.symLink }}
+        nvdApiKey: ${{ inputs.nvdApiKey }}
+        nvdApiEndpoint: ${{ inputs.nvdApiEndpoint }}
+        nvdMaxRetryCount: ${{ inputs.nvdMaxRetryCount }}
+        nvdApiDelay: ${{ inputs.nvdApiDelay }}
+        nvdApiResultsPerPage: ${{ inputs.nvdApiResultsPerPage }}
+        nvdDatafeed: ${{ inputs.nvdDatafeed }}
+        nvdUser: ${{ inputs.nvdUser }}
+        nvdPassword: ${{ inputs.nvdPassword }}
+        nvdBearerToken: ${{ inputs.nvdBearerToken }}
+        nvdValidForHours: ${{ inputs.nvdValidForHours }}
+        hints: ${{ inputs.hints }}
+        propertyfile: ${{ inputs.propertyfile }}
+        kevURL: ${{ inputs.kevURL }}
+        kevUser: ${{ inputs.kevUser }}
+        kevPassword: ${{ inputs.kevPassword }}
+        kevBearerToken: ${{ inputs.kevBearerToken }}
+        yarn: ${{ inputs.yarn }}
+        pnpm: ${{ inputs.pnpm }}
+        retireJsUrl: ${{ inputs.retireJsUrl }}
+        retireJsUrlUser: ${{ inputs.retireJsUrlUser }}
+        retirejsUrlPassword: ${{ inputs.retirejsUrlPassword }}
+        retirejsUrlBearerToken: ${{ inputs.retirejsUrlBearerToken }}
+        retirejsFilter: ${{ inputs.retirejsFilter }}
+        zipExtensions: ${{ inputs.zipExtensions }}
+        dotnet: ${{ inputs.dotnet }}
+        go: ${{ inputs.go }}
+        bundleAudit: ${{ inputs.bundleAudit }}
+        bundleAuditWorkingDirectory: ${{ inputs.bundleAuditWorkingDirectory }}
+        connectionString: ${{ inputs.connectionString }}
+        dbDriverName: ${{ inputs.dbDriverName }}
+        dbDriverPath: ${{ inputs.dbDriverPath }}
+        dbPassword: ${{ inputs.dbPassword }}
+        dbUser: ${{ inputs.dbUser }}
+        data: ${{ inputs.data }}
+        hostedSuppressionsValidForHours: ${{ inputs.hostedSuppressionsValidForHours }}
+        hostedSuppressionsUrl: ${{ inputs.hostedSuppressionsUrl }}
+        hostedSuppressionsUser: ${{ inputs.hostedSuppressionsUser }}
+        hostedSuppressionsPassword: ${{ inputs.hostedSuppressionsPassword }}
+        hostedSuppressionsBearerToken: ${{ inputs.hostedSuppressionsBearerToken }}
+        suppressionUser: ${{ inputs.suppressionUser }}
+        suppressionPassword: ${{ inputs.suppressionPassword }}
+        suppressionBearerToken: ${{ inputs.suppressionBearerToken }}
+        centralUrl: ${{ inputs.centralUrl }}
+        centralUsername: ${{ inputs.centralUsername }}
+        centralPassword: ${{ inputs.centralPassword }}
+        centralBearerToken: ${{ inputs.centralBearerToken }}
+        artifactoryUrl: ${{ inputs.artifactoryUrl }}
+        artifactoryParallelAnalysis: ${{ inputs.artifactoryParallelAnalysis }}
+        artifactoryUsername: ${{ inputs.artifactoryUsername }}
+        artifactoryApiToken: ${{ inputs.artifactoryApiToken }}
+        artifactoryBearerToken: ${{ inputs.artifactoryBearerToken }}
+        nexus: ${{ inputs.nexus }}
+        nexusUser: ${{ inputs.nexusUser }}
+        nexusPass: ${{ inputs.nexusPass }}
+        ossIndexUsername: ${{ inputs.ossIndexUsername }}
+        ossIndexPassword: ${{ inputs.ossIndexPassword }}
+        ossIndexRemoteErrorWarnOnly: ${{ inputs.ossIndexRemoteErrorWarnOnly }}
+        ossIndexUrl: ${{ inputs.ossIndexUrl }}
+        CONTAINERS_STORAGE_DRIVER: vfs
+      run: |
+        set -euo pipefail
+        bash "${ACTION_PATH}/run-dependency-check.sh"

@@ -1,0 +1,39 @@
+# =============================================================================
+# FILE_NAME: okf-lint.yml
+# DESCRIPTION: CI gate — run okf.py lint (incl. standards Prompt Card check).
+# ALIGNMENT: OWASP SPVS (Secure Pipeline Verification Standard) 1.0
+# VERSION: 0.1.0
+# EXIT_CODES/SIGNALS: 0 on success, 1 on failure.
+# AUTHORS: contributors
+# =============================================================================
+
+name: OKF lint
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  okf-lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Lint vault (Prompt Card gate)
+        shell: bash
+        working-directory: .github/agents
+        run: |
+          set -euo pipefail
+          python3 -u _okf_knowledge/kernel/okf.py lint

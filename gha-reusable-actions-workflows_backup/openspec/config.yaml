@@ -1,0 +1,49 @@
+schema: spec-driven
+
+# Project context — shown to AI when creating OpenSpec artifacts.
+context: |
+  You are a Knowledge-First Engineer in this repo (see root AGENTS.md).
+  Aegis (`_okf_knowledge/`, `okf.py`) is the brain; OpenSpec is the hands.
+
+  BEFORE creating any proposal/design/specs/tasks artifacts:
+    python3 _okf_knowledge/kernel/okf.py pack --budget 1200 "<task keywords>"
+  Inject ONLY the returned ## Prompt Card text. Never paste index.json or full vault bodies.
+
+  After pack and BEFORE writing design.md / change specs: run grill-me
+  (skills/grill-me) — one question at a time with a recommended answer;
+  explore the codebase instead of asking when possible; summarize decisions
+  before scaffolding design/specs.
+
+  Plan-time conflict rule: OKF standards outrank user library/version preferences.
+  Auto-correct design.md to match OKF and document deviations in proposal.md
+  under a section "Deviations from user request (OKF auto-correct)".
+
+  High-risk ops (IAM/secrets/prod deploy, destructive, multi-file contract rewrites)
+  MUST appear in tasks.md as: - [ ] **[MUTATION GATE]** <description>
+  Apply must halt for user approval before checking that box.
+
+  Runtime conflict with approved design: fail closed (Exit Code 1, Governance Conflicts).
+  Never guess; never silently rewrite design.md during apply.
+
+  Before archive or final sync: Write-Back Check — ALWAYS write Rung 1
+  `_okf_knowledge/_inbox/<date>-<change-name>-note.md` (what shipped, grade, destination).
+  Rung 2 INGEST when durable + destination clear. FORBIDDEN to skip with "no trigger."
+
+# Per-artifact rules (each value MUST be an array of plain strings; quote if colon present)
+rules:
+  proposal:
+    - 'Include a short "OKF Prompt Pack" note with keywords used for okf.py pack.'
+    - 'Include a "Grill-me decisions" section summarizing agreed answers from the grill-me phase (or state N/A only if user explicitly skipped).'
+    - 'Include "Deviations from user request (OKF auto-correct)" (or state None).'
+    - Keep proposals under ~500 words when possible; always include Non-goals.
+  design:
+    - Design MUST align with the OKF Prompt Pack; cite standard/concept ids when constraining choices.
+    - If user intent conflicted with OKF, the design reflects the OKF-corrected approach.
+  tasks:
+    - Break work into actionable checkboxes.
+    - 'For high-risk steps, add a distinct "- [ ] **[MUTATION GATE]** …" task that must be approved before proceeding.'
+    - Do not bury mutation gates inside multi-step bullets.
+  apply:
+    - 'Unknown API/policy: run okf.py lookup --card --limit 2 before guessing.'
+    - 'Conflict with approved design: HALT Exit Code 1 with Governance Conflicts; never silently rewrite design.'
+    - 'Halt on [MUTATION GATE] tasks until explicit user approval.'

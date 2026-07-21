@@ -1,0 +1,106 @@
+# =============================================================================
+# Custom SemVer Action
+# =============================================================================
+# DESCRIPTION: Determines the next SemVer version based on commit messages.
+# VERSION: 1.2.0
+# AUTHORS: Platform Team
+# =============================================================================
+
+name: 'Custom SemVer'
+description: 'Derives the next SemVer version from commit history'
+inputs:
+  current_version:
+    description: 'The current version (e.g., 1.0.0)'
+    required: true
+  safe_name:
+    description: 'The safe name of the component for tag lookup'
+    required: true
+outputs:
+  next_version:
+    description: 'The calculated next version'
+    value: ${{ steps.semver.outputs.next_version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Calculate Next Version
+      id: semver
+      shell: bash
+      env:
+        CURRENT_VER: ${{ inputs.current_version }}
+        SAFE_NAME: ${{ inputs.safe_name }}
+      run: |
+        set -euo pipefail
+        # CHECKPOINT: semver reads ticket-prefixed conventional commits via commit_message_lib.sh
+        LIB="${GITHUB_WORKSPACE}/policies/scripts/commit_message_lib.sh"
+        if [[ ! -f "${LIB}" ]]; then
+          echo "[ERR-T-00] Missing commit message library at ${LIB}" >&2
+          exit 1
+        fi
+        # shellcheck source=commit_message_lib.sh
+        source "${LIB}"
+
+        # [T-01] Fetching commit messages since last tag
+        LAST_TAG="${SAFE_NAME}-${CURRENT_VER}"
+        if git rev-parse "refs/tags/$LAST_TAG" >/dev/null 2>&1; then
+          COMMITS=$(git log "${LAST_TAG}..HEAD" --oneline)
+          echo "[DBG-001] Commits since $LAST_TAG: $COMMITS"
+        else
+          COMMITS=$(git log --oneline)
+          echo "[DBG-001] No previous tag found. Commits: $COMMITS"
+        fi
+
+        # Handle initial version (starts at 1.0.0 as per requirement)
+        if [[ "$CURRENT_VER" == "0.0.0" ]]; then
+          NEXT_VER="1.0.0"
+          echo "next_version=$NEXT_VER" >> "$GITHUB_OUTPUT"
+          echo "::notice::Initial version set to $NEXT_VER"
+          exit 0
+        fi
+
+        MAJOR=$(echo "$CURRENT_VER" | awk -F. '{print $1}')
+        MINOR=$(echo "$CURRENT_VER" | awk -F. '{print $2}')
+        PATCH=$(echo "$CURRENT_VER" | awk -F. '{print $3}')
+
+        BUMP="none"
+
+        if [[ -n "$COMMITS" ]]; then
+          while IFS= read -r line; do
+            MSG=$(echo "$line" | cut -d' ' -f2-)
+            BODY="$(commit_msg_strip_ticket_prefix "${MSG}")"
+            CLASS="$(commit_msg_classify_semver_bump "${BODY}")"
+
+            # [T-02] Checking commit: $MSG -> $CLASS
+            case "${CLASS}" in
+              minor)
+                BUMP="minor"
+                break
+                ;;
+              patch)
+                if [[ "$BUMP" != "minor" ]]; then
+                  BUMP="patch"
+                fi
+                ;;
+              skip)
+                continue
+                ;;
+              none)
+                continue
+                ;;
+            esac
+          done <<< "$COMMITS"
+        fi
+
+        if [[ "$BUMP" == "minor" ]]; then
+          NEXT_VER="${MAJOR}.$((MINOR + 1)).0"
+        elif [[ "$BUMP" == "patch" ]]; then
+          NEXT_VER="${MAJOR}.${MINOR}.$((PATCH + 1))"
+        else
+          echo "[ERR-T-01] No version-bumping keywords (feat, fix, chore) found in commits since $LAST_TAG." >&2
+          echo "[ERR-T-01] Release aborted: No qualifying changes for a version bump." >&2
+          echo "[ERR-T-01] Use ticket-prefixed subjects, e.g. DCDT-12345 feat: description" >&2
+          exit 1
+        fi
+
+        echo "next_version=$NEXT_VER" >> "$GITHUB_OUTPUT"
+        echo "::notice::Next version calculated ($BUMP): $NEXT_VER"

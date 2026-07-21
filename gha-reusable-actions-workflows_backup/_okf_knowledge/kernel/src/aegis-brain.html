@@ -1,0 +1,1570 @@
+<!DOCTYPE html>
+<!--
+FILE_NAME: aegis-brain.html
+DESCRIPTION: Self-contained OKF bundle graph (aegis-brain). No backend, no CDN, no
+             dependencies. Graph + lint payloads are embedded in this file by
+             kernel/okf.py compile / lint (no graph.json / lint.json sidecars).
+             When served via okf.py serve, Run Compile / Run Lint refresh via API.
+             Features: force graph, declutter panel (labels/orphans/local
+             graph), type legend, navigator sidebar, and lint panel.
+VERSION: 0.2.11
+AUTHORS: contributors
+-->
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>aegis knowledge system</title>
+  <style>
+    :root {
+      --bg: #1a1a1a;
+      --panel: #202020;
+      --panel2: #262626;
+      --text: #dadada;
+      --muted: #8a8a8a;
+      --accent: #7f6df2;
+      --border: #333;
+      --error: #f26d78;
+      --warning: #f0c674;
+      --sidebar-w: 300px;
+      --topbar-h: 46px;
+      --reader-w: 440px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    #topbar {
+      position: fixed;
+      inset: 0 0 auto 0;
+      z-index: 10;
+      height: 46px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 16px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+
+    #topbar h1 {
+      font-size: 18px;
+      margin: 0;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    #topbar h1 span {
+      color: var(--accent);
+    }
+
+    #legend {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      overflow: hidden;
+    }
+
+    .key {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2px 9px;
+      background: var(--panel2);
+      transition: opacity .15s;
+    }
+
+    .key:hover {
+      border-color: #3a4157;
+    }
+
+    .key.off {
+      opacity: 0.35;
+      text-decoration: line-through;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: none;
+    }
+
+    #load {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    #status {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tb-btn {
+      cursor: pointer;
+      background: #232838;
+      color: var(--text);
+      border: 1px solid #313749;
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .tb-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .tb-btn:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
+
+    #side {
+      position: fixed;
+      top: 46px;
+      left: 0;
+      bottom: 0;
+      width: 300px;
+      z-index: 9;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      overflow: hidden; /* clip; navlist scrolls inside */
+    }
+
+    #searchbox {
+      flex: none;
+      padding: 10px 12px 6px;
+    }
+
+    #searchbox input {
+      width: 100%;
+      background: var(--panel2);
+      color: var(--text);
+      border: 1px solid #313749;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    #searchbox input:focus {
+      border-color: var(--accent);
+    }
+
+    #navlist {
+      flex: 1 1 auto;
+      min-height: 0; /* required for flex child overflow scroll */
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 4px 6px 8px;
+      /* Shared tree columns: chevron/bullet | label | mark */
+      --nav-cols: 14px minmax(0, 1fr) auto;
+      --nav-gap: 3px;
+      --nav-indent: 12px;
+      scrollbar-width: thin;
+      scrollbar-color: #4a4a4a var(--panel2);
+    }
+
+    #navlist::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    #navlist::-webkit-scrollbar-track {
+      background: var(--panel2);
+    }
+
+    #navlist::-webkit-scrollbar-thumb {
+      background: #4a4a4a;
+      border-radius: 4px;
+    }
+
+    #navlist::-webkit-scrollbar-thumb:hover {
+      background: #5a5a5a;
+    }
+
+    .navgroup summary,
+    .navitem {
+      display: grid;
+      grid-template-columns: var(--nav-cols);
+      column-gap: var(--nav-gap);
+      align-items: center;
+      box-sizing: border-box;
+      padding: 5px 10px 5px calc(6px + (var(--depth, 0) * var(--nav-indent)));
+      min-height: 26px;
+    }
+
+    .navgroup summary {
+      cursor: pointer;
+      list-style: none;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      user-select: none;
+    }
+
+    .navgroup summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .navgroup summary::before {
+      content: "";
+      grid-column: 1;
+      width: 14px;
+      height: 14px;
+      justify-self: center;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Expand arrow only when the folder/zone has nested folders or files */
+    .navgroup.has-children>summary::before {
+      content: "▸";
+      font-size: 13px;
+      line-height: 1;
+      font-weight: 700;
+      transition: transform .12s;
+    }
+
+    .navgroup.has-children[open]>summary::before {
+      transform: rotate(90deg);
+    }
+
+    .navgroup.zone-group {
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 6px;
+      padding-bottom: 6px;
+    }
+
+    .navgroup.zone-group>summary {
+      color: var(--accent);
+      font-size: 14px;
+    }
+
+    .navgroup.folder-group>summary {
+      color: #fff;
+      font-size: 12px;
+      text-transform: none;
+      letter-spacing: 0;
+      font-weight: 600;
+    }
+
+    .navgroup summary .nav-label {
+      grid-column: 2;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .navitem {
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #fff;
+    }
+
+    .navitem:hover {
+      background: var(--panel2);
+    }
+
+    .navitem.selected {
+      background: #23304d;
+    }
+
+    .navitem .bullet {
+      grid-column: 1;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      justify-self: center;
+    }
+
+    .navitem .nav-label {
+      grid-column: 2;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .navitem .mark {
+      grid-column: 3;
+      font-size: 12px;
+    }
+
+    .tb-status {
+      font-weight: 600;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .tb-status .cnt.err {
+      color: var(--error);
+    }
+
+    .tb-status .cnt.warn {
+      color: var(--warning);
+    }
+
+    .tb-status .cnt.ok {
+      color: #a3d977;
+    }
+
+    .tb-status .cnt.idle {
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    #reader {
+      position: fixed;
+      top: 46px;
+      right: 0;
+      bottom: 0;
+      width: 440px;
+      z-index: 9;
+      display: none;
+      flex-direction: column;
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+    }
+
+    #r-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 14px 4px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #r-title {
+      font-size: 15px;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    #r-close {
+      cursor: pointer;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 15px;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    #r-close:hover {
+      background: var(--panel2);
+      color: var(--text);
+    }
+
+    #r-meta {
+      padding: 0 14px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      word-break: break-all;
+    }
+
+    #r-meta .tag {
+      display: inline-block;
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0 8px;
+      margin: 2px 3px 0 0;
+      font-size: 11px;
+    }
+
+    #r-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px 24px;
+      font-size: 13px;
+    }
+
+    #r-body h1 {
+      font-size: 15px;
+      margin: 16px 0 6px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 4px;
+    }
+
+    #r-body h2 {
+      font-size: 14px;
+      margin: 14px 0 5px;
+    }
+
+    #r-body h3,
+    #r-body h4 {
+      font-size: 13px;
+      margin: 12px 0 4px;
+    }
+
+    #r-body p {
+      margin: 6px 0;
+    }
+
+    #r-body ul,
+    #r-body ol {
+      margin: 6px 0;
+      padding-left: 1.5em;
+      list-style-position: outside;
+    }
+
+    #r-body li {
+      margin: 3px 0;
+    }
+
+    #r-body li>ul,
+    #r-body li>ol {
+      margin: 4px 0 2px;
+      padding-left: 1.5em;
+    }
+
+    #r-body .li-cont {
+      display: block;
+      margin: 2px 0 0 1em;
+    }
+
+    #r-body code {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0 4px;
+      font-size: 12px;
+    }
+
+    #r-body pre {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+
+    #r-body pre code {
+      background: none;
+      border: none;
+      padding: 0;
+    }
+
+    #r-body table {
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 12px;
+    }
+
+    #r-body th,
+    #r-body td {
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      text-align: left;
+    }
+
+    #r-body th {
+      background: var(--panel2);
+    }
+
+    #r-body a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    #r-body a:hover {
+      text-decoration: underline;
+    }
+
+    #r-body a.dead {
+      color: var(--muted);
+      border-bottom: 1px dashed var(--muted);
+      cursor: help;
+    }
+
+    canvas#c {
+      position: fixed;
+      z-index: 1;
+      top: var(--topbar-h);
+      left: var(--sidebar-w);
+      right: 0;
+      bottom: 0;
+      display: block;
+      background: var(--bg);
+      /* Avoid browser upscaling blur; JS sets the real backing-store size. */
+      image-rendering: auto;
+    }
+
+    body.reader-open canvas#c {
+      right: var(--reader-w);
+    }
+
+    #tip {
+      position: fixed;
+      z-index: 20;
+      pointer-events: none;
+      display: none;
+      background: var(--panel);
+      border: 1px solid #313749;
+      border-radius: 8px;
+      padding: 8px 12px;
+      max-width: 340px;
+      font-size: 12px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, .5);
+    }
+
+    #tip .t-title {
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    #tip .t-meta {
+      color: var(--muted);
+    }
+
+    #tip .t-lint.error {
+      color: var(--error);
+    }
+
+    #tip .t-lint.warning {
+      color: var(--warning);
+    }
+
+    /* Floating graph controls */
+    #declutter {
+      position: fixed;
+      z-index: 8;
+      right: 16px;
+      bottom: 16px;
+      width: 220px;
+      background: rgba(32, 32, 32, 0.92);
+      border: 1px solid #3a3a3a;
+      border-radius: 10px;
+      padding: 10px 12px 12px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, .45);
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    body.reader-open #declutter {
+      right: calc(var(--reader-w) + 16px);
+    }
+
+    #declutter h2 {
+      margin: 0 0 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    #declutter label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      cursor: pointer;
+      user-select: none;
+      color: var(--text);
+    }
+
+    #declutter label:hover {
+      color: #fff;
+    }
+
+    #declutter input[type="checkbox"] {
+      accent-color: var(--accent);
+      width: 14px;
+      height: 14px;
+    }
+
+    #declutter .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 4px 0;
+    }
+
+    #declutter select {
+      background: var(--panel2);
+      color: var(--text);
+      border: 1px solid #3a3a3a;
+      border-radius: 6px;
+      padding: 3px 6px;
+      font-size: 12px;
+    }
+
+    #declutter .hint {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="topbar">
+    <h1>aegis knowledge system</h1>
+    <div id="legend"></div>
+    <div id="load">
+      <span id="status">loading…</span>
+      <span id="lintcounts" class="tb-status" title="Lint status"><span class="cnt idle">lint —</span></span>
+      <button id="run-lint" class="tb-btn" type="button"
+        title="Run vault lint (full scan when served via kernel/okf.py serve)">Run Lint</button>
+      <span id="compilecounts" class="tb-status" title="Compile status"><span class="cnt idle">compile —</span></span>
+      <button id="run-compile" class="tb-btn" type="button"
+        title="Rebuild vault index + re-embed graph (when served via kernel/okf.py serve)">Run Compile</button>
+    </div>
+  </div>
+  <div id="side">
+    <div id="searchbox"><input id="search" type="search" placeholder="Search concepts…"></div>
+    <div id="navlist"></div>
+  </div>
+  <canvas id="c"></canvas>
+  <div id="declutter">
+    <h2>Declutter</h2>
+    <div class="row">
+      <span>Labels</span>
+      <select id="opt-labels" title="When to show node titles">
+        <option value="hover">On hover</option>
+        <option value="selection">Selection</option>
+        <option value="always" selected>Always</option>
+        <option value="off">Off</option>
+      </select>
+    </div>
+    <label><input type="checkbox" id="opt-orphans" checked> Hide orphans</label>
+    <label><input type="checkbox" id="opt-local" checked> Local graph</label>
+    <label><input type="checkbox" id="opt-arrows" checked> Show arrows</label>
+    <p class="hint">Local graph shows only the selected note and its neighbors.</p>
+  </div>
+  <div id="tip"></div>
+  <div id="reader">
+    <div id="r-head">
+      <div id="r-title"></div>
+      <button id="r-close" title="Close (Esc)">✕</button>
+    </div>
+    <div id="r-meta"></div>
+    <div id="r-body"></div>
+  </div>
+  <!-- Data embedded by kernel/okf.py compile and kernel/okf.py lint so
+     aegis-brain auto-loads even when opened as file:// (where fetch is blocked). -->
+  <script id="graph-data"
+    type="application/json">{"nodes": [{"id": "kernel/profiles/_schema", "type": "Profile", "title": "Profile schema", "description": "Template for optional kernel/profiles \u2014 objective, intents, modes, required vault/standards lookup paths. Not a runtime Module/Vendor gate.", "tags": ["profile", "schema", "template", "persona", "rbac"], "content": "# Profile schema\n\nTemplate for optional capability profiles under `kernel/profiles/`. Copy this file; replace placeholders. Profiles are **not** a runtime Module/Vendor gate \u2014 domain knowledge loads via OKF lookup.\n\n## 1. Profile objective\n\nDefine the scope, boundaries, and primary goal of this persona. What are they authorized to do?\n\n## 2. Dynamic capabilities (RBAC)\n\n### 2.1 Authorized intents\n\n* Example: `CREATE`, `REVIEW`, `OPERATE`\n* Add intents this role may run\n\n### 2.2 Execution modes\n\n* One or more of: `advisory` | `generate` | `enforce`\n* Note any mode that is strictly PROHIBITED for this role\n\n### 2.3 Required vault / standards (lookup)\n\n* Example paths: `vault/concepts/extending-aegis.md`, `vault/playbooks/maintain-aegis-system.md`\n* Example standard: `standards/simplicity-first.md`, `standards/okf-prompt-injection.md`\n* Documented for future Profile use \u2014 kernel does not enforce missing paths today\n\n### 2.4 Enforced standards\n\n* Example: `standards/simplicity-first.md`, `standards/okf-prompt-injection.md`\n* Governance rules that strictly apply to this role's output\n\n## Prompt Card\n\n```text\nOptional Profile under kernel/profiles/: copy this template; set objective,\nauthorized intents, modes (advisory|generate|enforce), required vault/standards\npaths, enforced standards. Not a Module/Vendor runtime gate \u2014 load domain via OKF lookup.\n```\n\n## Related\n\n- Control plane: [AGENTS.md](/AGENTS.md)\n- Maintenance: [Maintain aegis-system](/vault/playbooks/maintain-aegis-system.md)\n- Prompt rules: [OKF Prompt Injection](/standards/okf-prompt-injection.md)\n- Extending: [Extending Aegis](/vault/concepts/extending-aegis.md)"}, {"id": "standards/metadata-headers", "type": "Concept", "title": "Metadata Headers", "description": "Required metadata blocks on every new file, function, and class across all languages.", "tags": ["standard", "code-quality", "documentation", "conventions"], "content": "Every new file, function, and class MUST carry a metadata block. This makes code\nself-describing for both humans and agents.\n\n# File header\n\nFields: `file_name`, `description`, `version`, `authors` (snake_case).\n\n```python\n# file_name: okf.py\n# description: Single-file Aegis OKF kernel (lookup, compile, lint, ...).\n# version: 0.1.0\n# authors: contributors\n```\n\n# Function / class header\n\nFields: `intent`, `input`, `output`, `role`, `side_effects` (snake_case).\n\n```python\ndef slugify(text: str) -> str:\n    \"\"\"\n    intent: Turn a free-text query into a safe filename slug.\n    input: text \u2014 arbitrary user query string.\n    output: lowercase kebab-case slug.\n    role: pure helper.\n    side_effects: none.\n    \"\"\"\n```\n\n## Prompt Card\n\n```text\nMetadata MUST on new files: file_name, description, version, authors.\nOn new functions/classes: intent, input, output, role, side_effects.\nSnake_case field names; match existing kernel header style.\n```\n\n# Related\n\n- [Simplicity First](/standards/simplicity-first.md)"}, {"id": "standards/okf-house-schema", "type": "Concept", "title": "OKF House Schema", "description": "Binding document schema for every durable brain concept \u2014 known types, required frontmatter, timestamp canon, Prompt Card exceptions, and the OKF v0.2 Code dialect.", "tags": ["standard", "okf", "schema", "frontmatter", "document-types"], "content": "# OKF House Schema\n\nEvery durable markdown concept under `_okf_knowledge/` **MUST** carry YAML frontmatter. `okf.py lint` enforces this schema \u2014 agents **MUST NOT** validate it manually; assume lookup returns validated knowledge.\n\n## Known `type` values\n\n| `type` | Zone | Directory (under `_okf_knowledge/`) |\n| --- | --- | --- |\n| `Concept` | 3 or 4 | `standards/` (tag `standard`) or `vault/` |\n| `Playbook` | 4 | `vault/playbooks/` |\n| `System` | 4 | `vault/systems/` |\n| `Incident` | 4 | `vault/incidents/` |\n| `Reference` | 4 | `vault/references/` |\n| `Profile` | 2 | `kernel/profiles/` (optional / schema; not a runtime gate today) |\n| `Code` | 5 | `code/` (OKF v0.2 dialect; machine-produced, regenerate-only) |\n\n## Required frontmatter fields\n\n```yaml\n---\ntype: Concept          # one of Known types above\ntitle: Human-readable name\ndescription: One-line summary for indexes and okf_lookup\ntags: [kebab-case, topic]\ntimestamp: 2026-07-13T00:00:00Z\nstatus: active         # active | deprecated | draft\nowns: [yaml, metadata] # Standards only: explicit domain ownership (REQUIRED when scopes may overlap)\npriority: 100          # Standards only: 1-100 (highest wins conflicts; REQUIRED when scopes may overlap)\n---\n```\n\n## Field rules\n\n* `type` is **REQUIRED** (lint error if missing).\n* `title` and `description` are house-required (lint warning if missing).\n* `timestamp` is the kernel's canonical date field (`okf.py enrich`/`optimize` stamp it; recency ranking reads it). It **MUST** be updated (ISO-8601) on every modification \u2014 cache invalidation, deterministic tie-breaking, and history tracking depend on it. **MUST NOT** use `last_modified` or other aliases; the kernel will not recognize them.\n* Standards (`standards/` path or tag `standard`) **MUST** include a non-empty `## Prompt Card` section (lint `DBG-308`; target \u2264600 chars, `DBG-309`).\n* Optional Prompt Card exceptions: `prompt_card_max_chars` (per-doc clamp; default 600, hard ceiling 2000) and `pack_force_when: [keywords\u2026]` (force-include in the Prompt Pack when the query matches \u2014 bypasses pack max_cards/budget; forced cards capped at 4).\n\n## `type: Code` \u2014 OKF v0.2 dialect (Zone 5)\n\nAdditionally **REQUIRED** (lint error `DBG-310` if missing):\n\n* `schema_version: 0.2` (mismatch warns `DBG-311`)\n* `language` \u2014 e.g. `terraform` | `cloudformation` | `bicep` | `shell` | `python` | `go` | `yaml-k8s` | `yaml-ansible` | `yaml`\n* `kind` \u2014 e.g. `resource` | `module` | `function` | `class` | `manifest` | `play`\n* `source` \u2014 `relpath:line` back to the described artifact\n\nOptional typed-relationship lists \u2014 `depends_on`, `references`, `calls`, `called_by` \u2014 map onto the graph edge vocabulary; entries that resolve to concept ids become graph/adjacency edges, others remain metadata. Code concepts are exempt from orphan checks (`DBG-306`) and are regenerate-only (never hand-edited or ingested).\n\n## Placement & verification\n\nPlacement, index updates, cross-links, and post-change verification live only in the maintain playbook: [Maintain aegis-system](/vault/playbooks/maintain-aegis-system.md).\n\n## Prompt Card\n\n```text\nOKF house schema (lint-enforced \u2014 never validate manually):\ntypes Concept|Playbook|System|Incident|Reference|Profile|Code.\nRequired: type,title,description,tags,timestamp(ISO-8601, canonical \u2014\nNOT last_modified),status. Standards: +owns,+priority,+## Prompt Card\n(\u2264600 chars); optional prompt_card_max_chars / pack_force_when.\nCode (v0.2, zone code/): +schema_version 0.2,language,kind,source;\noptional depends_on/references/calls/called_by \u2192 graph edges;\nregenerate-only. Placement/verify: maintain-aegis-system playbook.\n```\n\n## Related\n\n- Playbook: [Maintain aegis-system](/vault/playbooks/maintain-aegis-system.md)\n- Standard: [OKF Prompt Injection](/standards/okf-prompt-injection.md)\n- Standard: [Metadata headers](/standards/metadata-headers.md)\n- Control plane: [AGENTS.md](/AGENTS.md) \u00a71.3 (stub pointer)"}, {"id": "standards/okf-prompt-injection", "type": "Concept", "title": "OKF Prompt Injection", "description": "Binding rule \u2014 anytime Aegis runs, inject a dynamic Prompt Pack from live lookup; vault-first catalogs with live refresh when stale; grader reads only for explain/fix \u2014 not a static path ban-list.", "tags": ["standard", "okf", "prompting", "tokens", "aegis", "retrieval", "cache"], "content": "# OKF Prompt Injection (Rule #2)\n\n**Rule #2.** Curated OKF stays in the vault. Generation and Q&A context get a **dynamic Prompt Pack**: slim `## Prompt Card` text from **this turn\u2019s** `okf.py lookup` / `okf.py card` \u2014 not a full-brain dump and not a static \u201cnever open these paths\u201d encyclopedia in AGENTS.md.\n\n**Scope:** Anytime Aegis is used (questions, review, authoring) \u2014 not only Path A artifact generation.\n\nDomain graders differ by stack. **What is in-bounds for a turn is defined by the live lookup hit-set** (and, for benches, by task placeholders such as `GATE_ANSWER_KEY_GLOBS`).\n\n## Retrieval ladder (global)\n\n| Priority | Lane | How | Use for | Must not use for |\n| :---: | :--- | :--- | :--- | :--- |\n| 1 | **OKF knowledge cache** | `okf.py lookup --card` (+ \u22641 follow-up `lookup`/`card`) | Standards, playbooks, concepts, catalogs, pins/versions in the vault | Random vault Grep; paste compiled artifacts / full docs |\n| 2 | **Pointers from cards** | Read only paths the **current cards** name | One deep dive the pack pointed to | Opening every related file |\n| 3 | **Task corpus** | Glob \u2192 Grep \u2192 Read (or Explore subagent) | Product/code/config being changed or inspected | Discovering org compliance that should be on cards |\n| 4 | **Grader / answer key** | See [Grader access](#grader-access-daily-work) | Explain failure (what/why/where); fix from gate output | Authoring-time peek to invent compliance |\n\nLane 1 **MUST** run before vault Grep or authoring. Corpus Grep (lane 3) is allowed after lane 1; it is not a substitute for lane 1.\n\n## Catalog / pin freshness (vault + live)\n\nPins, version catalogs, and similar reference data use **both** sources, ordered by freshness need:\n\n1. **Vault first (default):** human-maintained Prompt Cards; keep warm with `okf.py compile` (`index.json` / `prompt_cards.json`; process also mtime-caches them).\n2. **Live fetch when stale or missing:** network/`gh`/upstream only if the card is absent, marked stale, or the user requires verification against current upstream.\n3. **Write-back (MUST when a \u00a71.6 trigger fired):** if lookup returned no relevant domain card, or you live-resolved a pin/version/catalog fact, or a multi-attempt procedure produced durable know-how \u2014 **before the turn ends**, minimum Rung 1: `_okf_knowledge/_inbox/<date>-<slug>.md` (what / evidence grade / intended vault destination). Rung 2 full ingest via [maintain playbook](/vault/playbooks/maintain-aegis-system.md) when budget allows. Task sandboxes / \u201cJSON only\u201d finals **MUST NOT** skip this \u2014 inbox write-back is outside deliverable OUT_DIR constraints.\n\nAgents **MUST NOT** default to live rediscovery when a current card already supplies the catalog.\n\n## Grader access (daily work)\n\n| Mode | Policy / Rego / CI rule sources |\n| :--- | :--- |\n| **Authoring / writing** | Cards (+ failure text if remediating). **MUST NOT** mine the grader to invent compliance. |\n| **Asked what failed / why / where** | **MAY** open the relevant grader source to explain and locate the rule. Prefer starting from failure output, then open the cited file/rule. |\n| **A/B bench OKF arm** | Follow the bench prompt: forbidden globs are **task-specific** (`GATE_ANSWER_KEY_GLOBS`), not this standard\u2019s static list. |\n\n## MUST\n\n1. Anytime Aegis is used, run `okf.py lookup --card` (or `lookup` then `card` / `pack`) with **task-specific** keywords before vault Grep or generation.\n2. Assemble a **Prompt Pack** from returned `## Prompt Card` sections only.\n3. Each card **MUST** target **\u2264150 tokens** (~600 characters) by default. Prefer shorter.\n4. Hard pack rule: **\u22648 Prompt Cards**. Target budget **\u22481200 tokens** (guidance \u2014 tokenizers differ; kernel default matches). Prefer fewer/shorter when the hit-set allows.\n5. Encyclopedic bodies **MUST** stay in the vault \u2014 **MUST NOT** be copied wholesale into the generation prompt.\n6. Binding rules **MUST** expose a `## Prompt Card` so lookup can surface them dynamically.\n7. Missing pin/version/constraint in the pack \u2192 \n\n\u2026"}, {"id": "standards/simplicity-first", "type": "Concept", "title": "Simplicity First (Rule #1)", "description": "The Laziness Ladder \u2014 always choose the simplest, shortest, minimal solution that works. Overrides complexity in design, code, and vault structure.", "tags": ["standard", "simplicity", "laziness-ladder", "principles"], "content": "**Rule #1.** Apply the Laziness Ladder as the primary lens for every decision in\nthis vault and in code: the simplest, shortest, most minimal solution that works.\n\n# Laziness Ladder\n\nWhen multiple approaches solve the problem, pick the lowest rung that still works:\n\n| Rung | Approach | Example |\n|------|----------|---------|\n| 1 | Do nothing new | Reuse an existing concept, playbook, or reference |\n| 2 | Edit one file | Fix a link, add one paragraph, patch one script |\n| 3 | Add one small file | One new concept \u2014 not a new directory tree |\n| 4 | Add tooling | Only when manual steps repeat and hurt |\n| 5 | Add abstraction | Last resort \u2014 never start here |\n\n# In the vault\n\n- One concept per file; cross-link instead of duplicating prose.\n- Prefer `index.md` progressive disclosure over bulk-reading the tree.\n- Scripts are stdlib-only unless a dependency is unavoidable.\n- New types, directories, or tooling require justification against this rule.\n\n# In code\n\n- Smallest diff that fixes the root cause \u2014 no drive-by refactors.\n- No helpers for one-liners; no frameworks where a script suffices.\n- Match existing conventions before inventing new ones.\n\n## Prompt Card\n\n```text\nRule #1 Laziness Ladder: simplest shortest minimal solution that works.\nPrefer reuse \u2192 one-file edit \u2192 one small file \u2192 tooling \u2192 abstraction (last).\nSmallest diff; stdlib scripts; no new dirs/types without justification.\n```\n\n# Related\n\n- All other house standards: [Standards index](index.md)\n- Metadata discipline: [Metadata Headers](metadata-headers.md)\n- Prompt discipline: [OKF Prompt Injection](okf-prompt-injection.md)"}, {"id": "vault/concepts/extending-aegis", "type": "Concept", "title": "Extending Aegis", "description": "How to grow this empty framework with your own standards and vault knowledge.", "tags": ["aegis-system", "getting-started", "framework"], "content": "# Extending Aegis\n\nThis package is an **empty control plane**: `AGENTS.md` + `_okf_knowledge/`. Zip it, drop the folder into an IDE agents directory, then add your knowledge.\n\n## Add durable knowledge\n\n1. Drop raw material in [`_inbox/`](/_inbox/).\n2. Follow [Maintain aegis-system](/vault/playbooks/maintain-aegis-system.md).\n3. From the package directory:\n\n```bash\npython3 _okf_knowledge/kernel/okf.py compile\npython3 _okf_knowledge/kernel/okf.py lint\n```\n\n## Where things go\n\n| Content | Directory (under `_okf_knowledge/`) | `type` |\n| :--- | :--- | :--- |\n| House rule | `standards/` | `Concept` + tag `standard` |\n| Evergreen fact / pattern | `vault/concepts/` | `Concept` |\n| Procedure | `vault/playbooks/` | `Playbook` |\n| Running system | `vault/systems/` | `System` |\n| Post-mortem | `vault/incidents/` | `Incident` |\n| Cached upstream docs | `vault/references/` | `Reference` |\n\n## Frontmatter (required)\n\n```yaml\n---\ntype: Concept\ntitle: Human-readable name\ndescription: One-line summary for indexes and okf_lookup\ntags: [kebab-case, topic]\ntimestamp: 2026-07-13T00:00:00Z\nstatus: active\n---\n```\n\n## Prompt Card\n\n```text\nNew knowledge MUST: pick type/dir from the table (standards/, vault/*),\nadd required frontmatter (type,title,description,tags,timestamp,status),\nthen run okf.py compile + okf.py lint from the package dir.\nFollow vault/playbooks/maintain-aegis-system.md end-to-end.\n```\n\n## Related\n\n- Control plane: [AGENTS.md](/AGENTS.md)\n- Maintenance: [Maintain aegis-system](/vault/playbooks/maintain-aegis-system.md)\n- Law: [Simplicity First](/standards/simplicity-first.md)\n- Profile template: [Profile schema](/kernel/profiles/_schema.md)"}, {"id": "vault/playbooks/maintain-aegis-system", "type": "Playbook", "title": "Maintain aegis-system", "description": "MAINTAIN/INGEST playbook \u2014 add or update vault knowledge, self-learning write-back (Rung 1 inbox capture \u2192 Rung 2 full ingest), cross-links, compile+lint verification.", "tags": ["aegis-system", "ingest", "maintenance", "okf", "procedure", "write-back", "inbox", "self-learn", "maintain"], "content": "# Trigger\n\nYou need to add or change durable knowledge in aegis-system: a concept, house standard,\nplaybook, reference, vault script, or Cursor skill \u2014 either because a user\nasked (MAINTAIN/INGEST) or because a self-learn write-back trigger fired\n([AGENTS.md](/AGENTS.md) \u00a71.6 \u2014 full trigger/ladder detail in\n\u00a7 Self-learning write-back below).\n\n# Preconditions\n\n- [AGENTS.md](/AGENTS.md) \u00a71.2 binds all brain mutations to this playbook \u2014 follow it end-to-end.\n- Read [OKF House Schema](/standards/okf-house-schema.md) for the frontmatter schema before creating files (AGENTS.md \u00a71.3 points there).\n- Raw source material (if any) is in [`_inbox/`](/_inbox/) and has not been edited.\n- You know which `type` the content is (see decision table below).\n\n# What to create \u2014 decision table\n\n| You are documenting\u2026 | `type` | Directory | Also update |\n|----------------------|--------|-----------|-------------|\n| Evergreen knowledge, pattern, tool overview | `Concept` | `vault/` (by domain) | `vault/index.md` |\n| House rule (MUST/SHOULD) | `Concept` + tag `standard` | `standards/` | [standards/index.md](/standards/index.md) |\n| Executable agent procedure | `Playbook` | `vault/playbooks/` | [playbooks/index.md](/vault/playbooks/index.md) |\n| Cached upstream docs | `Reference` | `vault/references/` | Run `kernel/okf.py optimize` |\n| Running system in workspace | `System` | `vault/systems/` | [systems/index.md](/vault/systems/index.md) |\n| Post-mortem | `Incident` | `vault/incidents/` | Link to affected systems/playbooks |\n| Domain routing / tool overview | `Concept` | `vault/concepts/` | [vault/index.md](/vault/index.md) |\n| Vault tooling (lint, compile, scrape) | Python script | `kernel/` | This playbook \u00a7 Scripts |\n| Control-plane schema / persona | Markdown | `AGENTS.md` (package root, next to `_okf_knowledge/`) | [_okf_knowledge/index.md](/index.md) |\n\n# Add or update a concept\n\n## 1. Choose path and filename\n\n- One concept per file; kebab-case filename matching the topic.\n- House standards go in `standards/` with `tags: [standard, \u2026]`.\n- Domain concepts go in `vault/`.\n\n## 2. Frontmatter (required)\n\n```yaml\n---\ntype: Concept\ntitle: Human-readable name\ndescription: One-line summary for indexes and okf_lookup.\ntags: [kebab-case, topic]\ntimestamp: 2026-07-13T00:00:00Z\nstatus: active\n# Optional exceptions (dense catalogs only \u2014 see okf-prompt-injection):\n# prompt_card_max_chars: 1200          # DBG-309 / enrich clamp override (hard max 2000)\n# pack_force_when: [catalog, pin, version]  # force-include in Prompt Pack when query matches\n---\n```\n\n## 3. Body\n\n- Prefer headings, tables, lists, and fenced code over long prose.\n- Standards: normative **MUST** / **SHOULD** / **FORBIDDEN** language.\n- Binding standards **MUST** include a non-empty `## Prompt Card` section (default \u2264150 tokens / ~600 chars) \u2014 enforced by `okf.py lint` (`DBG-308` / `DBG-309`). Override with `prompt_card_max_chars` only when a denser card is justified. See [OKF Prompt Injection](/standards/okf-prompt-injection.md).\n- Catalogs that must survive pack eviction **SHOULD** set `pack_force_when: [keywords\u2026]`.\n- Other agent-facing concepts **SHOULD** include a `## Prompt Card` for slim injection.\n- External claims: `# Citations` with numbered `[1] [title](url)` entries.\n- Link to related concepts with bundle-absolute paths.\n\n## 4. Cross-links (both directions)\n\n- New concept MUST link to at least one existing related concept.\n- Update those existing files to link back.\n- Update every affected `index.md` on the path from root to the file.\n\n# Add or update a playbook\n\n## Required sections\n\n```markdown\n# Trigger\n# Preconditions\n# Steps\n# Verification\n```\n\n- Add a one-line entry to [playbooks/index.md](/vault/playbooks/index.md).\n\n# Add or update a script\n\nThe kernel is a single script, `kernel/okf.py`, with one subcommand per operation; it is **not** an OKF concept.\n\n| Subcommand | Role |\n|--------|------|\n| `okf.py compile` | Regenerate `index.json` + `prompt_cards.json`; embed visuali\n\n\u2026"}], "edges": [{"source": "kernel/profiles/_schema", "target": "vault/playbooks/maintain-aegis-system"}, {"source": "kernel/profiles/_schema", "target": "standards/okf-prompt-injection"}, {"source": "kernel/profiles/_schema", "target": "vault/concepts/extending-aegis"}, {"source": "standards/metadata-headers", "target": "standards/simplicity-first"}, {"source": "standards/okf-house-schema", "target": "vault/playbooks/maintain-aegis-system"}, {"source": "standards/okf-house-schema", "target": "vault/playbooks/maintain-aegis-system"}, {"source": "standards/okf-house-schema", "target": "standards/okf-prompt-injection"}, {"source": "standards/okf-house-schema", "target": "standards/metadata-headers"}, {"source": "standards/okf-prompt-injection", "target": "vault/playbooks/maintain-aegis-system"}, {"source": "standards/okf-prompt-injection", "target": "standards/simplicity-first"}, {"source": "standards/okf-prompt-injection", "target": "vault/playbooks/maintain-aegis-system"}, {"source": "standards/okf-prompt-injection", "target": "vault/concepts/extending-aegis"}, {"source": "standards/simplicity-first", "target": "standards/metadata-headers"}, {"source": "standards/simplicity-first", "target": "standards/okf-prompt-injection"}, {"source": "vault/concepts/extending-aegis", "target": "vault/playbooks/maintain-aegis-system"}, {"source": "vault/concepts/extending-aegis", "target": "vault/playbooks/maintain-aegis-system"}, {"source": "vault/concepts/extending-aegis", "target": "standards/simplicity-first"}, {"source": "vault/concepts/extending-aegis", "target": "kernel/profiles/_schema"}, {"source": "vault/playbooks/maintain-aegis-system", "target": "standards/okf-house-schema"}, {"source": "vault/playbooks/maintain-aegis-system", "target": "standards/okf-prompt-injection"}, {"source": "vault/playbooks/maintain-aegis-system", "target": "standards/okf-prompt-injection"}, {"source": "vault/playbooks/maintain-aegis-system", "target": "standards/okf-house-schema"}, {"source": "vault/playbooks/maintain-aegis-system", "target": "standards/okf-house-schema"}, {"source": "vault/playbooks/maintain-aegis-system", "target": "standards/okf-house-schema"}, {"source": "vault/playbooks/maintain-aegis-system", "target": "standards/simplicity-first"}, {"source": "vault/playbooks/maintain-aegis-system", "target": "vault/concepts/extending-aegis"}, {"source": "vault/playbooks/maintain-aegis-system", "target": "kernel/profiles/_schema"}]}</script>
+  <script id="lint-data" type="application/json">{
+  "generated": "2026-07-21T01:14:09Z",
+  "vault": "_okf_knowledge",
+  "summary": {
+    "concepts": 24,
+    "errors": 0,
+    "warnings": 0
+  },
+  "findings": []
+}</script>
+  <script>
+    "use strict";
+    /* Palette assigned to `type` in order of first appearance. */
+    const PALETTE = ["#7f6df2", "#e0a35c", "#4ecdc4", "#e06c75", "#c678dd", "#98c379", "#e5c07b", "#61afef"];
+    const KNOWN_TYPES = new Set(["Concept", "Playbook", "System", "Reference", "Incident"]);
+    const MD_LINK_RE = /\[[^\]]*\]\(([^)\s]+)\)/g;
+    const SIDEBAR_W = 300, TOPBAR_H = 46, READER_W = 440;
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
+    const tip = document.getElementById("tip");
+    const statusEl = document.getElementById("status");
+    let dpr = 1;
+
+    const opts = {
+      labels: "always",   // off | hover | selection | always
+      hideOrphans: true,
+      localGraph: true,
+      arrows: true,
+    };
+
+    let nodes = [], edges = [], typeColors = new Map();
+    let lint = null;                 // embedded lint report
+    let lintByConcept = new Map();   // concept id -> "error" | "warning"
+    let hiddenTypes = new Set();     // toggled off via legend
+    let selected = null;
+    let hoverNode = null;
+    let view = { x: 0, y: 0, k: 1 };
+    let tween = null;                // {tx, ty, tk} camera target
+    let dragNode = null, panning = false, moved = false, last = { x: 0, y: 0 };
+    let alpha = 0;                   // simulation temperature
+
+    function bindDeclutter() {
+      const labels = document.getElementById("opt-labels");
+      const orphans = document.getElementById("opt-orphans");
+      const local = document.getElementById("opt-local");
+      const arrows = document.getElementById("opt-arrows");
+      labels.value = opts.labels;
+      orphans.checked = opts.hideOrphans;
+      local.checked = opts.localGraph;
+      arrows.checked = opts.arrows;
+      const bump = () => { alpha = Math.max(alpha, 0.35); };
+      labels.addEventListener("change", () => { opts.labels = labels.value; });
+      orphans.addEventListener("change", () => { opts.hideOrphans = orphans.checked; bump(); });
+      local.addEventListener("change", () => { opts.localGraph = local.checked; bump(); });
+      arrows.addEventListener("change", () => { opts.arrows = arrows.checked; });
+    }
+    bindDeclutter();
+    canvas.addEventListener("mouseleave", () => { hoverNode = null; tip.style.display = "none"; });
+
+    function graphSize() {
+      const readerW = readerOpen() ? READER_W : 0;
+      return {
+        w: Math.max(1, innerWidth - SIDEBAR_W - readerW),
+        h: Math.max(1, innerHeight - TOPBAR_H),
+      };
+    }
+
+    function resize() {
+      document.body.classList.toggle("reader-open", readerOpen());
+      const { w, h } = graphSize();
+      dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+      const bw = Math.round(w * dpr);
+      const bh = Math.round(h * dpr);
+      if (canvas.width !== bw || canvas.height !== bh) {
+        canvas.width = bw;
+        canvas.height = bh;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      if ("imageSmoothingQuality" in ctx) ctx.imageSmoothingQuality = "high";
+    }
+    addEventListener("resize", resize);
+
+    function pointer(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+
+    function centerView() {
+      const { w, h } = graphSize();
+      view = { x: w / 2, y: h / 2, k: 1 };
+    }
+
+    function colorFor(type) {
+      if (!typeColors.has(type)) typeColors.set(type, PALETTE[typeColors.size % PALETTE.length]);
+      return typeColors.get(type);
+    }
+
+    /* ---------- data loading ---------- */
+
+    function setGraph(data) {
+      const byId = new Map();
+      typeColors = new Map();
+      nodes = (data.nodes || []).map((n, i) => {
+        const angle = (i / Math.max(1, data.nodes.length)) * Math.PI * 2;
+        const node = {
+          ...n, color: colorFor(n.type || "?"),
+          x: Math.cos(angle) * 260 + (Math.random() - .5) * 40,
+          y: Math.sin(angle) * 260 + (Math.random() - .5) * 40,
+          vx: 0, vy: 0, deg: 0,
+        };
+        byId.set(n.id, node);
+        return node;
+      });
+      edges = (data.edges || [])
+        .map(e => ({ s: byId.get(e.source), t: byId.get(e.target) }))
+        .filter(e => e.s && e.t);
+      edges.forEach(e => { e.s.deg++; e.t.deg++; });
+      hiddenTypes.clear();
+      selected = null;
+      resize();
+      centerView();
+      alpha = 1;
+      statusEl.textContent = `${nodes.length} concepts, ${edges.length} links`;
+      renderCompileStatus("ok");
+      renderLegend(); renderNavigator(); renderReader(); applyLint();
+    }
+
+    function renderCompileStatus(state, detail) {
+      const el = document.getElementById("compilecounts");
+      if (state === "ok") {
+        el.innerHTML = `<span class="cnt ok">compiled ✓</span>`;
+        el.title = detail || `${nodes.length} concepts, ${edges.length} links`;
+      } else if (state === "err") {
+        el.innerHTML = `<span class="cnt err">compile failed</span>`;
+        el.title = detail || "Compile failed";
+      } else {
+        el.innerHTML = `<span class="cnt idle">compile —</span>`;
+        el.title = detail || "Compile status";
+      }
+    }
+
+    function setLint(data) {
+      lint = data;
+      lintByConcept = new Map();
+      for (const f of (data.findings || [])) {
+        const prev = lintByConcept.get(f.concept);
+        if (prev !== "error") lintByConcept.set(f.concept, f.severity);
+      }
+      applyLint(); renderLint(); renderNavigator();
+    }
+
+    function applyLint() {
+      for (const n of nodes) n.lint = lintByConcept.get(n.id) || null;
+    }
+
+    function loadText(text, label) {
+      let data;
+      try { data = JSON.parse(text); }
+      catch (err) { statusEl.textContent = `could not parse ${label}: ${err.message}`; return; }
+      if (Array.isArray(data.nodes)) setGraph(data);
+      else if (Array.isArray(data.findings)) setLint(data);
+      else statusEl.textContent = `${label}: not a graph or lint payload`;
+    }
+
+    /* Load payloads embedded by okf.py compile / lint. */
+    function loadEmbedded(id, label) {
+      const el = document.getElementById(id);
+      const text = el ? el.textContent.trim() : "";
+      if (!text || text === "null") return false;
+      loadText(text, label);
+      return true;
+    }
+    if (!loadEmbedded("graph-data", "embedded graph")) {
+      statusEl.textContent = "no embedded graph (run: python3 kernel/okf.py compile)";
+      renderCompileStatus("idle", "No embedded graph — run Compile");
+    }
+    loadEmbedded("lint-data", "embedded lint");
+
+    /* ---------- legend (click to filter) ---------- */
+
+    function renderLegend() {
+      const legend = document.getElementById("legend");
+      legend.innerHTML = "";
+      for (const [type, color] of typeColors) {
+        const el = document.createElement("div");
+        el.className = "key" + (hiddenTypes.has(type) ? " off" : "");
+        el.innerHTML = `<span class="dot" style="background:${color}"></span>${type}`;
+        el.title = "Click to show/hide this type";
+        el.addEventListener("click", () => {
+          hiddenTypes.has(type) ? hiddenTypes.delete(type) : hiddenTypes.add(type);
+          if (selected && hiddenTypes.has(selected.type)) { selected = null; renderReader(); }
+          renderLegend(); renderNavigator();
+        });
+        legend.appendChild(el);
+      }
+    }
+
+    /* ---------- navigator sidebar ---------- */
+
+    function getZone(id) {
+      const p = id.replace(/^knowledge\//, "");
+      if (p.startsWith("_inbox")) return "Zone 1: Untriaged";
+      if (p.startsWith("kernel")) return "Zone 2: Execution";
+      if (p.startsWith("standards")) return "Zone 3: Governance";
+      if (p.startsWith("vault")) return "Zone 4: Knowledge";
+      return "Other";
+    }
+
+    function pathDirs(id) {
+      const parts = id.replace(/^knowledge\//, "").split("/").filter(Boolean);
+      return parts.slice(0, -1); // directories only (drop filename stem)
+    }
+
+    function emptyDirNode(name) {
+      return { name, children: new Map(), nodes: [] };
+    }
+
+    function countTree(node) {
+      let n = node.nodes.length;
+      for (const child of node.children.values()) n += countTree(child);
+      return n;
+    }
+
+    function appendNavItem(parent, n, depth) {
+      const item = document.createElement("div");
+      item.className = "navitem" + (selected === n ? " selected" : "");
+      item.style.setProperty("--depth", String(depth));
+      const mark = n.lint === "error" ? `<span class="mark" style="color:var(--error)">●</span>`
+        : n.lint === "warning" ? `<span class="mark" style="color:var(--warning)">●</span>` : "";
+      item.innerHTML = `<span class="bullet" style="background:${n.color}"></span>` +
+        `<span class="nav-label">${n.title || n.id.split("/").pop()}</span>${mark}`;
+      item.title = n.id + ".md";
+      item.addEventListener("click", () => selectNode(n, true));
+      parent.appendChild(item);
+    }
+
+    function hasSubEntities(dirNode) {
+      return dirNode.children.size > 0 || dirNode.nodes.length > 0;
+    }
+
+    function renderDirTree(parentEl, dirNode, depth) {
+      const childNames = [...dirNode.children.keys()].sort((a, b) => a.localeCompare(b));
+      for (const name of childNames) {
+        const child = dirNode.children.get(name);
+        const folderDet = document.createElement("details");
+        folderDet.className = "navgroup folder-group";
+        if (hasSubEntities(child)) folderDet.classList.add("has-children");
+        folderDet.open = true;
+        const folderSum = document.createElement("summary");
+        folderSum.style.setProperty("--depth", String(depth));
+        const total = countTree(child);
+        folderSum.innerHTML =
+          `<span class="nav-label">${name} (${total})</span>`;
+        folderDet.appendChild(folderSum);
+        renderDirTree(folderDet, child, depth + 1);
+        parentEl.appendChild(folderDet);
+      }
+      const members = [...dirNode.nodes].sort(
+        (a, b) => (a.title || a.id).localeCompare(b.title || b.id)
+      );
+      for (const n of members) appendNavItem(parentEl, n, depth);
+    }
+
+    function renderNavigator() {
+      const list = document.getElementById("navlist");
+      const q = document.getElementById("search").value.trim().toLowerCase();
+      list.innerHTML = "";
+
+      const zoneOrder = [
+        "Zone 1: Untriaged",
+        "Zone 2: Execution",
+        "Zone 3: Governance",
+        "Zone 4: Knowledge",
+        "Other",
+      ];
+      const groups = new Map(zoneOrder.map(z => [z, emptyDirNode(z)]));
+
+      for (const n of nodes) {
+        if (hiddenTypes.has(n.type)) continue;
+        if (q && !(n.title + " " + n.id).toLowerCase().includes(q)) continue;
+
+        const zoneRoot = groups.get(getZone(n.id));
+        const dirs = pathDirs(n.id);
+        let cur = zoneRoot;
+        for (const d of dirs) {
+          if (!cur.children.has(d)) cur.children.set(d, emptyDirNode(d));
+          cur = cur.children.get(d);
+        }
+        cur.nodes.push(n);
+      }
+
+      let any = false;
+      for (const zoneName of zoneOrder) {
+        const zoneRoot = groups.get(zoneName);
+        if (!zoneRoot.children.size && !zoneRoot.nodes.length) continue;
+        any = true;
+
+        const zoneDet = document.createElement("details");
+        zoneDet.className = "navgroup zone-group";
+        if (hasSubEntities(zoneRoot)) zoneDet.classList.add("has-children");
+        zoneDet.open = true;
+        const zoneSum = document.createElement("summary");
+        zoneSum.style.setProperty("--depth", "0");
+        zoneSum.innerHTML =
+          `<span class="nav-label" style="color:var(--accent)">${zoneName}</span>`;
+        zoneDet.appendChild(zoneSum);
+        renderDirTree(zoneDet, zoneRoot, 1);
+        list.appendChild(zoneDet);
+      }
+
+      if (!any) {
+        list.innerHTML =
+          `<div style="padding:10px 14px;color:var(--muted);font-size:12px">no matching concepts</div>`;
+      }
+    }
+    document.getElementById("search").addEventListener("input", renderNavigator);
+
+    /* ---------- selection ---------- */
+
+    function selectNode(n, focus) {
+      selected = n;
+      renderNavigator(); renderReader();
+      resize();
+      if (focus && n) {
+        const { w, h } = graphSize();
+        const k = Math.max(view.k, 1.15);
+        tween = {
+          tx: w / 2 - n.x * k,
+          ty: h / 2 - n.y * k,
+          tk: k,
+        };
+      }
+    }
+
+    /* ---------- reading pane (markdown content) ---------- */
+
+    function readerOpen() { return !!(selected && typeof selected.content === "string"); }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    /* Resolve a markdown link target (bundle-absolute or relative) to a graph node. */
+    function resolveMdLink(url, baseId) {
+      if (/^([a-z]+:)?\/\//i.test(url) || /^(https?|mailto|file):/i.test(url)) return null;
+      let path = url.split("#")[0];
+      if (!path.endsWith(".md")) return null;
+      path = path.slice(0, -3);
+      let parts;
+      if (path.startsWith("/")) parts = path.slice(1).split("/");
+      else {
+        parts = baseId.split("/").slice(0, -1);
+        for (const seg of path.split("/")) {
+          if (seg === "." || seg === "") continue;
+          if (seg === "..") parts.pop();
+          else parts.push(seg);
+        }
+      }
+      const id = parts.join("/");
+      return nodes.find(n => n.id === id) || null;
+    }
+
+    function mdInline(s, baseId) {
+      s = escapeHtml(s);
+      s = s.replace(/`([^`]+)`/g, (m, c) => `<code>${c}</code>`);
+      s = s.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+      s = s.replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, "$1<i>$2</i>");
+      s = s.replace(/\[([^\]]*)\]\(([^)\s]+)\)/g, (m, text, url) => {
+        const n = resolveMdLink(url, baseId);
+        if (n) return `<a href="#" data-node="${n.id}" title="${n.id}.md">${text}</a>`;
+        if (/^https?:/i.test(url)) return `<a href="${url}" target="_blank" rel="noopener">${text}</a>`;
+        return `<a class="dead" title="${url} (not in bundle)">${text}</a>`;
+      });
+      return s;
+    }
+
+    /* Parse a markdown list line; returns null if not a list item. */
+    function parseListLine(line) {
+      const m = line.match(/^(\s*)([-*]|\d+\.)\s+(.*)/);
+      return m ? { indent: m[1].length, marker: m[2], text: m[3] } : null;
+    }
+
+    /* Build nested <ul>/<ol> from lines starting at index i. */
+    function buildList(lines, i, baseId) {
+      const first = parseListLine(lines[i]);
+      const baseIndent = first.indent;
+      const ordered = /\d/.test(first.marker);
+      const items = [];
+
+      while (i < lines.length) {
+        const cur = parseListLine(lines[i]);
+        if (!cur) {
+          const cont = lines[i].match(/^(\s+)(\S.*)$/);
+          if (cont && cont[1].length > baseIndent && items.length) {
+            const last = items[items.length - 1];
+            last.extra.push(cont[2].trim());
+            i++; continue;
+          }
+          break;
+        }
+        if (cur.indent < baseIndent) break;
+        if (cur.indent > baseIndent) {
+          const nested = buildList(lines, i, baseId);
+          if (items.length) items[items.length - 1].nested = nested.html;
+          i = nested.next;
+          continue;
+        }
+        items.push({ text: cur.text, extra: [], nested: "" });
+        i++;
+        while (i < lines.length) {
+          if (parseListLine(lines[i])) break;
+          const cont = lines[i].match(/^(\s+)(\S.*)$/);
+          if (cont && cont[1].length > baseIndent) {
+            items[items.length - 1].extra.push(cont[2].trim());
+            i++;
+          } else break;
+        }
+      }
+
+      const body = items.map(it => {
+        let inner = mdInline(it.text, baseId);
+        if (it.extra.length) {
+          inner += it.extra.map(t => `<span class="li-cont">${mdInline(t, baseId)}</span>`).join("");
+        }
+        return `<li>${inner}${it.nested}</li>`;
+      }).join("");
+      const tag = ordered ? "ol" : "ul";
+      return { html: `<${tag}>${body}</${tag}>`, next: i };
+    }
+
+    /* Minimal markdown -> HTML: headings, fenced code, tables, lists, paragraphs. */
+    function mdToHtml(md, baseId) {
+      const lines = md.split("\n");
+      const out = [];
+      let i = 0;
+      while (i < lines.length) {
+        const line = lines[i];
+        if (line.trimStart().startsWith("```")) {
+          const code = [];
+          i++;
+          while (i < lines.length && !lines[i].trimStart().startsWith("```")) code.push(lines[i++]);
+          i++; // closing fence
+          out.push(`<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`);
+          continue;
+        }
+        const h = line.match(/^(#{1,4})\s+(.*)/);
+        if (h) {
+          out.push(`<h${h[1].length}>${mdInline(h[2], baseId)}</h${h[1].length}>`);
+          i++; continue;
+        }
+        if (line.trim().startsWith("|") && i + 1 < lines.length &&
+          /^\s*\|[\s|:-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes("-")) {
+          const cells = row => row.trim().replace(/^\||\|$/g, "").split("|").map(c => mdInline(c.trim(), baseId));
+          const head = cells(line);
+          i += 2;
+          const rows = [];
+          while (i < lines.length && lines[i].trim().startsWith("|")) rows.push(cells(lines[i++]));
+          out.push("<table><thead><tr>" + head.map(c => `<th>${c}</th>`).join("") + "</tr></thead><tbody>" +
+            rows.map(r => "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>").join("") + "</tbody></table>");
+          continue;
+        }
+        if (parseListLine(line)) {
+          const list = buildList(lines, i, baseId);
+          out.push(list.html);
+          i = list.next;
+          continue;
+        }
+        if (!line.trim()) { i++; continue; }
+        const para = [];
+        while (i < lines.length && lines[i].trim() &&
+          !/^(#{1,4}\s|\s*([-*]|\d+\.)\s|\s*\||\s*```)/.test(lines[i])) {
+          para.push(lines[i++]);
+        }
+        if (para.length) out.push(`<p>${mdInline(para.join(" "), baseId)}</p>`);
+        else i++;
+      }
+      return out.join("\n");
+    }
+
+    function renderReader() {
+      const el = document.getElementById("reader");
+      if (!readerOpen()) {
+        el.style.display = "none";
+        resize();
+        return;
+      }
+      const n = selected;
+      document.getElementById("r-title").innerHTML =
+        `<span class="dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${n.color};margin-right:6px"></span>` +
+        escapeHtml(n.title || n.id);
+      const tags = (n.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join("");
+      document.getElementById("r-meta").innerHTML =
+        `${escapeHtml(n.type)} &middot; ${escapeHtml(n.id)}.md` +
+        (n.description ? `<div>${escapeHtml(n.description)}</div>` : "") +
+        (tags ? `<div>${tags}</div>` : "");
+      document.getElementById("r-body").innerHTML =
+        n.content ? mdToHtml(n.content, n.id) : `<p style="color:var(--muted)">empty body</p>`;
+      document.getElementById("r-body").scrollTop = 0;
+      el.style.display = "flex";
+      resize();
+    }
+
+    function closeReader() {
+      selected = null;
+      renderNavigator(); renderReader();
+    }
+    document.getElementById("r-close").addEventListener("click", closeReader);
+    addEventListener("keydown", e => { if (e.key === "Escape" && readerOpen()) closeReader(); });
+    /* Internal links inside rendered markdown jump to that concept's node. */
+    document.getElementById("r-body").addEventListener("click", e => {
+      const a = e.target.closest("a[data-node]");
+      if (!a) return;
+      e.preventDefault();
+      const n = nodes.find(n => n.id === a.dataset.node);
+      if (n) selectNode(n, true);
+    });
+
+    /* ---------- lint panel ---------- */
+
+    function extractMdLinks(content) {
+      const links = [];
+      let m;
+      const re = new RegExp(MD_LINK_RE.source, "g");
+      while ((m = re.exec(content)) !== null) {
+        const url = m[1];
+        if (/^(https?|mailto|file):/i.test(url)) continue;
+        links.push(url);
+      }
+      return links;
+    }
+
+    /* Mirror scripts/okf.py lint checks against the loaded graph (no index.md scan). */
+    function runClientLint() {
+      const findings = [];
+      const inbound = new Set(edges.map(e => e.t.id));
+      const add = (severity, concept, code, message) =>
+        findings.push({ severity, concept, code, message });
+
+      for (const n of nodes) {
+        if (!String(n.type || "").trim())
+          add("error", n.id, "DBG-301", "missing required 'type' field");
+        if (n.type && !KNOWN_TYPES.has(n.type))
+          add("warning", n.id, "DBG-302", `unknown type '${n.type}' (not in AGENTS.md taxonomy)`);
+        if (!String(n.title || "").trim())
+          add("warning", n.id, "DBG-303", "missing house-required field 'title'");
+        if (!String(n.description || "").trim())
+          add("warning", n.id, "DBG-303", "missing house-required field 'description'");
+        for (const target of extractMdLinks(n.content || "")) {
+          if (!target.endsWith(".md")) continue;
+          if (!resolveMdLink(target, n.id))
+            add("warning", n.id, "DBG-304", `broken link -> ${target}`);
+        }
+      }
+      for (const n of nodes) {
+        if (!inbound.has(n.id))
+          add("warning", n.id, "DBG-306", "orphan — no inbound links in graph");
+      }
+      const errors = findings.filter(f => f.severity === "error").length;
+      const warnings = findings.filter(f => f.severity === "warning").length;
+      return {
+        generated: new Date().toISOString(),
+        source: "browser",
+        summary: { concepts: nodes.length, errors, warnings },
+        findings,
+      };
+    }
+
+    /* ---------- remote operations (when served via python) ---------- */
+
+    async function runCompile() {
+      const btn = document.getElementById("run-compile");
+      btn.disabled = true;
+      btn.textContent = "Compiling…";
+      renderCompileStatus("idle", "Compiling…");
+      try {
+        const resp = await fetch("/api/compile", { method: "POST" });
+        if (resp.ok) {
+          const data = await resp.json();
+          setGraph(data);
+          statusEl.textContent = `${nodes.length} concepts — graph compiled successfully`;
+          renderCompileStatus("ok", `vault compile · ${nodes.length} concepts, ${edges.length} links`);
+        } else {
+          const msg = "compile failed (is the server running with kernel/okf.py serve?)";
+          statusEl.textContent = msg;
+          renderCompileStatus("err", msg);
+        }
+      } catch (err) {
+        const msg = `compile error: ${err.message}`;
+        statusEl.textContent = msg;
+        renderCompileStatus("err", msg);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Run Compile";
+      }
+    }
+    document.getElementById("run-compile").addEventListener("click", runCompile);
+
+    async function runLint() {
+      const btn = document.getElementById("run-lint");
+      if (!nodes.length) {
+        statusEl.textContent = "load a graph first, then run lint";
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "Running…";
+      try {
+        const resp = await fetch("/api/lint", { method: "POST" });
+        if (resp.ok) {
+          const data = await resp.json();
+          data.source = "vault";
+          setLint(data);
+          statusEl.textContent = `${nodes.length} concepts — vault lint complete`;
+          return;
+        }
+        setLint(runClientLint());
+        statusEl.textContent = `${nodes.length} concepts — browser lint complete`;
+      } catch (_) {
+        setLint(runClientLint());
+        statusEl.textContent = `${nodes.length} concepts — browser lint complete`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Run Lint";
+      }
+    }
+    document.getElementById("run-lint").addEventListener("click", runLint);
+
+    /* On first page load via okf.py serve, refresh graph + lint automatically. */
+    async function autoRunOnServe() {
+      if (!/^https?:$/.test(location.protocol)) return;
+      const flag = "aegis-brain-autorun-v1";
+      try {
+        if (sessionStorage.getItem(flag) === "1") return;
+        sessionStorage.setItem(flag, "1");
+      } catch (_) { /* private mode — still autorun once this load */ }
+      statusEl.textContent = "serve detected — running compile + lint…";
+      await runCompile();
+      await runLint();
+    }
+    autoRunOnServe();
+
+    function renderLint() {
+      const counts = document.getElementById("lintcounts");
+      if (!lint) {
+        counts.innerHTML = `<span class="cnt idle">lint —</span>`;
+        counts.title = "Lint status";
+        return;
+      }
+      const e = lint.summary.errors, w = lint.summary.warnings;
+      counts.innerHTML = (e || w)
+        ? `<span class="cnt err">${e} err</span> · <span class="cnt warn">${w} warn</span>`
+        : `<span class="cnt ok">lint clean ✓</span>`;
+      const src = lint.source === "vault" ? "vault scan" : "browser scan";
+      const sample = (lint.findings || []).slice(0, 8).map(f =>
+        `${f.severity === "error" ? "ERR" : "WARN"} ${f.concept}: [${f.code}] ${f.message}`
+      ).join("\n");
+      counts.title = sample
+        ? `${src} · ${lint.generated}\n${sample}${(lint.findings.length > 8) ? "\n…" : ""}`
+        : `${src} · ${lint.generated} · vault is conformant and healthy`;
+    }
+
+    /* ---------- force simulation & drawing ---------- */
+
+    function neighborsOf(n) {
+      const set = new Set();
+      if (!n) return set;
+      for (const e of edges) {
+        if (e.s === n) set.add(e.t);
+        if (e.t === n) set.add(e.s);
+      }
+      return set;
+    }
+
+    function visible(n) {
+      if (hiddenTypes.has(n.type)) return false;
+      if (opts.hideOrphans && n.deg === 0) return false;
+      if (opts.localGraph && selected) {
+        if (n === selected) return true;
+        return neighborsOf(selected).has(n);
+      }
+      return true;
+    }
+
+    function shouldShowLabel(n, neighbors) {
+      if (opts.labels === "off") return false;
+      if (opts.labels === "always") return true;
+      if (opts.labels === "hover") return n === hoverNode || n === selected;
+      if (opts.labels === "selection") return n === selected || neighbors.has(n);
+      return false;
+    }
+
+    function drawArrow(sx, sy, tx, ty, color) {
+      const dx = tx - sx, dy = ty - sy;
+      const d = Math.hypot(dx, dy) || 1;
+      const ux = dx / d, uy = dy / d;
+      const tipX = tx - ux * 10 / view.k, tipY = ty - uy * 10 / view.k;
+      const ax = -uy, ay = ux;
+      const s = 4.5 / view.k;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(tx - ux * 4 / view.k, ty - uy * 4 / view.k);
+      ctx.lineTo(tipX + ax * s, tipY + ay * s);
+      ctx.lineTo(tipX - ax * s, tipY - ay * s);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function step() {
+      if (alpha > 0.005) {
+        for (const e of edges) {
+          if (!visible(e.s) || !visible(e.t)) continue;
+          const dx = e.t.x - e.s.x, dy = e.t.y - e.s.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const f = (d - 140) * 0.018 * alpha;
+          e.s.vx += dx / d * f; e.s.vy += dy / d * f;
+          e.t.vx -= dx / d * f; e.t.vy -= dy / d * f;
+        }
+        for (let i = 0; i < nodes.length; i++) {
+          if (!visible(nodes[i])) continue;
+          for (let j = i + 1; j < nodes.length; j++) {
+            if (!visible(nodes[j])) continue;
+            const a = nodes[i], b = nodes[j];
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const d2 = dx * dx + dy * dy || 1;
+            const f = Math.min(2800 / d2, 5) * alpha;
+            const d = Math.sqrt(d2);
+            a.vx -= dx / d * f; a.vy -= dy / d * f;
+            b.vx += dx / d * f; b.vy += dy / d * f;
+          }
+        }
+        for (const n of nodes) {
+          if (!visible(n)) continue;
+          n.vx -= n.x * 0.0015 * alpha; n.vy -= n.y * 0.0015 * alpha;
+          if (n !== dragNode) { n.x += n.vx; n.y += n.vy; }
+          n.vx *= 0.86; n.vy *= 0.86;
+        }
+        alpha *= 0.995;
+      }
+      if (tween) {
+        view.x += (tween.tx - view.x) * 0.15;
+        view.y += (tween.ty - view.y) * 0.15;
+        view.k += (tween.tk - view.k) * 0.15;
+        if (Math.abs(tween.tx - view.x) < .5 && Math.abs(tween.ty - view.y) < .5) tween = null;
+      }
+      draw();
+      requestAnimationFrame(step);
+    }
+
+    function draw() {
+      const { w, h } = graphSize();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = "#181818";
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.translate(view.x, view.y);
+      ctx.scale(view.k, view.k);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      const neighbors = neighborsOf(selected);
+      const focus = selected || hoverNode;
+      const focusNeighbors = neighborsOf(focus);
+
+      /* --- edges --- */
+      for (const e of edges) {
+        if (!visible(e.s) || !visible(e.t)) continue;
+        const hot = focus && (e.s === focus || e.t === focus);
+        const faded = focus && !hot;
+        ctx.globalAlpha = faded ? 0.08 : 1;
+        ctx.strokeStyle = hot ? "rgba(127,109,242,0.75)" : "rgba(160,160,160,0.22)";
+        ctx.lineWidth = (hot ? 1.6 : 1) / view.k;
+        ctx.beginPath();
+        ctx.moveTo(e.s.x, e.s.y);
+        ctx.lineTo(e.t.x, e.t.y);
+        ctx.stroke();
+        if (opts.arrows && !faded) {
+          drawArrow(e.s.x, e.s.y, e.t.x, e.t.y, hot ? "rgba(127,109,242,0.85)" : "rgba(160,160,160,0.35)");
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      /* --- nodes --- */
+      for (const n of nodes) {
+        if (!visible(n)) continue;
+        const r = 5.5 + Math.min(n.deg, 12) * 1.1;
+        const isFocus = n === focus;
+        const isNear = focus && (n === focus || focusNeighbors.has(n));
+        const faded = focus && !isNear;
+        ctx.globalAlpha = faded ? 0.12 : 1;
+
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = n.color;
+        ctx.fill();
+
+        if (n.lint && !faded) {
+          ctx.strokeStyle = n.lint === "error" ? "#f26d78" : "#f0c674";
+          ctx.lineWidth = 2 / view.k;
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, r + 3 / view.k, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        if (n === selected) {
+          ctx.strokeStyle = "rgba(255,255,255,0.9)";
+          ctx.lineWidth = 1.75 / view.k;
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, r + 5 / view.k, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        if (shouldShowLabel(n, neighbors) && view.k > 0.35) {
+          const label = n.title || n.id;
+          const fs = Math.max(11, Math.round(12 / Math.sqrt(Math.max(view.k, 0.5))));
+          ctx.font = `500 ${fs / view.k}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "rgba(0,0,0,0.55)";
+          ctx.fillText(label, n.x + r + 6 / view.k + 0.7 / view.k, n.y + 0.7 / view.k);
+          ctx.fillStyle = isFocus || isNear ? "rgba(255,255,255,0.95)" : "rgba(220,220,220,0.82)";
+          ctx.fillText(label, n.x + r + 6 / view.k, n.y);
+        }
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
+    }
+
+    /* ---------- pointer interaction ---------- */
+
+    function toWorld(px, py) { return { x: (px - view.x) / view.k, y: (py - view.y) / view.k }; }
+    function nodeAt(px, py) {
+      const p = toWorld(px, py);
+      return nodes.find(n => visible(n) &&
+        Math.hypot(n.x - p.x, n.y - p.y) < (8 + Math.min(n.deg, 10) * 1.35) + 5 / view.k);
+    }
+
+    canvas.addEventListener("mousedown", e => {
+      const p = pointer(e);
+      const n = nodeAt(p.x, p.y);
+      if (n) { dragNode = n; alpha = Math.max(alpha, 0.3); }
+      else panning = true;
+      moved = false; tween = null;
+      last = { x: e.clientX, y: e.clientY };
+    });
+    addEventListener("mousemove", e => {
+      const dx = e.clientX - last.x, dy = e.clientY - last.y;
+      if (dragNode) { dragNode.x += dx / view.k; dragNode.y += dy / view.k; moved = moved || dx || dy; }
+      else if (panning) { view.x += dx; view.y += dy; moved = moved || dx || dy; }
+      else {
+        const p = pointer(e);
+        const n = nodeAt(p.x, p.y);
+        hoverNode = n || null;
+        if (n) {
+          const lintLine = n.lint
+            ? `<div class="t-lint ${n.lint}">${n.lint === "error" ? "has lint errors" : "has lint warnings"}</div>` : "";
+          tip.style.display = "block";
+          tip.style.left = (e.clientX + 14) + "px";
+          tip.style.top = (e.clientY + 14) + "px";
+          tip.innerHTML = `<div class="t-title">${n.title || n.id}</div>` +
+            `<div class="t-meta">${n.type} &middot; ${n.id}.md &middot; ${n.deg} link(s)</div>` + lintLine;
+          canvas.style.cursor = "pointer";
+        } else { tip.style.display = "none"; canvas.style.cursor = panning ? "grabbing" : "default"; }
+      }
+      last = { x: e.clientX, y: e.clientY };
+    });
+    addEventListener("mouseup", e => {
+      if (dragNode && !moved) selectNode(dragNode, false);
+      else if (panning && !moved && e.target === canvas) {
+        selected = null; resize();
+        renderNavigator(); renderReader();
+      }
+      dragNode = null; panning = false;
+    });
+    canvas.addEventListener("wheel", e => {
+      e.preventDefault(); tween = null;
+      const p = pointer(e);
+      const factor = e.deltaY < 0 ? 1.1 : 0.9;
+      const world = toWorld(p.x, p.y);
+      view.k = Math.min(4, Math.max(0.2, view.k * factor));
+      view.x = p.x - world.x * view.k;
+      view.y = p.y - world.y * view.k;
+    }, { passive: false });
+
+    resize();
+    step();
+  </script>
+</body>
+
+</html>
