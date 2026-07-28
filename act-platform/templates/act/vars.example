@@ -1,0 +1,4 @@
+# Copy to repo-root `.vars` (gitignored) if your workflows need vars.
+# KEY=value, one per line.
+#
+# EXAMPLE_VAR=local

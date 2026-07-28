@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>A/B Benchmark — OKF vs no-OKF — ci-8stage</title>
+<!--
+  Aegis A/B bench report template (standalone, inline CSS, no JS).
+  Fill every double-brace KEY via render_bench_report.py or string substitution.
+  Do not invent a new layout — copy this file and substitute only.
+
+  Scoring contract (bake into every report):
+  - SCORED: true wall (sum of draft+rem runs), parent runs to PASS, tokens, cost,
+    effectiveness, efficiency (1/true_wall), quality / architecture / runtime.
+  - INFORMATIONAL ONLY (winner must be "—"): draft wall, tool-call turns,
+    tok/s or chars/s throughput. Never crown a winner on draft-only wall.
+  - When remediation ran: show draft + rem stack on dashboard; true = sum.
+-->
+<style>
+:root {
+  --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3; --muted:#8b949e;
+  --okf:#3fb950; --base:#58a6ff; --warn:#d29922; --bad:#f85149; --card:#21262d;
+  --info:#8b949e;
+}
+* { box-sizing:border-box; }
+body { margin:0; font-family: ui-sans-serif, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: radial-gradient(1200px 600px at 10% -10%, #1a2332 0%, var(--bg) 55%), var(--bg);
+  color:var(--text); line-height:1.5; }
+.wrap { max-width:1180px; margin:0 auto; padding:28px 18px 64px; }
+header.hero { border:1px solid var(--border); background:linear-gradient(135deg,#161b22,#1a2740 60%,#132018);
+  border-radius:16px; padding:28px 26px; margin-bottom:22px; }
+header.hero h1 { margin:0 0 8px; font-size:1.55rem; letter-spacing:-0.02em; }
+header.hero .sub { color:var(--muted); font-size:0.95rem; }
+.badge-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.badge { font-size:0.75rem; padding:4px 10px; border-radius:999px; border:1px solid var(--border); background:var(--panel); color:var(--muted); }
+.badge.okf { color:var(--okf); border-color:#238636; }
+.badge.base { color:var(--base); border-color:#1f6feb; }
+.banner { border-radius:14px; padding:18px 20px; margin-bottom:22px;
+  background:linear-gradient(90deg,#123822,#16304d); border:1px solid #2ea043; }
+.banner h2 { margin:0 0 6px; font-size:1.2rem; }
+.banner p { margin:0; color:#d0d7de; }
+.note-banner { border-radius:14px; padding:14px 18px; margin-bottom:18px; background:#2a2111; border:1px solid var(--warn); color:#e3b341; font-size:0.9rem; }
+.note-banner.hidden { display:none; }
+.scoring {
+  border-radius:14px; padding:16px 18px; margin-bottom:18px;
+  background:#161b22; border:1px solid var(--border);
+}
+.scoring h2 { margin:0 0 10px; font-size:1rem; }
+.scoring .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.scoring .box { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:12px; }
+.scoring .box h3 { margin:0 0 8px; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.04em; }
+.scoring .box.scored h3 { color:var(--okf); }
+.scoring .box.info h3 { color:var(--warn); }
+.scoring ul { margin:0 0 0 16px; padding:0; font-size:0.85rem; color:var(--muted); }
+.scoring li { margin:3px 0; }
+.scoring .foot { margin:10px 0 0; font-size:0.8rem; color:var(--muted); }
+section { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:18px; }
+section h2 { margin:0 0 12px; font-size:1.1rem; }
+section .sec-note { color:var(--muted); font-size:0.85rem; margin:-4px 0 12px; }
+.kpi-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:12px; }
+.kpi { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; }
+.kpi.info { border-style:dashed; opacity:0.92; }
+.kpi h3 { margin:0 0 8px; font-size:0.78rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+.kpi .tag { display:inline-block; font-size:0.65rem; padding:1px 6px; border-radius:999px; margin-left:6px;
+  border:1px solid var(--border); vertical-align:middle; font-weight:600; letter-spacing:0.03em; }
+.kpi .tag.scored { color:var(--okf); border-color:#238636; }
+.kpi .tag.info { color:var(--warn); border-color:#9e6a03; }
+.kpi .vals { display:flex; flex-direction:column; gap:2px; font-variant-numeric:tabular-nums; font-size:0.95rem; }
+.kpi .okf { color:var(--okf); }
+.kpi .base { color:var(--base); }
+.kpi .meta { display:flex; justify-content:space-between; margin-top:8px; font-size:0.78rem; color:var(--muted); }
+.kpi .win { color:var(--warn); font-weight:600; }
+.bars { display:grid; gap:14px; }
+.bar-legend { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px; font-size:0.78rem; color:var(--muted); }
+.bar-legend span::before {
+  content:""; display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:middle;
+}
+.bar-legend .l-okf::before { background:#3fb950; }
+.bar-legend .l-base::before { background:#58a6ff; }
+.bar-legend .l-rem::before { background:#d29922; }
+.bar-row { display:grid; grid-template-columns:160px 1fr; gap:10px; align-items:center; }
+.bar-row .label { color:var(--muted); font-size:0.85rem; }
+.track { background:#0d1117; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+.fill { height:22px; display:flex; align-items:center; padding-left:8px; font-size:0.75rem; color:#fff; white-space:nowrap; }
+.fill.okf { background:linear-gradient(90deg,#238636,#3fb950); }
+.fill.base { background:linear-gradient(90deg,#1f6feb,#58a6ff); }
+.fill.rem { background:linear-gradient(90deg,#9e6a03,#d29922); }
+table { width:100%; border-collapse:collapse; font-size:0.88rem; }
+th, td { border-bottom:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top; }
+th { color:var(--muted); font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; }
+tr.total td { font-weight:700; color:#fff; }
+tr.info td { color:#c9d1d9; }
+tr.info td:first-child { color:var(--muted); font-style:italic; }
+td.w { color:var(--warn); font-weight:600; }
+td.ok { color:var(--okf); }
+td.bad { color:var(--bad); }
+.cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media (max-width:800px) {
+  .cols { grid-template-columns:1fr; }
+  .scoring .grid { grid-template-columns:1fr; }
+  .bar-row { grid-template-columns:1fr; }
+}
+.flow {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background:#0d1117; border:1px solid var(--border); border-radius:10px;
+  padding:14px; overflow:auto; white-space:pre; font-size:0.78rem; color:#c9d1d9;
+}
+.verdict { border:1px solid #3fb950; background:#122018; border-radius:14px; padding:18px 20px; }
+.verdict h2 { margin-top:0; }
+.verdict p { margin:4px 0; }
+footer.note { color:var(--muted); font-size:0.8rem; margin-top:8px; }
+code { background:#0d1117; padding:1px 5px; border-radius:4px; border:1px solid var(--border); font-size:0.85em; }
+ul { margin:8px 0 0 18px; padding:0; }
+li { margin:4px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="hero">
+  <h1>A/B Benchmark — OKF vs no-OKF</h1>
+  <div class="sub">Reusable 8-stage workflow_call CI (OWASP→Sonar→gate→Nexus/Docker) + README</div>
+  <div class="badge-row">
+    <span class="badge">Task: ci-8stage</span>
+    <span class="badge">Model: same as parent (Cursor Grok 4.5)</span>
+    <span class="badge">Date: 2026-07-28</span>
+    <span class="badge okf">PASS</span>
+    <span class="badge base">PASS</span>
+    <span class="badge">Pricing: $3/M in · $15/M out</span>
+  </div>
+</header>
+
+<div class="scoring">
+  <h2>Scoring contract (true cost-to-PASS)</h2>
+  <div class="grid">
+    <div class="box scored">
+      <h3>Scored (use for winner)</h3>
+      <ul>
+        <li><strong>True wall</strong> = sum of draft + all remediation run walls</li>
+        <li><strong>Parent runs to PASS</strong> (1 vs 2+ when gate fix loops run)</li>
+        <li>Tokens, estimated cost, effectiveness, efficiency (<code>1 / true_wall</code>)</li>
+        <li>Quality index, architecture (/60), runtime correctness %</li>
+      </ul>
+    </div>
+    <div class="box info">
+      <h3>Informational only (winner = —)</h3>
+      <ul>
+        <li><strong>Draft wall</strong> — never score alone if gate FAIL</li>
+        <li><strong>Tool-call turns</strong> — fewer turns ≠ fewer parent runs</li>
+        <li><strong>Throughput (tok/s, chars/s)</strong> — higher ≠ better (rem dumps inflate)</li>
+      </ul>
+    </div>
+  </div>
+  <p class="foot">When a gate fix loop ran, dashboard bars must stack <span style="color:var(--base)">draft</span> + <span style="color:var(--warn)">remediation</span>. Delta % on scored lower-is-better metrics = savings vs baseline (positive favors OKF).</p>
+</div>
+
+<div class="note-banner ">
+  Both arms required 1 parent gate-remediation loop. True wall = draft + rem. Baseline rem prompt included full 59-failure dump (counts toward prompt_chars).
+</div>
+
+<section>
+  <h2>1. Executive Summary</h2>
+  <p>Both arms parent-gate PASS after 1 remediation loop. OKF draft had 2 Conftest failures vs Baseline 59; true wall 127.7s vs 237.6s. Isolation PASS both arms; OKF write-back Rung 1 present.</p>
+</section>
+
+<div class="banner">
+  <h2>2. Winner Banner — Overall Winner: OKF</h2>
+  <p>OKF reached parent-verified PASS with ~46% lower true wall, ~47% fewer tokens, and higher architecture/runtime quality after one shared rem loop each.</p>
+</div>
+
+<section>
+  <h2>3. KPI Cards</h2>
+  <p class="sec-note">Prefer scored KPIs: True Wall, Parent Runs, Tokens, Cost, Efficiency, Quality, Architecture, Runtime. Mark tool turns / throughput as info (dashed card, winner —).</p>
+  <div class="kpi-grid">
+<article class="kpi"><h3>True Wall (scored) <span class="tag scored">SCORED</span></h3>
+<div class="vals"><span class="okf">OKF 127.7s (113.5+14.2)</span><span class="base">Base 237.6s (84.7+152.9)</span></div>
+<div class="meta"><span class="delta">46.3% faster</span><span class="win">OKF</span></div></article>
+<article class="kpi"><h3>Parent Runs (scored) <span class="tag scored">SCORED</span></h3>
+<div class="vals"><span class="okf">OKF 2</span><span class="base">Base 2</span></div>
+<div class="meta"><span class="delta">tie</span><span class="win">—</span></div></article>
+<article class="kpi"><h3>Input Tokens <span class="tag scored">SCORED</span></h3>
+<div class="vals"><span class="okf">OKF 705</span><span class="base">Base 3691</span></div>
+<div class="meta"><span class="delta">80.9% fewer</span><span class="win">OKF</span></div></article>
+<article class="kpi"><h3>Output Tokens <span class="tag scored">SCORED</span></h3>
+<div class="vals"><span class="okf">OKF 11375</span><span class="base">Base 19260</span></div>
+<div class="meta"><span class="delta">40.9% fewer</span><span class="win">OKF</span></div></article>
+<article class="kpi"><h3>Total Tokens <span class="tag scored">SCORED</span></h3>
+<div class="vals"><span class="okf">OKF 12080</span><span class="base">Base 22951</span></div>
+<div class="meta"><span class="delta">47.4% fewer</span><span class="win">OKF</span></div></article>
+<article class="kpi"><h3>Estimated Cost <span class="tag scored">SCORED</span></h3>
+<div class="vals"><span class="okf">OKF $0.1727</span><span class="base">Base $0.3000</span></div>
+<div class="meta"><span class="delta">42.4% lower</span><span class="win">OKF</span></div></article>
+<article class="kpi"><h3>Effectiveness <span class="tag scored">SCORED</span></h3>
+<div class="vals"><span class="okf">OKF 1</span><span class="base">Base 1</span></div>
+<div class="meta"><span class="delta">tie</span><span class="win">—</span></div></article>
+<article class="kpi"><h3>Efficiency (1/true_wall) <span class="tag scored">SCORED</span></h3>
+<div class="vals"><span class="okf">OKF 0.0078</span><span class="base">Base 0.0042</span></div>
+<div class="meta"><span class="delta">+86.1%</span><span class="win">OKF</span></div></article>
+<article class="kpi"><h3>Quality Index <span class="tag scored">SCORED</span></h3>
+<div class="vals"><span class="okf">OKF 96.4</span><span class="base">Base 87.6</span></div>
+<div class="meta"><span class="delta">+10.0%</span><span class="win">OKF</span></div></article>
+<article class="kpi"><h3>Architecture Score <span class="tag scored">SCORED</span></h3>
+<div class="vals"><span class="okf">OKF 56/60</span><span class="base">Base 46/60</span></div>
+<div class="meta"><span class="delta">+21.7%</span><span class="win">OKF</span></div></article>
+<article class="kpi"><h3>Runtime Correctness <span class="tag scored">SCORED</span></h3>
+<div class="vals"><span class="okf">OKF 93.8%</span><span class="base">Base 75.0%</span></div>
+<div class="meta"><span class="delta">+25.1%</span><span class="win">OKF</span></div></article>
+<article class="kpi info"><h3>Tool Turns (info) <span class="tag info">INFO</span></h3>
+<div class="vals"><span class="okf">OKF 8 (6+2)</span><span class="base">Base 10 (4+6)</span></div>
+<div class="meta"><span class="delta">not scored alone</span><span class="win">—</span></div></article>
+  </div>
+</section>
+
+<section>
+  <h2>4. Performance Dashboard</h2>
+  <div class="bar-legend">
+    <span class="l-okf">OKF (true / total)</span>
+    <span class="l-base">Baseline draft</span>
+    <span class="l-rem">Baseline remediation (stacked into true)</span>
+  </div>
+  <p class="sec-note">True wall and parent runs are scored. Tool-turn bars are informational.</p>
+  <div class="bars">
+<div class="bar-row"><div class="label">True Wall (s)</div><div>
+<div class="track" style="margin-bottom:6px"><div class="fill okf" style="width:53.7%">127.7s</div></div>
+<div class="track" style="margin-bottom:4px"><div class="fill base" style="width:35.7%">draft 84.7s</div></div>
+<div class="track"><div class="fill rem" style="width:64.3%">rem 152.9s</div></div>
+</div></div>
+<div class="bar-row"><div class="label">Total Tokens</div><div>
+<div class="track" style="margin-bottom:6px"><div class="fill okf" style="width:52.6%">12080</div></div>
+<div class="track"><div class="fill base" style="width:100.0%">22951</div></div>
+</div></div>
+<div class="bar-row"><div class="label">Est. Cost ($)</div><div>
+<div class="track" style="margin-bottom:6px"><div class="fill okf" style="width:57.6%">$0.173</div></div>
+<div class="track"><div class="fill base" style="width:100.0%">$0.300</div></div>
+</div></div>
+<div class="bar-row"><div class="label">Parent Runs</div><div>
+<div class="track" style="margin-bottom:6px"><div class="fill okf" style="width:100.0%">2</div></div>
+<div class="track"><div class="fill base" style="width:100.0%">2</div></div>
+</div></div>
+<div class="bar-row"><div class="label">Architecture /60</div><div>
+<div class="track" style="margin-bottom:6px"><div class="fill okf" style="width:93.3%">56</div></div>
+<div class="track"><div class="fill base" style="width:76.7%">46</div></div>
+</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>5. Full Metrics Table</h2>
+  <p class="sec-note">Rows labeled non-scoring / informational must use winner <code>—</code>. Scored wall is <strong>True Wall Time</strong> only.</p>
+  <table>
+    <thead><tr><th>Metric</th><th>OKF</th><th>Baseline</th><th>Delta</th><th>Winner</th></tr></thead>
+    <tbody>
+<tr class="info"><td>Draft Wall (info)</td><td>113.5s (gate FAIL 2)</td><td>84.7s (gate FAIL 59)</td><td>not final</td><td class='w'>—</td></tr>
+<tr><td>True Wall (scored)</td><td>127.682s</td><td>237.561s</td><td>46.3%</td><td class='w'>OKF</td></tr>
+<tr><td>Remediation Wall</td><td>14.215s</td><td>152.866s</td><td>90.7%</td><td class='w'>OKF</td></tr>
+<tr><td>Parent Runs to PASS</td><td>2</td><td>2</td><td>0</td><td class='w'>—</td></tr>
+<tr><td>Prompt Chars (true)</td><td>2820</td><td>14765</td><td>80.9%</td><td class='w'>OKF</td></tr>
+<tr><td>Output Chars (true)</td><td>45500</td><td>77040</td><td>40.9%</td><td class='w'>OKF</td></tr>
+<tr><td>Input Tokens</td><td>705</td><td>3691</td><td>80.9%</td><td class='w'>OKF</td></tr>
+<tr><td>Output Tokens</td><td>11375</td><td>19260</td><td>40.9%</td><td class='w'>OKF</td></tr>
+<tr><td>Total Tokens</td><td>12080</td><td>22951</td><td>47.4%</td><td class='w'>OKF</td></tr>
+<tr><td>Estimated Cost USD</td><td>0.1727</td><td>0.3000</td><td>42.4%</td><td class='w'>OKF</td></tr>
+<tr><td>Files Written</td><td>2 (+inbox)</td><td>2</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Deliverable Size (bytes)</td><td>23818</td><td>43179</td><td>44.8% smaller</td><td class='w'>OKF</td></tr>
+<tr><td>Effectiveness</td><td>1</td><td>1</td><td>0</td><td class='w'>—</td></tr>
+<tr><td>Efficiency</td><td>0.007832</td><td>0.004209</td><td>OKF higher</td><td class='w'>OKF</td></tr>
+<tr class="info"><td>Tool Turns (info)</td><td>6+2=8</td><td>4+6=10</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Quality Index</td><td>96.4</td><td>87.6</td><td>+10.0%</td><td class='w'>OKF</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>6. Architecture Review (0–5 each, /60)</h2>
+  <table>
+    <thead><tr><th>Dimension</th><th>OKF</th><th>Baseline</th><th>Delta</th><th>Winner</th></tr></thead>
+    <tbody>
+<tr><td>Build Once / Reuse Many</td><td>5</td><td>4</td><td>1</td><td class='w'>OKF</td></tr>
+<tr><td>Artifact Strategy</td><td>5</td><td>4</td><td>1</td><td class='w'>OKF</td></tr>
+<tr><td>Cache Strategy</td><td>4</td><td>4</td><td>0</td><td class='w'>—</td></tr>
+<tr><td>Dependency Graph</td><td>5</td><td>5</td><td>0</td><td class='w'>—</td></tr>
+<tr><td>Parallelization</td><td>4</td><td>4</td><td>0</td><td class='w'>—</td></tr>
+<tr><td>Critical Path Optimization</td><td>4</td><td>3</td><td>1</td><td class='w'>OKF</td></tr>
+<tr><td>Runtime Efficiency</td><td>5</td><td>3</td><td>2</td><td class='w'>OKF</td></tr>
+<tr><td>Failure Isolation</td><td>4</td><td>4</td><td>0</td><td class='w'>—</td></tr>
+<tr><td>Security Hardening</td><td>5</td><td>4</td><td>1</td><td class='w'>OKF</td></tr>
+<tr><td>Maintainability</td><td>5</td><td>3</td><td>2</td><td class='w'>OKF</td></tr>
+<tr><td>Reusability</td><td>5</td><td>5</td><td>0</td><td class='w'>—</td></tr>
+<tr><td>Enterprise Readiness</td><td>5</td><td>3</td><td>2</td><td class='w'>OKF</td></tr>
+<tr><td>TOTAL</td><td>56</td><td>46</td><td>10</td><td class='w'>OKF</td></tr>
+    </tbody>
+  </table>
+  <p style="color:var(--muted);font-size:0.85rem;margin-top:10px;">Scores 0–5 per dimension (max 60). OKF leveraged Prompt Cards + house composites; Baseline remediated from gate dump + public SHA resolve.</p>
+</section>
+
+<section>
+  <h2>7. Runtime Correctness Audit</h2>
+  <table>
+    <thead><tr><th>Check</th><th>OKF</th><th>Baseline</th><th>Delta</th><th>Winner</th></tr></thead>
+    <tbody>
+<tr><td>Invented actions / APIs</td><td class="ok">PASS</td><td class="ok">PASS</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Placeholder / masking stubs</td><td class="ok">PASS</td><td class="bad">FAIL</td><td>—</td><td class='w'>OKF</td></tr>
+<tr><td>Invalid marketplace refs</td><td class="ok">PASS</td><td class="ok">PASS</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Deprecated actions/APIs</td><td class="ok">PASS</td><td class="ok">PASS</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Unpinned mutable refs</td><td class="ok">PASS</td><td class="ok">PASS</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>SonarQube properties</td><td class="ok">PASS</td><td class="ok">PASS</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>OWASP → Sonar import</td><td class="ok">PASS</td><td class="ok">PASS</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Cache strategy soundness</td><td class="ok">PASS</td><td class="ok">PASS</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Duplicated builds</td><td class="ok">PASS</td><td class="ok">PASS</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Redundant I/O / downloads</td><td class="ok">PASS</td><td class="bad">FAIL</td><td>—</td><td class='w'>OKF</td></tr>
+<tr><td>Missing permissions</td><td class="ok">PASS</td><td class="ok">PASS</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Excessive permissions</td><td class="ok">PASS</td><td class="ok">PASS</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Missing concurrency</td><td class="bad">FAIL</td><td class="bad">FAIL</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Missing timeout</td><td class="ok">PASS</td><td class="bad">FAIL</td><td>—</td><td class='w'>OKF</td></tr>
+<tr><td>Dependency / needs graph</td><td class="ok">PASS</td><td class="ok">PASS</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Card-only / isolation</td><td class="ok">PASS</td><td class="ok">PASS</td><td>—</td><td class='w'>—</td></tr>
+<tr><td>Runtime Correctness %</td><td>93.8%</td><td>75.0%</td><td>+25.1%</td><td class='w'>OKF</td></tr>
+    </tbody>
+  </table>
+  <div class="cols" style="margin-top:14px">
+    <div>
+      <h3 style="margin:0 0 6px;font-size:0.95rem;color:var(--okf)">OKF findings</h3>
+      <ul>
+<li>SHA-pinned marketplace actions + ./ house composites from Prompt Cards</li>
+<li>Top-level + job permissions; python3 -u after rem</li>
+<li>timeout-minutes on quality-gate job; concurrency still absent</li>
+<li>OWASP via house action; Sonar xmlReportPath import</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;font-size:0.95rem;color:var(--base)">Baseline findings</h3>
+      <ul>
+<li>Draft used mutable @vN tags — fixed to SHA via public GitHub API during rem</li>
+<li>Placeholder OWASP JSON stub remains in failure path (masking risk)</li>
+<li>No job timeouts; no concurrency; more checkout/cache duplication</li>
+<li>Gate dump drove rem; 59→0 failures in one loop</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>8. Artifact &amp; Cache Flow</h2>
+  <div class="cols">
+    <div>
+      <h3 style="margin:0 0 8px;font-size:0.95rem;color:var(--okf)">OKF</h3>
+      <div class="flow">build-preprocess → build-test-lint (upload build) → owasp (house action + report artifact) ∥ → sonarqube (import OWASP XML + scannerwork) → sonarqube-gate → publish-to-nexus / docker-build-publish (reuse build) → notification-email (always)</div>
+    </div>
+    <div>
+      <h3 style="margin:0 0 8px;font-size:0.95rem;color:var(--base)">Baseline</h3>
+      <div class="flow">build-preprocess → build-test-lint (upload) → owasp (DC + upload) ∥ → sonarqube (JSON import) → sonarqube-gate → publish/docker (reuse) → notification-email (always); heavier per-job cache/setup</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>9. Benefits Observed</h2>
+  <div class="cols">
+    <div>
+      <h3 style="margin:0 0 6px;font-size:0.95rem;color:var(--okf)">OKF arm</h3>
+      <ul>
+<li>Prompt Cards supplied SPVS/SHA constraints before first write (2 draft fails only)</li>
+<li>House composites reduced workflow size (~16KB vs ~34KB)</li>
+<li>True cost-to-PASS ~46% faster wall and ~47% fewer tokens vs Baseline</li>
+<li>Write-back captured lookup gap + rem root cause into _inbox/</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;font-size:0.95rem;color:var(--base)">Baseline arm</h3>
+      <ul>
+<li>Faster initial draft wall (84.7s) for functional-only authoring</li>
+<li>Successfully remediated all 59 SPVS findings from failure text alone</li>
+<li>No Aegis dependency — pure public knowledge + gate dump</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>10. Parent Findings</h2>
+  <table>
+    <thead><tr><th>Success Gate Item</th><th>OKF</th><th>Baseline</th><th>Delta</th><th>Winner</th></tr></thead>
+    <tbody>
+<tr><td>Parent Conftest Gate (final)</td><td class="ok">PASS</td><td class="ok">PASS</td><td>26/26 both</td><td class='w'>—</td></tr>
+<tr><td>Draft Gate</td><td class="bad">FAIL (2)</td><td class="bad">FAIL (59)</td><td>OKF closer</td><td class='w'>OKF</td></tr>
+<tr><td>Isolation Audit</td><td class="ok">PASS</td><td class="ok">PASS</td><td>no answer-key reads</td><td class='w'>—</td></tr>
+<tr><td>Write-back (§1.6)</td><td class="ok">PASS</td><td>N/A</td><td>Rung 1 inbox notes</td><td class='w'>OKF</td></tr>
+<tr><td>Discovery Budget</td><td class="ok">PASS</td><td>N/A</td><td>1 mandated + 1 extra lookup</td><td class='w'>OKF</td></tr>
+<tr><td>Functional Checklist</td><td class="ok">PASS</td><td class="ok">PASS</td><td>8 stages + README</td><td class='w'>—</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:12px;color:var(--muted);font-size:0.9rem;">Parent re-ran conftest independently; draft FAIL not scored as final. Isolation audited against **/policies/** and **/*.rego.</p>
+</section>
+
+<section>
+  <h2>11. Methodology</h2>
+  <ul>
+<li>Same model for both arms; parallel launch; parent never implemented</li>
+<li>Shared functional brief only; PARENT_GATE + answer-key globs withheld from initial prompts</li>
+<li>OKF: live okf.py lookup --card; Baseline: forbidden Aegis/OKF/policies</li>
+<li>Gate FAIL → resume with raw failure stdout; score true totals (draft+rem)</li>
+<li>Report rendered from BENCH_REPORT_TEMPLATE.html via render_bench_report.py</li>
+  </ul>
+</section>
+
+<section class="verdict">
+  <h2>12. Final Verdict</h2>
+<p><strong>Fastest:</strong> OKF (127.7s true vs 237.6s)</p>
+<p><strong>Lowest Tokens:</strong> OKF (12080 vs 22951)</p>
+<p><strong>Lowest Cost:</strong> OKF ($0.1727 vs $0.3000)</p>
+<p><strong>Highest Quality:</strong> OKF (QI 96.4 vs 87.6)</p>
+<p><strong>Best Architecture:</strong> OKF (56/60 vs 46/60)</p>
+<p><strong>Best Runtime Correctness:</strong> OKF (93.8% vs 75.0%)</p>
+<p><strong>Best Enterprise Readiness:</strong> OKF (cards + house actions + timeouts)</p>
+<p><strong>Overall Winner:</strong> OKF</p>
+</section>
+
+<footer class="note">
+  Time saved 46.3% · Token reduction 47.4% · Cost reduction 42.4% · Arch +21.7% · QI +10.0%
+</footer>
+</div>
+</body>
+</html>

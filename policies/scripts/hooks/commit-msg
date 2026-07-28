@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# =============================================================================
+# FILE_NAME: commit-msg (hook)
+# DESCRIPTION: Global Git hook for commit message validation.
+#              Sources shared validation logic from commit_message_lib.sh.
+# =============================================================================
+set -euo pipefail
+
+# Sourcing the shared library from the global hooks directory
+HOOKS_DIR="${HOME}/.git-templates/hooks"
+LIB_PATH="${HOOKS_DIR}/commit_message_lib.sh"
+
+if [[ ! -f "${LIB_PATH}" ]]; then
+    echo "[COMMIT-MSG] ERROR: Validation library not found at ${LIB_PATH}" >&2
+    exit 1
+fi
+
+# shellcheck source=/dev/null
+source "${LIB_PATH}"
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(head -1 "$COMMIT_MSG_FILE")
+
+if ! commit_msg_validate_subject "${COMMIT_MSG}"; then
+    exit 1
+fi
+
+exit 0

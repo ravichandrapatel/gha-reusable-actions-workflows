@@ -1,0 +1,6 @@
+# Dev tooling for local SPVS pre-commit hooks.
+# pip: pre-commit, bandit
+# System (apt/brew): shellcheck, actionlint, conftest, yq, terraform, tflint
+pre-commit>=4.6.0
+bandit==1.9.4
+pyyaml>=6.0.3

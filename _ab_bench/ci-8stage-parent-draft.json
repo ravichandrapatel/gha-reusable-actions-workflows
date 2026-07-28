@@ -1,0 +1,6 @@
+{
+  "draft_gate": {
+    "no_okf": {"status": "FAIL", "failures": 59, "passed": 0, "tests": 59, "wall_s": 84.695144, "parent_runs": 1},
+    "okf": {"status": "FAIL", "failures": 2, "passed": 24, "tests": 26, "note": "draft peek while arm finishing; rem pending on complete"}
+  }
+}

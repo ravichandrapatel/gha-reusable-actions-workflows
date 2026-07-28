@@ -1,0 +1,543 @@
+# =============================================================================
+# FILE_NAME: release-manager.yml
+# DESCRIPTION: Release, Promote, and Rollback manager for actions and workflows.
+# ALIGNMENT: OWASP SPVS (Secure Pipeline Verification Standard) 1.0
+# VERSION: 1.8.1
+# EXIT_CODES/SIGNALS: 0 on success, 1 on failure.
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: Release Manager
+
+on:
+  workflow_dispatch:
+    inputs:
+      component_path:
+        description: 'Path to component (e.g., actions/common/janitor-bot or workflows/type/name)'
+        required: true
+        type: string
+      mode:
+        description: 'Release stage'
+        required: true
+        type: choice
+        options:
+          - release   # Create versioned tag (name-X.Y.Z) on main
+          - promote   # Update stable tag (name-v1) to version
+          - rollback  # Revert stable tag (name-v1) to previous version
+      version:
+        description: 'Optional. Release: auto-derived if empty. Promote/rollback: defaults to latest versioned tag if empty (pass explicitly to target a specific X.Y.Z).'
+        required: false
+        type: string
+
+concurrency:
+  group: release-${{ github.event.inputs.component_path }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # =============================================================================
+  # STAGE 1: VALIDATE (SPVS Plan/Develop)
+  # =============================================================================
+  validate:
+    name: Validate Component
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      component_name: ${{ steps.validate_init.outputs.component_name }}
+      component_type: ${{ steps.validate_init.outputs.component_type }}
+      version: ${{ steps.validate.outputs.version }}
+      safe_name: ${{ steps.validate_init.outputs.safe_name }}
+      current_version: ${{ steps.validate_init.outputs.current_version }}
+      workflow_file: ${{ steps.validate_init.outputs.workflow_file }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Validate Component and Version
+        id: validate_init
+        shell: bash
+        env:
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+        run: |
+          set -euo pipefail
+          # [T-01] Validating component path: "$COMPONENT_PATH"
+          echo "[DBG-001] Starting validation for path: $COMPONENT_PATH"
+          
+          if [[ ! -d "$COMPONENT_PATH" ]]; then
+            echo "[ERR-T-01] Component path $COMPONENT_PATH does not exist." >&2
+            exit 1
+          fi
+
+          # Determine type (actions or workflows)
+          if [[ "$COMPONENT_PATH" =~ ^actions/ ]]; then
+            TYPE="action"
+            echo "[DBG-002] Detected component type: action"
+          elif [[ "$COMPONENT_PATH" =~ ^workflows/ ]]; then
+            TYPE="workflow"
+            echo "[DBG-002] Detected component type: workflow"
+          else
+            echo "[ERR-T-02] Component must be in actions/ or workflows/ directory." >&2
+            exit 1
+          fi
+
+          NAME=$(basename "$COMPONENT_PATH")
+          # Tag prefix stays basename for existing tags; reject duplicate basenames across categories.
+          SAFE_NAME="$NAME"
+          DUP_HITS=()
+          while IFS= read -r -d '' hit; do
+            DUP_HITS+=("$hit")
+          done < <(find actions workflows -mindepth 2 -maxdepth 2 -type d -name "$NAME" -print0 2>/dev/null || true)
+          if [[ ${#DUP_HITS[@]} -gt 1 ]]; then
+            echo "[ERR-T-02c] Ambiguous basename '$NAME' used by multiple components: ${DUP_HITS[*]}" >&2
+            echo "[ERR-T-02c] Rename one component or release cannot choose a unique tag prefix." >&2
+            exit 1
+          fi
+
+          # [T-02a] Discover workflow file if type is workflow
+          WORKFLOW_FILE_OUTPUT=""
+          if [[ "$TYPE" == "workflow" ]]; then
+            echo "[DBG-002a] Searching for workflow file in $COMPONENT_PATH"
+            WF_FILES=("$COMPONENT_PATH"/*.{yml,yaml})
+            # Filter out non-existent globs if no files match
+            VALID_WF_FILES=()
+            for f in "${WF_FILES[@]}"; do
+              [[ -e "$f" ]] && VALID_WF_FILES+=("$f")
+            done
+
+            if [[ ${#VALID_WF_FILES[@]} -eq 0 ]]; then
+              echo "[ERR-T-02a] No .yml or .yaml file found in $COMPONENT_PATH" >&2
+              exit 1
+            elif [[ ${#VALID_WF_FILES[@]} -gt 1 ]]; then
+              echo "[ERR-T-02b] Multiple workflow files found in $COMPONENT_PATH. Only one is allowed." >&2
+              exit 1
+            fi
+
+            WF_FILE=$(basename "${VALID_WF_FILES[0]}")
+            echo "[DBG-002b] Discovered workflow file: $WF_FILE"
+            WORKFLOW_FILE_OUTPUT="$WF_FILE"
+          fi
+
+          # Get current version for semver action
+          echo "[DBG-003] Fetching latest tag for $SAFE_NAME"
+          LATEST_TAG=$(git tag -l "${SAFE_NAME}-[0-9]*" | sort -V | tail -n1 || true)
+          if [[ -z "$LATEST_TAG" ]]; then
+            CURRENT_VER="0.0.0"
+            echo "[DBG-004] No existing tags found, starting from 0.0.0"
+          else
+            CURRENT_VER="${LATEST_TAG#"${SAFE_NAME}"-}"
+            echo "[DBG-004] Latest tag found: $LATEST_TAG (version: $CURRENT_VER)"
+          fi
+
+          {
+            echo "component_name=$NAME"
+            echo "component_type=$TYPE"
+            echo "safe_name=$SAFE_NAME"
+            echo "workflow_file=$WORKFLOW_FILE_OUTPUT"
+            echo "current_version=$CURRENT_VER"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Calculate Next Version
+        if: github.event.inputs.mode == 'release' && github.event.inputs.version == ''
+        id: semver
+        uses: ./actions/common/semver
+        with:
+          current_version: ${{ steps.validate_init.outputs.current_version }}
+          safe_name: ${{ steps.validate_init.outputs.safe_name }}
+
+      - name: Finalize Validation
+        id: validate
+        shell: bash
+        env:
+          MODE: ${{ github.event.inputs.mode }}
+          VERSION_INPUT: ${{ github.event.inputs.version }}
+          SAFE_NAME: ${{ steps.validate_init.outputs.safe_name }}
+          NEXT_VERSION: ${{ steps.semver.outputs.next_version }}
+          COMPONENT_TYPE: ${{ steps.validate_init.outputs.component_type }}
+          COMPONENT_NAME: ${{ steps.validate_init.outputs.component_name }}
+        run: |
+          set -euo pipefail
+          echo "[DBG-005] Finalizing validation for mode: $MODE"
+          
+          if [[ "$MODE" == "release" ]]; then
+            if [[ -n "$VERSION_INPUT" ]]; then
+              VERSION="$VERSION_INPUT"
+              echo "[DBG-006] Using provided version: $VERSION"
+            else
+              VERSION="$NEXT_VERSION"
+              echo "[DBG-006] Using auto-calculated version: $VERSION"
+            fi
+            
+            # [T-03] Checking for tag collision (Artifact Integrity)
+            TAG_NAME="${SAFE_NAME}-${VERSION}"
+            echo "[DBG-007] Checking for tag collision: $TAG_NAME"
+            if git rev-parse "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+              echo "[ERR-T-03] Tag $TAG_NAME already exists. Collision detected." >&2
+              exit 1
+            fi
+          else
+            # For promote/rollback, we need a version
+            if [[ -n "$VERSION_INPUT" ]]; then
+              VERSION="$VERSION_INPUT"
+              echo "[DBG-008] Using provided version for $MODE: $VERSION"
+            else
+              # Default to latest versioned tag
+              echo "[DBG-009] No version provided, looking for latest versioned tag"
+              LATEST_TAG=$(git tag -l "${SAFE_NAME}-[0-9]*" | sort -V | tail -n1 || true)
+              if [[ -z "$LATEST_TAG" ]]; then
+                echo "[ERR-T-04] No versioned tags found for $SAFE_NAME. Cannot $MODE." >&2
+                exit 1
+              fi
+              VERSION="${LATEST_TAG#"${SAFE_NAME}"-}"
+              echo "[DBG-010] Using latest version: $VERSION"
+            fi
+            
+            # Verify tag exists for promote/rollback
+            TAG_NAME="${SAFE_NAME}-${VERSION}"
+            echo "[DBG-011] Verifying tag exists for $MODE: $TAG_NAME"
+            if ! git rev-parse "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+              echo "[ERR-T-05] Tag $TAG_NAME does not exist. Cannot $MODE." >&2
+              exit 1
+            fi
+          fi
+          
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "[DBG-012] Validation successful. Version to use: $VERSION"
+          echo "::notice::Validated $COMPONENT_TYPE $COMPONENT_NAME for $MODE at version $VERSION"
+
+  # =============================================================================
+  # STAGE 2: SECURITY (SPVS Integrate/Automated Validation)
+  # =============================================================================
+  security:
+    name: Security Scans
+    needs: validate
+    if: github.event.inputs.mode == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Tools
+        run: |
+          set -euo pipefail
+          # [T-04] Installing security tools (SPVS Build Environment Protection)
+          echo "[DBG-013] Installing Bandit and Shellcheck"
+          pip install --no-cache-dir bandit==1.9.4
+          
+          echo "[DBG-014] Updating apt and installing Shellcheck"
+          sudo apt-get install -y shellcheck
+          
+          echo "[DBG-015] Downloading and installing Actionlint (pinned release + checksum)"
+          ACTIONLINT_VERSION="1.7.7"
+          ACTIONLINT_SHA256="023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
+          ACTIONLINT_ARCHIVE="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "${ACTIONLINT_ARCHIVE}" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${ACTIONLINT_ARCHIVE}"
+          echo "${ACTIONLINT_SHA256}  ${ACTIONLINT_ARCHIVE}" | sha256sum -c -
+          tar xzf "${ACTIONLINT_ARCHIVE}" actionlint
+          sudo install -m 755 actionlint /usr/local/bin/actionlint
+          rm -f "${ACTIONLINT_ARCHIVE}" actionlint
+          
+          echo "[DBG-016] Installing Conftest (pinned release + checksum)"
+          CONFTEST_VERSION="0.56.0"
+          CONFTEST_SHA256="620f41640d63bbde1646a108ce2816ba54c980466ceebb7e754dda2d508e8cd5"
+          CONFTEST_ARCHIVE="conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
+          curl -fsSL -o "${CONFTEST_ARCHIVE}" \
+            "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/${CONFTEST_ARCHIVE}"
+          echo "${CONFTEST_SHA256}  ${CONFTEST_ARCHIVE}" | sha256sum -c -
+          tar xzf "${CONFTEST_ARCHIVE}" conftest
+          sudo install -m 755 conftest /usr/local/bin/conftest
+          rm -f "${CONFTEST_ARCHIVE}" conftest
+          
+          echo "[DBG-016a] Verifying tool installations"
+          bandit --version
+          conftest --version
+          shellcheck --version
+          actionlint --version
+          
+          echo "[DBG-016b] Tool verification complete"
+
+      - name: Run Actionlint
+        env:
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+          COMPONENT_TYPE: ${{ needs.validate.outputs.component_type }}
+          WF_FILE: ${{ needs.validate.outputs.workflow_file }}
+        run: |
+          set -euo pipefail
+          # [T-05] Running actionlint
+          echo "[DBG-017] Starting Actionlint for $COMPONENT_TYPE at $COMPONENT_PATH"
+          if [[ "$COMPONENT_TYPE" == "action" ]]; then
+            # [DBG-017a] Skipping actionlint for actions (actionlint primarily targets workflows)
+            # Conftest and Shellcheck cover composite action security.
+            echo "[DBG-017a] Action detected, skipping actionlint (covered by Conftest)"
+          else
+            # [DBG-017b] Running actionlint for workflow
+            echo "[DBG-017b] Running actionlint on $COMPONENT_PATH/$WF_FILE"
+            actionlint "$COMPONENT_PATH/$WF_FILE"
+          fi
+          echo "[DBG-018] Actionlint completed successfully"
+
+      - name: Run SPVS GitHub Actions scan
+        env:
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+          COMPONENT_TYPE: ${{ needs.validate.outputs.component_type }}
+          WF_FILE: ${{ needs.validate.outputs.workflow_file }}
+        run: |
+          set -euo pipefail
+          # [T-06] Running Conftest SPVS scan on the release component only (CKV2_SPVS_* + CKV_GHA_*)
+          echo "[DBG-019] SPVS scan for component: $COMPONENT_PATH"
+          POLICY_LIB="policies/conftest/github_actions/lib"
+          # shellcheck disable=SC1091
+          source policies/scripts/spvs_conftest_run.sh
+          if [[ "$COMPONENT_TYPE" == "action" ]]; then
+            scan_file=""
+            for candidate in action.yml action.yaml; do
+              if [[ -f "$COMPONENT_PATH/$candidate" ]]; then
+                scan_file="$COMPONENT_PATH/$candidate"
+                break
+              fi
+            done
+            if [[ -z "$scan_file" ]]; then
+              echo "[ERR-T-06] No action.yml or action.yaml in $COMPONENT_PATH" >&2
+              exit 1
+            fi
+            echo "[DBG-019a] Scanning composite action: $scan_file"
+            spvs_conftest_test composite \
+              policies/conftest/github_actions/composite \
+              "${POLICY_LIB}" \
+              "$scan_file"
+          else
+            scan_file="$COMPONENT_PATH/$WF_FILE"
+            if [[ ! -f "$scan_file" ]]; then
+              echo "[ERR-T-06b] Workflow file not found: $scan_file" >&2
+              exit 1
+            fi
+            echo "[DBG-019a] Scanning workflow: $scan_file"
+            spvs_conftest_test workflow \
+              policies/conftest/github_actions/workflow \
+              "${POLICY_LIB}" \
+              "$scan_file"
+          fi
+          echo "[DBG-020] SPVS GitHub Actions scan completed successfully"
+
+      - name: Run Bandit
+        env:
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+        run: |
+          set -euo pipefail
+          # [T-07] Running bandit on Python files (recursive under component)
+          echo "[DBG-021] Checking for Python files in $COMPONENT_PATH"
+          mapfile -t PY_FILES < <(find "$COMPONENT_PATH" -type f -name '*.py' -print | sort || true)
+          if [[ ${#PY_FILES[@]} -gt 0 ]]; then
+            echo "[DBG-022] Starting Bandit scan (${#PY_FILES[@]} file(s))"
+            bandit -r "$COMPONENT_PATH"
+            echo "[DBG-023] Bandit scan completed successfully"
+          else
+            echo "[DBG-024] No Python files found, skipping Bandit."
+          fi
+
+      - name: Run Shellcheck
+        env:
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+        run: |
+          set -euo pipefail
+          # [T-08] Running shellcheck on shell scripts (recursive under component)
+          echo "[DBG-025] Checking for Shell scripts in $COMPONENT_PATH"
+          mapfile -t SH_FILES < <(find "$COMPONENT_PATH" -type f -name '*.sh' -print | sort || true)
+          if [[ ${#SH_FILES[@]} -gt 0 ]]; then
+            echo "[DBG-026] Starting Shellcheck scan (${#SH_FILES[@]} file(s))"
+            shellcheck "${SH_FILES[@]}"
+            echo "[DBG-027] Shellcheck scan completed successfully"
+          else
+            echo "[DBG-028] No shell scripts found, skipping Shellcheck."
+          fi
+
+  # =============================================================================
+  # STAGE 3: EXECUTE (SPVS Release/Release Assurance)
+  # NOTE: If 'main' branch is protected, the GitHub App used below MUST be 
+  # added to the "Allow bypass" list in branch protection rules to allow 
+  # workflow syncing during release/rollback.
+  # =============================================================================
+  execute:
+    name: Execute Release
+    needs: [validate, security]
+    if: always() && needs.validate.result == 'success' && (needs.security.result == 'success' || needs.security.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.mode == 'release' && 'sandbox' || 'production' }}
+    permissions:
+      contents: write
+    steps:
+      - name: Generate Token
+        id: generate_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          token: ${{ steps.generate_token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          set -euo pipefail
+          # [T-09] Configuring Git for Release (SPVS Artifact Integrity)
+          echo "[DBG-029] Configuring Git user for bot"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Execute Release/Promote/Rollback
+        id: execute_step
+        shell: bash
+        env:
+          MODE: ${{ github.event.inputs.mode }}
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+          COMPONENT_NAME: ${{ needs.validate.outputs.component_name }}
+          COMPONENT_TYPE: ${{ needs.validate.outputs.component_type }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          SAFE_NAME: ${{ needs.validate.outputs.safe_name }}
+          WF_FILE: ${{ needs.validate.outputs.workflow_file }}
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          echo "[DBG-030] Starting execution for mode: $MODE"
+          
+          # Stable tag is always v1 with component prefix as per user request
+          STABLE_TAG="${SAFE_NAME}-v1"
+          VERSION_TAG="${SAFE_NAME}-${VERSION}"
+
+          sync_main_with_retry() {
+            # Reduce race with concurrent merges on main before push
+            git pull --rebase origin main
+          }
+
+          if [[ "$MODE" == "release" ]]; then
+            if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
+              # [T-12] Syncing workflow to .github/workflows/ (Do this in release so tag includes it)
+              SRC_WF="$COMPONENT_PATH/$WF_FILE"
+              DEST_WF=".github/workflows/${COMPONENT_NAME}.yml"
+              echo "[DBG-035] Syncing workflow file from $SRC_WF to $DEST_WF"
+              mkdir -p .github/workflows
+              cp "$SRC_WF" "$DEST_WF"
+              git add "$DEST_WF"
+              if git diff --cached --quiet; then
+                echo "[DBG-036] No changes to commit for workflow sync"
+              else
+                git commit -m "DCDT-0000 chore(release): sync workflow ${COMPONENT_NAME} to ${VERSION}"
+                sync_main_with_retry
+                git push origin main
+              fi
+              echo "[DBG-037] Successfully synced workflow to main"
+            fi
+
+            # [T-10] Creating versioned tag: "$VERSION_TAG"
+            echo "[DBG-031] Creating versioned tag: $VERSION_TAG"
+            git tag -a "$VERSION_TAG" -m "Release $VERSION_TAG"
+            git push origin "$VERSION_TAG"
+            echo "[DBG-032] Successfully pushed versioned tag"
+            
+          elif [[ "$MODE" == "promote" ]]; then
+            echo "[DBG-033] Starting promotion of $VERSION_TAG to $STABLE_TAG"
+            
+            # [T-11] Promoting to stable tag: "$STABLE_TAG" (Point to versioned tag commit)
+            echo "[DBG-033a] Updating stable tag $STABLE_TAG to point to $VERSION_TAG"
+            git tag -d "$STABLE_TAG" || true
+            git tag -a "$STABLE_TAG" "$VERSION_TAG" -m "Promote to $VERSION_TAG"
+            
+            # [T-11b] Push tag without --force by deleting remote first
+            echo "[DBG-033b] Pushing stable tag to remote"
+            git push origin :refs/tags/"$STABLE_TAG" || true
+            git push origin "$STABLE_TAG"
+            echo "[DBG-034] Successfully updated stable tag"
+
+          elif [[ "$MODE" == "rollback" ]]; then
+            echo "[DBG-038] Starting rollback for $STABLE_TAG"
+            # Previous versioned tag via sorted list index (not grep -B1)
+            mapfile -t VERSION_TAGS < <(git tag -l "${SAFE_NAME}-[0-9]*" | sort -V)
+            PREV_TAG=""
+            for i in "${!VERSION_TAGS[@]}"; do
+              if [[ "${VERSION_TAGS[$i]}" == "$VERSION_TAG" ]]; then
+                if [[ "$i" -gt 0 ]]; then
+                  PREV_TAG="${VERSION_TAGS[$((i - 1))]}"
+                fi
+                break
+              fi
+            done
+            if [[ -z "$PREV_TAG" || "$PREV_TAG" == "$VERSION_TAG" ]]; then
+              echo "[ERR-T-07] No previous version found for rollback from $VERSION_TAG." >&2
+              exit 1
+            fi
+            echo "[DBG-039] Identified previous version: $PREV_TAG"
+            
+            if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
+              # [T-14] Syncing previous workflow version to main
+              DEST_WF=".github/workflows/${COMPONENT_NAME}.yml"
+              echo "[DBG-041] Restoring workflow file from tag $PREV_TAG"
+              git checkout "$PREV_TAG" -- "$COMPONENT_PATH/$WF_FILE"
+              cp "$COMPONENT_PATH/$WF_FILE" "$DEST_WF"
+              git checkout HEAD -- "$COMPONENT_PATH/$WF_FILE" # Restore current state of source
+              git add "$DEST_WF"
+              if git diff --cached --quiet; then
+                echo "[DBG-042] No changes to commit for workflow rollback"
+              else
+                git commit -m "DCDT-0000 chore(release): rollback workflow ${COMPONENT_NAME} to ${PREV_TAG}"
+                sync_main_with_retry
+                git push origin main
+              fi
+              echo "[DBG-043] Successfully restored workflow file to main"
+            fi
+
+            # [T-13] Rolling back stable tag: "$STABLE_TAG" (Point to previous versioned tag)
+            echo "[DBG-040] Updating stable tag $STABLE_TAG to point to $PREV_TAG"
+            git tag -d "$STABLE_TAG" || true
+            git tag -a "$STABLE_TAG" "$PREV_TAG" -m "Rollback to $PREV_TAG"
+            
+            # Push tag without --force
+            git push origin :refs/tags/"$STABLE_TAG" || true
+            git push origin "$STABLE_TAG"
+            echo "[DBG-040a] Successfully rolled back stable tag to $PREV_TAG"
+          fi
+
+      - name: Generate Release Summary
+        if: always()
+        env:
+          COMPONENT_PATH: ${{ github.event.inputs.component_path }}
+          MODE: ${{ github.event.inputs.mode }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          SECURITY_RESULT: ${{ needs.security.result }}
+          EXECUTE_RESULT: ${{ steps.execute_step.outcome }}
+        run: |
+          set -euo pipefail
+          # [T-15] Generating release summary (SPVS Release Assurance)
+          echo "[DBG-044] Generating job summary"
+          
+          {
+            echo "## Release Manager Summary"
+            echo "| Stage | Result |"
+            echo "| :--- | :--- |"
+            echo "| **Validation** | $VALIDATE_RESULT |"
+            echo "| **Security Scans** | $SECURITY_RESULT |"
+            echo "| **Execution** | $EXECUTE_RESULT |"
+            echo ""
+            echo "### Metadata"
+            echo "- **Component:** \`$COMPONENT_PATH\`"
+            echo "- **Mode:** \`$MODE\`"
+            echo "- **Version:** \`$VERSION\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          
+          echo "[DBG-045] Summary generation completed"

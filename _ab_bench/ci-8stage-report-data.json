@@ -1,0 +1,571 @@
+{
+  "TASK_SHORT_NAME": "ci-8stage",
+  "TASK_ONE_LINER": "Reusable 8-stage workflow_call CI (OWASP\u2192Sonar\u2192gate\u2192Nexus/Docker) + README",
+  "DATE": "2026-07-28",
+  "MODEL": "same as parent (Cursor Grok 4.5)",
+  "IN_PRICE_PER_M": "3",
+  "OUT_PRICE_PER_M": "15",
+  "OKF_BADGE": "PASS",
+  "BASE_BADGE": "PASS",
+  "WINNER_BANNER_TITLE": "Overall Winner: OKF",
+  "WINNER_BANNER_BODY": "OKF reached parent-verified PASS with ~46% lower true wall, ~47% fewer tokens, and higher architecture/runtime quality after one shared rem loop each.",
+  "executive_summary": "Both arms parent-gate PASS after 1 remediation loop. OKF draft had 2 Conftest failures vs Baseline 59; true wall 127.7s vs 237.6s. Isolation PASS both arms; OKF write-back Rung 1 present.",
+  "ARCHITECTURE_NOTE": "Scores 0\u20135 per dimension (max 60). OKF leveraged Prompt Cards + house composites; Baseline remediated from gate dump + public SHA resolve.",
+  "PARENT_FINDINGS_NOTE": "Parent re-ran conftest independently; draft FAIL not scored as final. Isolation audited against **/policies/** and **/*.rego.",
+  "ROI_FOOTER": "Time saved 46.3% \u00b7 Token reduction 47.4% \u00b7 Cost reduction 42.4% \u00b7 Arch +21.7% \u00b7 QI +10.0%",
+  "ARTIFACT_FLOW_OKF": "build-preprocess \u2192 build-test-lint (upload build) \u2192 owasp (house action + report artifact) \u2225 \u2192 sonarqube (import OWASP XML + scannerwork) \u2192 sonarqube-gate \u2192 publish-to-nexus / docker-build-publish (reuse build) \u2192 notification-email (always)",
+  "ARTIFACT_FLOW_BASE": "build-preprocess \u2192 build-test-lint (upload) \u2192 owasp (DC + upload) \u2225 \u2192 sonarqube (JSON import) \u2192 sonarqube-gate \u2192 publish/docker (reuse) \u2192 notification-email (always); heavier per-job cache/setup",
+  "METHODOLOGY_NOTE": "Both arms required 1 parent gate-remediation loop. True wall = draft + rem. Baseline rem prompt included full 59-failure dump (counts toward prompt_chars).",
+  "METHODOLOGY_NOTE_CLASS": "",
+  "kpis": [
+    {
+      "title": "True Wall (scored)",
+      "okf": "127.7s (113.5+14.2)",
+      "base": "237.6s (84.7+152.9)",
+      "delta": "46.3% faster",
+      "winner": "OKF",
+      "kind": "scored"
+    },
+    {
+      "title": "Parent Runs (scored)",
+      "okf": "2",
+      "base": "2",
+      "delta": "tie",
+      "winner": "\u2014",
+      "kind": "scored"
+    },
+    {
+      "title": "Input Tokens",
+      "okf": "705",
+      "base": "3691",
+      "delta": "80.9% fewer",
+      "winner": "OKF",
+      "kind": "scored"
+    },
+    {
+      "title": "Output Tokens",
+      "okf": "11375",
+      "base": "19260",
+      "delta": "40.9% fewer",
+      "winner": "OKF",
+      "kind": "scored"
+    },
+    {
+      "title": "Total Tokens",
+      "okf": "12080",
+      "base": "22951",
+      "delta": "47.4% fewer",
+      "winner": "OKF",
+      "kind": "scored"
+    },
+    {
+      "title": "Estimated Cost",
+      "okf": "$0.1727",
+      "base": "$0.3000",
+      "delta": "42.4% lower",
+      "winner": "OKF",
+      "kind": "scored"
+    },
+    {
+      "title": "Effectiveness",
+      "okf": "1",
+      "base": "1",
+      "delta": "tie",
+      "winner": "\u2014",
+      "kind": "scored"
+    },
+    {
+      "title": "Efficiency (1/true_wall)",
+      "okf": "0.0078",
+      "base": "0.0042",
+      "delta": "+86.1%",
+      "winner": "OKF",
+      "kind": "scored"
+    },
+    {
+      "title": "Quality Index",
+      "okf": "96.4",
+      "base": "87.6",
+      "delta": "+10.0%",
+      "winner": "OKF",
+      "kind": "scored"
+    },
+    {
+      "title": "Architecture Score",
+      "okf": "56/60",
+      "base": "46/60",
+      "delta": "+21.7%",
+      "winner": "OKF",
+      "kind": "scored"
+    },
+    {
+      "title": "Runtime Correctness",
+      "okf": "93.8%",
+      "base": "75.0%",
+      "delta": "+25.1%",
+      "winner": "OKF",
+      "kind": "scored"
+    },
+    {
+      "title": "Tool Turns (info)",
+      "okf": "8 (6+2)",
+      "base": "10 (4+6)",
+      "delta": "not scored alone",
+      "winner": "\u2014",
+      "kind": "info"
+    }
+  ],
+  "dashboard": [
+    {
+      "label": "True Wall (s)",
+      "okf_width": 53.74702719569605,
+      "okf_label": "127.7s",
+      "base_width": 35.65194943618828,
+      "base_label": "draft 84.7s",
+      "rem_width": 64.34805056381171,
+      "rem_label": "rem 152.9s"
+    },
+    {
+      "label": "Total Tokens",
+      "okf_width": 52.633298839932465,
+      "okf_label": "12080",
+      "base_width": 100.0,
+      "base_label": "22951"
+    },
+    {
+      "label": "Est. Cost ($)",
+      "okf_width": 57.58503869088546,
+      "okf_label": "$0.173",
+      "base_width": 100.0,
+      "base_label": "$0.300"
+    },
+    {
+      "label": "Parent Runs",
+      "okf_width": 100,
+      "okf_label": "2",
+      "base_width": 100,
+      "base_label": "2"
+    },
+    {
+      "label": "Architecture /60",
+      "okf_width": 93.33333333333333,
+      "okf_label": "56",
+      "base_width": 76.66666666666667,
+      "base_label": "46"
+    }
+  ],
+  "metrics": [
+    {
+      "name": "Draft Wall (info)",
+      "okf": "113.5s (gate FAIL 2)",
+      "base": "84.7s (gate FAIL 59)",
+      "delta": "not final",
+      "winner": "\u2014",
+      "info": true
+    },
+    {
+      "name": "True Wall (scored)",
+      "okf": "127.682s",
+      "base": "237.561s",
+      "delta": "46.3%",
+      "winner": "OKF"
+    },
+    {
+      "name": "Remediation Wall",
+      "okf": "14.215s",
+      "base": "152.866s",
+      "delta": "90.7%",
+      "winner": "OKF"
+    },
+    {
+      "name": "Parent Runs to PASS",
+      "okf": "2",
+      "base": "2",
+      "delta": "0",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Prompt Chars (true)",
+      "okf": "2820",
+      "base": "14765",
+      "delta": "80.9%",
+      "winner": "OKF"
+    },
+    {
+      "name": "Output Chars (true)",
+      "okf": "45500",
+      "base": "77040",
+      "delta": "40.9%",
+      "winner": "OKF"
+    },
+    {
+      "name": "Input Tokens",
+      "okf": "705",
+      "base": "3691",
+      "delta": "80.9%",
+      "winner": "OKF"
+    },
+    {
+      "name": "Output Tokens",
+      "okf": "11375",
+      "base": "19260",
+      "delta": "40.9%",
+      "winner": "OKF"
+    },
+    {
+      "name": "Total Tokens",
+      "okf": "12080",
+      "base": "22951",
+      "delta": "47.4%",
+      "winner": "OKF"
+    },
+    {
+      "name": "Estimated Cost USD",
+      "okf": "0.1727",
+      "base": "0.3000",
+      "delta": "42.4%",
+      "winner": "OKF"
+    },
+    {
+      "name": "Files Written",
+      "okf": "2 (+inbox)",
+      "base": "2",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Deliverable Size (bytes)",
+      "okf": "23818",
+      "base": "43179",
+      "delta": "44.8% smaller",
+      "winner": "OKF"
+    },
+    {
+      "name": "Effectiveness",
+      "okf": "1",
+      "base": "1",
+      "delta": "0",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Efficiency",
+      "okf": "0.007832",
+      "base": "0.004209",
+      "delta": "OKF higher",
+      "winner": "OKF"
+    },
+    {
+      "name": "Tool Turns (info)",
+      "okf": "6+2=8",
+      "base": "4+6=10",
+      "delta": "\u2014",
+      "winner": "\u2014",
+      "info": true
+    },
+    {
+      "name": "Quality Index",
+      "okf": "96.4",
+      "base": "87.6",
+      "delta": "+10.0%",
+      "winner": "OKF"
+    }
+  ],
+  "architecture": [
+    {
+      "name": "Build Once / Reuse Many",
+      "okf": "5",
+      "base": "4",
+      "delta": "1",
+      "winner": "OKF"
+    },
+    {
+      "name": "Artifact Strategy",
+      "okf": "5",
+      "base": "4",
+      "delta": "1",
+      "winner": "OKF"
+    },
+    {
+      "name": "Cache Strategy",
+      "okf": "4",
+      "base": "4",
+      "delta": "0",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Dependency Graph",
+      "okf": "5",
+      "base": "5",
+      "delta": "0",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Parallelization",
+      "okf": "4",
+      "base": "4",
+      "delta": "0",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Critical Path Optimization",
+      "okf": "4",
+      "base": "3",
+      "delta": "1",
+      "winner": "OKF"
+    },
+    {
+      "name": "Runtime Efficiency",
+      "okf": "5",
+      "base": "3",
+      "delta": "2",
+      "winner": "OKF"
+    },
+    {
+      "name": "Failure Isolation",
+      "okf": "4",
+      "base": "4",
+      "delta": "0",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Security Hardening",
+      "okf": "5",
+      "base": "4",
+      "delta": "1",
+      "winner": "OKF"
+    },
+    {
+      "name": "Maintainability",
+      "okf": "5",
+      "base": "3",
+      "delta": "2",
+      "winner": "OKF"
+    },
+    {
+      "name": "Reusability",
+      "okf": "5",
+      "base": "5",
+      "delta": "0",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Enterprise Readiness",
+      "okf": "5",
+      "base": "3",
+      "delta": "2",
+      "winner": "OKF"
+    },
+    {
+      "name": "TOTAL",
+      "okf": "56",
+      "base": "46",
+      "delta": "10",
+      "winner": "OKF"
+    }
+  ],
+  "runtime": [
+    {
+      "name": "Invented actions / APIs",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Placeholder / masking stubs",
+      "okf": "PASS",
+      "base": "FAIL",
+      "delta": "\u2014",
+      "winner": "OKF"
+    },
+    {
+      "name": "Invalid marketplace refs",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Deprecated actions/APIs",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Unpinned mutable refs",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "SonarQube properties",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "OWASP \u2192 Sonar import",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Cache strategy soundness",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Duplicated builds",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Redundant I/O / downloads",
+      "okf": "PASS",
+      "base": "FAIL",
+      "delta": "\u2014",
+      "winner": "OKF"
+    },
+    {
+      "name": "Missing permissions",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Excessive permissions",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Missing concurrency",
+      "okf": "FAIL",
+      "base": "FAIL",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Missing timeout",
+      "okf": "PASS",
+      "base": "FAIL",
+      "delta": "\u2014",
+      "winner": "OKF"
+    },
+    {
+      "name": "Dependency / needs graph",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Card-only / isolation",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "\u2014",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Runtime Correctness %",
+      "okf": "93.8%",
+      "base": "75.0%",
+      "delta": "+25.1%",
+      "winner": "OKF"
+    }
+  ],
+  "runtime_findings_okf": [
+    "SHA-pinned marketplace actions + ./ house composites from Prompt Cards",
+    "Top-level + job permissions; python3 -u after rem",
+    "timeout-minutes on quality-gate job; concurrency still absent",
+    "OWASP via house action; Sonar xmlReportPath import"
+  ],
+  "runtime_findings_base": [
+    "Draft used mutable @vN tags \u2014 fixed to SHA via public GitHub API during rem",
+    "Placeholder OWASP JSON stub remains in failure path (masking risk)",
+    "No job timeouts; no concurrency; more checkout/cache duplication",
+    "Gate dump drove rem; 59\u21920 failures in one loop"
+  ],
+  "parent_findings": [
+    {
+      "name": "Parent Conftest Gate (final)",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "26/26 both",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Draft Gate",
+      "okf": "FAIL (2)",
+      "base": "FAIL (59)",
+      "delta": "OKF closer",
+      "winner": "OKF"
+    },
+    {
+      "name": "Isolation Audit",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "no answer-key reads",
+      "winner": "\u2014"
+    },
+    {
+      "name": "Write-back (\u00a71.6)",
+      "okf": "PASS",
+      "base": "N/A",
+      "delta": "Rung 1 inbox notes",
+      "winner": "OKF"
+    },
+    {
+      "name": "Discovery Budget",
+      "okf": "PASS",
+      "base": "N/A",
+      "delta": "1 mandated + 1 extra lookup",
+      "winner": "OKF"
+    },
+    {
+      "name": "Functional Checklist",
+      "okf": "PASS",
+      "base": "PASS",
+      "delta": "8 stages + README",
+      "winner": "\u2014"
+    }
+  ],
+  "benefits_okf": [
+    "Prompt Cards supplied SPVS/SHA constraints before first write (2 draft fails only)",
+    "House composites reduced workflow size (~16KB vs ~34KB)",
+    "True cost-to-PASS ~46% faster wall and ~47% fewer tokens vs Baseline",
+    "Write-back captured lookup gap + rem root cause into _inbox/"
+  ],
+  "benefits_base": [
+    "Faster initial draft wall (84.7s) for functional-only authoring",
+    "Successfully remediated all 59 SPVS findings from failure text alone",
+    "No Aegis dependency \u2014 pure public knowledge + gate dump"
+  ],
+  "methodology": [
+    "Same model for both arms; parallel launch; parent never implemented",
+    "Shared functional brief only; PARENT_GATE + answer-key globs withheld from initial prompts",
+    "OKF: live okf.py lookup --card; Baseline: forbidden Aegis/OKF/policies",
+    "Gate FAIL \u2192 resume with raw failure stdout; score true totals (draft+rem)",
+    "Report rendered from BENCH_REPORT_TEMPLATE.html via render_bench_report.py"
+  ],
+  "verdict_lines": [
+    "<strong>Fastest:</strong> OKF (127.7s true vs 237.6s)",
+    "<strong>Lowest Tokens:</strong> OKF (12080 vs 22951)",
+    "<strong>Lowest Cost:</strong> OKF ($0.1727 vs $0.3000)",
+    "<strong>Highest Quality:</strong> OKF (QI 96.4 vs 87.6)",
+    "<strong>Best Architecture:</strong> OKF (56/60 vs 46/60)",
+    "<strong>Best Runtime Correctness:</strong> OKF (93.8% vs 75.0%)",
+    "<strong>Best Enterprise Readiness:</strong> OKF (cards + house actions + timeouts)",
+    "<strong>Overall Winner:</strong> OKF"
+  ]
+}

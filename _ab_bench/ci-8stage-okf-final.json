@@ -1,0 +1,17 @@
+{
+  "arm": "okf_min",
+  "draft_wall_s": 113.467,
+  "remediation_wall_s": 14.215,
+  "true_wall_s": 127.682,
+  "parent_gate": "PASS",
+  "parent_runs_to_pass": 2,
+  "draft_failures": 2,
+  "final_tests": "26/26",
+  "isolation": "PASS",
+  "write_back": "PASS",
+  "round_trips_total": 8,
+  "prompt_chars_draft": 2400,
+  "prompt_chars_rem": 420,
+  "output_chars_draft": 28000,
+  "output_chars_rem": 17500
+}

@@ -1,0 +1,4 @@
+# Portable act platform maps (machine-local image tags).
+# Built via: act-platform/build-images.sh
+-P ubuntu-latest=gha-act-ubuntu:dev
+-P ubi9=gha-act-ubi9:dev

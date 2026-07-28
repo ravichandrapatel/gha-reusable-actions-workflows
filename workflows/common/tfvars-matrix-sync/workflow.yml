@@ -1,0 +1,215 @@
+# =============================================================================
+# FILE_NAME: workflow.yml
+# DESCRIPTION: Discover *.tfvars basenames into a JSON matrix and open a PR on a destination repo.
+# VERSION: 1.0.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: Tfvars Matrix Sync
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      vars_folder:
+        description: 'Folder containing *.tfvars (relative to working_directory)'
+        required: true
+        type: string
+      working_directory:
+        description: 'Source working directory relative to the caller repo root'
+        required: false
+        type: string
+        default: '.'
+      destination_repository:
+        description: 'Destination repository as owner/repo'
+        required: true
+        type: string
+      destination_path:
+        description: 'Path for the JSON file inside the destination repository'
+        required: true
+        type: string
+      destination_base_branch:
+        description: 'Base branch for the destination pull request'
+        required: false
+        type: string
+        default: 'main'
+      pr_branch:
+        description: 'Head branch name created/updated on the destination repository'
+        required: false
+        type: string
+        default: 'chore/sync-tfvars-matrix'
+      pr_title:
+        description: 'Pull request title on the destination repository'
+        required: false
+        type: string
+        default: 'chore: sync tfvars workspace matrix'
+      environment_name:
+        description: 'GitHub environment for the write-capable sync job'
+        required: false
+        type: string
+        default: 'sandbox'
+    secrets:
+      app_id:
+        description: 'GitHub App client ID used to open the destination PR'
+        required: true
+      app_private_key:
+        description: 'GitHub App private key used to open the destination PR'
+        required: true
+    outputs:
+      pr_url:
+        description: 'URL of the opened or updated destination pull request (empty when unchanged)'
+        value: ${{ jobs.sync_matrix.outputs.pr_url }}
+      workspaces_count:
+        description: 'Number of workspaces discovered from *.tfvars'
+        value: ${{ jobs.sync_matrix.outputs.workspaces_count }}
+
+jobs:
+  sync_matrix:
+    name: Sync Tfvars Matrix
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment_name }}
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      pr_url: ${{ steps.open_pr.outputs.pr_url }}
+      workspaces_count: ${{ steps.build_matrix.outputs.workspaces_count }}
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Build workspace matrix JSON
+        id: build_matrix
+        shell: bash
+        env:
+          WORKING_DIRECTORY: ${{ inputs.working_directory }}
+          VARS_FOLDER: ${{ inputs.vars_folder }}
+        run: |
+          set -euo pipefail
+          # [T-01] Discover *.tfvars basenames and write stable JSON
+          VARS_DIR="${WORKING_DIRECTORY%/}/${VARS_FOLDER}"
+          VARS_DIR="${VARS_DIR#./}"
+          if [[ ! -d "${VARS_DIR}" ]]; then
+            echo "ERROR: vars folder not found: ${VARS_DIR}" >&2
+            exit 1
+          fi
+
+          mapfile -t TFVARS_FILES < <(find "${VARS_DIR}" -maxdepth 1 -type f -name '*.tfvars' | LC_ALL=C sort)
+          if [[ ${#TFVARS_FILES[@]} -eq 0 ]]; then
+            echo "ERROR: no *.tfvars files found in ${VARS_DIR}" >&2
+            exit 1
+          fi
+
+          MATRIX_JSON="${RUNNER_TEMP}/workspaces.json"
+          NAMES=()
+          for TFVARS_FILE in "${TFVARS_FILES[@]}"; do
+            BASE="$(basename "${TFVARS_FILE}" .tfvars)"
+            if [[ -z "${BASE}" || "${BASE}" == *.tfvars ]]; then
+              echo "ERROR: failed to derive workspace name from ${TFVARS_FILE}" >&2
+              exit 1
+            fi
+            NAMES+=("${BASE}")
+          done
+
+          printf '%s\n' "${NAMES[@]}" | jq -R . | jq -s 'sort | unique | {workspaces: .}' > "${MATRIX_JSON}"
+          COUNT="$(jq '.workspaces | length' "${MATRIX_JSON}")"
+          if [[ "${COUNT}" -eq 0 ]]; then
+            echo "ERROR: failed to derive workspace names from *.tfvars" >&2
+            exit 1
+          fi
+          echo "workspaces_count=${COUNT}" >> "${GITHUB_OUTPUT}"
+          echo "matrix_json=${MATRIX_JSON}" >> "${GITHUB_OUTPUT}"
+          echo "Built matrix with ${COUNT} workspace(s):"
+          cat "${MATRIX_JSON}"
+
+      - name: Parse destination repository
+        id: dest
+        shell: bash
+        env:
+          DESTINATION_REPOSITORY: ${{ inputs.destination_repository }}
+        run: |
+          set -euo pipefail
+          # [T-02] Split owner/repo for App token scoping
+          if [[ "${DESTINATION_REPOSITORY}" != */* || "${DESTINATION_REPOSITORY}" == */*/* ]]; then
+            echo "ERROR: destination_repository must be owner/repo, got: ${DESTINATION_REPOSITORY}" >&2
+            exit 1
+          fi
+          OWNER="${DESTINATION_REPOSITORY%%/*}"
+          REPO="${DESTINATION_REPOSITORY#*/}"
+          if [[ -z "${OWNER}" || -z "${REPO}" ]]; then
+            echo "ERROR: invalid destination_repository: ${DESTINATION_REPOSITORY}" >&2
+            exit 1
+          fi
+          echo "owner=${OWNER}" >> "${GITHUB_OUTPUT}"
+          echo "repo=${REPO}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate GitHub App token
+        id: generate_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+          owner: ${{ steps.dest.outputs.owner }}
+          repositories: ${{ steps.dest.outputs.repo }}
+
+      - name: Checkout destination repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ inputs.destination_repository }}
+          token: ${{ steps.generate_token.outputs.token }}
+          ref: ${{ inputs.destination_base_branch }}
+          path: destination
+          fetch-depth: 0
+
+      - name: Open or update destination pull request
+        id: open_pr
+        shell: bash
+        env:
+          DESTINATION_PATH: ${{ inputs.destination_path }}
+          DESTINATION_BASE_BRANCH: ${{ inputs.destination_base_branch }}
+          PR_BRANCH: ${{ inputs.pr_branch }}
+          PR_TITLE: ${{ inputs.pr_title }}
+          DESTINATION_REPOSITORY: ${{ inputs.destination_repository }}
+          MATRIX_JSON: ${{ steps.build_matrix.outputs.matrix_json }}
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          # [T-03] Commit matrix JSON and open/update destination PR
+          DEST_ROOT="${GITHUB_WORKSPACE}/destination"
+          TARGET_FILE="${DEST_ROOT}/${DESTINATION_PATH}"
+
+          cd "${DEST_ROOT}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin "${DESTINATION_BASE_BRANCH}"
+          git checkout -B "${PR_BRANCH}" "origin/${DESTINATION_BASE_BRANCH}"
+
+          mkdir -p "$(dirname "${TARGET_FILE}")"
+          cp "${MATRIX_JSON}" "${TARGET_FILE}"
+          git add -- "${DESTINATION_PATH}"
+          if git diff --cached --quiet -- "${DESTINATION_PATH}"; then
+            echo "No matrix changes; skipping PR"
+            echo "pr_url=" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          git commit -m "${PR_TITLE}"
+          git push --force-with-lease origin "HEAD:refs/heads/${PR_BRANCH}"
+
+          EXISTING_URL="$(gh pr list --repo "${DESTINATION_REPOSITORY}" --head "${PR_BRANCH}" --state open --json url --jq '.[0].url // empty')"
+          if [[ -n "${EXISTING_URL}" ]]; then
+            echo "Updated existing PR: ${EXISTING_URL}"
+            echo "pr_url=${EXISTING_URL}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          PR_URL="$(gh pr create \
+            --repo "${DESTINATION_REPOSITORY}" \
+            --base "${DESTINATION_BASE_BRANCH}" \
+            --head "${PR_BRANCH}" \
+            --title "${PR_TITLE}" \
+            --body "Syncs workspace names discovered from \`*.tfvars\` in the source repository.")"
+          echo "Opened PR: ${PR_URL}"
+          echo "pr_url=${PR_URL}" >> "${GITHUB_OUTPUT}"

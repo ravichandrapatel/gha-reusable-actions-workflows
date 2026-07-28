@@ -1,0 +1,153 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Composite wrapper for inventory match + ng-ui app build resolve.
+# VERSION: 1.2.0
+# AUTHORS: Platform / DevOps
+# =============================================================================
+
+name: 'Build Preprocess'
+description: 'Inventory allowlist match and app-build metadata resolve (ng-ui)'
+
+inputs:
+  repo:
+    description: 'Caller repository / app id to match (exact string)'
+    required: true
+  app_build_type:
+    description: 'Build type: maven-java | dotnet | ng-ui (only ng-ui implemented)'
+    required: true
+  inventory_path:
+    description: 'Path to inventory JSON array; empty uses ${ACTION_PATH}/inventory.json'
+    required: false
+    default: ''
+  soft:
+    description: 'When true, inventory miss writes matched=false and succeeds'
+    required: false
+    default: 'false'
+  workspace:
+    description: 'Caller repo root with build.values / project.values / package.json (default: github.workspace)'
+    required: false
+    default: ''
+  branch:
+    description: 'Git branch to validate (default: github.ref_name)'
+    required: false
+    default: ''
+
+outputs:
+  matched:
+    description: 'true when repo is in the inventory'
+    value: ${{ steps.match.outputs.matched }}
+  matched_id:
+    description: 'Echo of repo when matched; empty otherwise'
+    value: ${{ steps.match.outputs.matched_id }}
+  app_build_type:
+    description: 'Resolved APP_BUILD_TYPE'
+    value: ${{ steps.resolve.outputs.app_build_type }}
+  branch:
+    description: 'Validated branch name'
+    value: ${{ steps.resolve.outputs.branch }}
+  application_version:
+    description: 'Application version from package.json (ng-ui)'
+    value: ${{ steps.resolve.outputs.application_version }}
+  node_version:
+    description: 'Node version from package.json engines.node (ng-ui)'
+    value: ${{ steps.resolve.outputs.node_version }}
+  build_and_unit_test:
+    description: 'Stage gate (always true)'
+    value: ${{ steps.resolve.outputs.build_and_unit_test }}
+  owasp:
+    description: 'Stage gate (always true)'
+    value: ${{ steps.resolve.outputs.owasp }}
+  sonar:
+    description: 'Stage gate (always true)'
+    value: ${{ steps.resolve.outputs.sonar }}
+  snapshot_artifact:
+    description: 'true when branch is develop and event is not pull_request'
+    value: ${{ steps.resolve.outputs.snapshot_artifact }}
+  release_artifact:
+    description: 'true when release/hotfix branch and workflow_dispatch'
+    value: ${{ steps.resolve.outputs.release_artifact }}
+  docker_image:
+    description: 'true when workflow_dispatch, not a bot actor, and not pull_request'
+    value: ${{ steps.resolve.outputs.docker_image }}
+  BUILDER_BASE_IMAGE:
+    description: 'From build.values'
+    value: ${{ steps.resolve.outputs.BUILDER_BASE_IMAGE }}
+  LIB_01:
+    description: 'From build.values'
+    value: ${{ steps.resolve.outputs.LIB_01 }}
+  LIB_02:
+    description: 'From build.values'
+    value: ${{ steps.resolve.outputs.LIB_02 }}
+  LIB_03:
+    description: 'From build.values'
+    value: ${{ steps.resolve.outputs.LIB_03 }}
+  APPLICATION_NAME:
+    description: 'From project.values'
+    value: ${{ steps.resolve.outputs.APPLICATION_NAME }}
+  ORGANIZATION:
+    description: 'From project.values'
+    value: ${{ steps.resolve.outputs.ORGANIZATION }}
+  PRODUCT:
+    description: 'From project.values'
+    value: ${{ steps.resolve.outputs.PRODUCT }}
+  PROJECT_DESCRIPTION:
+    description: 'From project.values'
+    value: ${{ steps.resolve.outputs.PROJECT_DESCRIPTION }}
+  CMDBIDNPD:
+    description: 'From project.values'
+    value: ${{ steps.resolve.outputs.CMDBIDNPD }}
+  CMDBIDPRD:
+    description: 'From project.values'
+    value: ${{ steps.resolve.outputs.CMDBIDPRD }}
+  TEAMADGROUNPD:
+    description: 'From project.values'
+    value: ${{ steps.resolve.outputs.TEAMADGROUNPD }}
+  TEAMADGROUPPRD:
+    description: 'From project.values'
+    value: ${{ steps.resolve.outputs.TEAMADGROUPPRD }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Match caller against inventory
+      id: match
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        CALLER_REPO: ${{ inputs.repo }}
+        INVENTORY_PATH: ${{ inputs.inventory_path }}
+        SOFT: ${{ inputs.soft }}
+      run: |
+        set -euo pipefail
+        EXTRA_ARGS=()
+        if [[ -n "${INVENTORY_PATH}" ]]; then
+          EXTRA_ARGS+=(--inventory-path "${INVENTORY_PATH}")
+        fi
+        if [[ "${SOFT}" == "true" ]]; then
+          EXTRA_ARGS+=(--soft)
+        fi
+        export PYTHONUNBUFFERED=1
+        python3 -u "${ACTION_PATH}/check_inventory.py" "${EXTRA_ARGS[@]}"
+
+    - name: Resolve app build metadata
+      id: resolve
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        APP_BUILD_TYPE: ${{ inputs.app_build_type }}
+        WORKSPACE_INPUT: ${{ inputs.workspace }}
+        BRANCH_INPUT: ${{ inputs.branch }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+        GITHUB_REF_NAME: ${{ github.ref_name }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        GITHUB_ACTOR: ${{ github.actor }}
+      run: |
+        set -euo pipefail
+        WORKSPACE="${WORKSPACE_INPUT:-${GITHUB_WORKSPACE}}"
+        BRANCH="${BRANCH_INPUT:-${GITHUB_REF_NAME}}"
+        export PYTHONUNBUFFERED=1
+        python3 -u "${ACTION_PATH}/preprocess.py" \
+          --workspace "${WORKSPACE}" \
+          --branch "${BRANCH}" \
+          --event-name "${GITHUB_EVENT_NAME}" \
+          --actor "${GITHUB_ACTOR}"

@@ -1,0 +1,27 @@
+repos:
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: Shellcheck
+        entry: shellcheck
+        language: system
+        types: [shell]
+
+      - id: bandit
+        name: Bandit
+        entry: bandit
+        language: system
+        files: \.py$
+
+      - id: actionlint
+        name: Actionlint
+        entry: bash policies/scripts/hooks/run_actionlint.sh
+        language: system
+        files: ^(\.github/(workflows|actions)/.*\.(yml|yaml)|workflows/.+/workflow\.yml)$
+
+      - id: spvs-gha
+        name: SPVS GitHub Actions (Conftest)
+        entry: bash policies/scripts/hooks/run_spvs_gha.sh
+        language: system
+        files: ^(actions/|workflows/|\.github/(workflows|actions)/|policies/conftest/)
+        pass_filenames: true
