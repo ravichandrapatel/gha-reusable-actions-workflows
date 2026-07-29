@@ -30,11 +30,9 @@ Monorepo that publishes composite GitHub Actions and reusable workflows under an
 | Action | `actions/common/drift-auditor` |
 | Action | `actions/common/git-path-filter` |
 | Action | `actions/common/prbot` |
-| Action | `actions/common/build-preprocess` |
 | Action | `actions/security/owasp-dependency-check` |
 | Workflow | `workflows/common/dummy-workflow` |
 | Workflow | `workflows/common/tfvars-matrix-sync` |
-| Workflow | `workflows/archtype/ng-ui-build-pipeline` |
 | Orchestrator | `.github/workflows/release-manager.yml` |
 | E2E | `.github/workflows/git-path-filter-e2e.yml` |
 
@@ -52,8 +50,8 @@ Tag patterns: `{safe_name}-{X.Y.Z}` and `{safe_name}-v1`.
 
 ```text
 Monorepo: actions/{cat}/{name}/ (action.yml+readme); workflows/{cat}/{name}/.
-Actions: semver, drift-auditor, git-path-filter, prbot, build-preprocess, owasp-dependency-check.
-Workflows: dummy-workflow, tfvars-matrix-sync, ng-ui-build-pipeline (archtype).
+Actions: semver, drift-auditor, git-path-filter, prbot, owasp-dependency-check.
+Workflows: dummy-workflow, tfvars-matrix-sync.
 Release: release-manager.yml. OKF: AGENTS.md + _okf_knowledge/ at package root.
 ```
 

@@ -16,7 +16,7 @@ status: active
 3. Reusable workflows **MUST** live at `workflows/{category}/{name}/`.
 4. Each workflow directory **MUST** contain exactly one `workflow.yml` (or `.yaml`) and `readme.md`.
 5. Release Manager `component_path` **MUST** start with `actions/` or `workflows/`.
-6. Categories in use today: `common`, `security` (actions); `common`, `archtype` (workflows). Add a category when a real component lands.
+6. Categories in use today: `common`, `security` (actions); `common` (workflows). Add a category when a real component lands.
 
 ## FORBIDDEN
 
@@ -30,7 +30,7 @@ Layout MUST:
 - actions/{category}/{name}/ → action.yml|yaml + readme.md
 - workflows/{category}/{name}/ → exactly one workflow.yml|yaml + readme.md
 - component_path starts with actions/ or workflows/
-- categories today: actions common|security; workflows common|archtype
+- categories today: actions common|security; workflows common
 FORBIDDEN: trees outside actions|workflows; multi workflow YAML per dir
 ```
 
