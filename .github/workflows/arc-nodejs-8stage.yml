@@ -11,6 +11,10 @@ concurrency:
   group: arc-nodejs-8stage-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 env:
   APP_DIR: samples/nodejs-arc-demo
 
