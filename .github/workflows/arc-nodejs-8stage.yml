@@ -1,0 +1,198 @@
+name: ARC Node.js 8-Stage Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'samples/nodejs-arc-demo/**'
+      - '.github/workflows/arc-nodejs-8stage.yml'
+
+concurrency:
+  group: arc-nodejs-8stage-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_DIR: samples/nodejs-arc-demo
+
+jobs:
+  stage01-prepare:
+    name: "01 Prepare"
+    runs-on: arc-runner-set
+    container:
+      image: node:20-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node environment
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          set -euo pipefail
+          node -v
+          npm -v
+          ls -la
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage01-marker
+          path: ${{ env.APP_DIR }}/package.json
+
+  stage02-install:
+    name: "02 Install"
+    needs: stage01-prepare
+    runs-on: arc-runner-set
+    container:
+      image: node:20-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - name: npm install
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          set -euo pipefail
+          npm install --no-fund --no-audit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: node-modules
+          path: ${{ env.APP_DIR }}/node_modules
+          retention-days: 1
+
+  stage03-lint:
+    name: "03 Lint"
+    needs: stage02-install
+    runs-on: arc-runner-set
+    container:
+      image: node:20-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: node-modules
+          path: ${{ env.APP_DIR }}/node_modules
+      - name: Lint
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          set -euo pipefail
+          npm run lint
+
+  stage04-test:
+    name: "04 Unit Test"
+    needs: stage03-lint
+    runs-on: arc-runner-set
+    container:
+      image: node:20-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: node-modules
+          path: ${{ env.APP_DIR }}/node_modules
+      - name: Test
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          set -euo pipefail
+          npm test
+
+  stage05-build:
+    name: "05 Build"
+    needs: stage04-test
+    runs-on: arc-runner-set
+    container:
+      image: node:20-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: node-modules
+          path: ${{ env.APP_DIR }}/node_modules
+      - name: Build
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          set -euo pipefail
+          npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: ${{ env.APP_DIR }}/dist
+
+  stage06-security:
+    name: "06 Security"
+    needs: stage05-build
+    runs-on: arc-runner-set
+    container:
+      image: node:20-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: node-modules
+          path: ${{ env.APP_DIR }}/node_modules
+      - name: npm audit
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          set -euo pipefail
+          npm run security
+
+  stage07-package:
+    name: "07 Package"
+    needs: [stage05-build, stage06-security]
+    runs-on: arc-runner-set
+    container:
+      image: node:20-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: ${{ env.APP_DIR }}/dist
+      - name: Package tarball
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          set -euo pipefail
+          npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-tarball
+          path: ${{ env.APP_DIR }}/artifacts/nodejs-arc-demo.tgz
+
+  stage08-deploy:
+    name: "08 Deploy (container)"
+    needs: stage07-package
+    runs-on: arc-runner-set
+    container:
+      image: node:20-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: ${{ env.APP_DIR }}/dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-tarball
+          path: ${{ env.APP_DIR }}/artifacts
+      - name: Install runtime deps for dist
+        working-directory: ${{ env.APP_DIR }}/dist
+        run: |
+          set -euo pipefail
+          npm install --omit=dev --no-fund --no-audit
+      - name: Container smoke deploy (healthz)
+        working-directory: ${{ env.APP_DIR }}/dist
+        run: |
+          set -euo pipefail
+          apt-get update -qq && apt-get install -y -qq curl >/dev/null
+          node src/server.js &
+          pid=$!
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:3000/healthz >/dev/null; then
+              echo "deploy smoke OK"
+              curl -s http://127.0.0.1:3000/healthz
+              kill "$pid" || true
+              exit 0
+            fi
+            sleep 1
+          done
+          kill "$pid" || true
+          echo "healthz failed"
+          exit 1
+      - name: Show K8s container deployment manifest
+        run: |
+          set -euo pipefail
+          echo "Container-based Deployment manifest:"
+          sed -n '1,120p' "${APP_DIR}/deploy/deployment.yaml"
