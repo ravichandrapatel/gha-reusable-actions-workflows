@@ -34,4 +34,5 @@ New functions: intent, input, output, role, side_effects. GHA YAML: SPVS + layou
 # Related
 
 - [Simplicity First](/standards/simplicity-first.md)
+- [Python CLI Args](/standards/python-cli-args.md)
 - [GHA SPVS YAML](/standards/gha-spvs-yaml.md)

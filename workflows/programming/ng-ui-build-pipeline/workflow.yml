@@ -1,0 +1,372 @@
+# =============================================================================
+# FILE_NAME: workflow.yml
+# DESCRIPTION: Reusable ng-ui CI — preprocess, build/test/lint, OWASP, Sonar, publish, docker.
+# VERSION: 1.2.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: ng-ui-build-pipeline
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: Runner label (Podman required for OWASP)
+        type: string
+        required: false
+        default: ubuntu-latest
+      bot_name:
+        description: Actor treated as auto-commit bot (preprocess skips other stages)
+        type: string
+        required: false
+        default: ""
+      sonar_host_url:
+        description: SonarQube server URL
+        type: string
+        required: true
+      sonar_project_key:
+        description: Sonar project key; empty uses preprocess application_name
+        type: string
+        required: false
+        default: ""
+      sonar_platform:
+        description: Sonar tag platform-<value>
+        type: string
+        required: false
+        default: cap
+      npm_registry:
+        description: Nexus npm registry URL for semantic-release (optional)
+        type: string
+        required: false
+        default: ""
+      docker_registry:
+        description: Nexus registry host for docker-build-and-push
+        type: string
+        required: false
+        default: ""
+      docker_file:
+        description: Dockerfile path relative to context
+        type: string
+        required: false
+        default: Dockerfile
+      docker_context:
+        description: Docker build context; empty uses workspace
+        type: string
+        required: false
+        default: ""
+      docker_environment:
+        description: Image path segment after organization
+        type: string
+        required: false
+        default: production
+      deploy_environment:
+        description: GitHub Environment for contents:write publish
+        type: string
+        required: false
+        default: ci-publish
+    outputs:
+      stages:
+        description: Comma-separated preprocess stages
+        value: ${{ jobs.build-preprocess.outputs.stages }}
+      application_name:
+        description: From project.values
+        value: ${{ jobs.build-preprocess.outputs.application_name }}
+      application_version:
+        description: package.json version
+        value: ${{ jobs.build-preprocess.outputs.application_version }}
+      quality_gate_status:
+        description: Sonar quality gate from branch or PR scan
+        value: ${{ jobs.sonarqube.outputs.quality_gate_status }}
+      docker_image:
+        description: Pushed image reference
+        value: ${{ jobs.docker-build.outputs.image }}
+
+permissions:
+  contents: read
+
+jobs:
+  build-preprocess:
+    name: build-preprocess
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    outputs:
+      stages: ${{ steps.preprocess.outputs.stages }}
+      snapshot_artifact: ${{ steps.preprocess.outputs.snapshot_artifact }}
+      release_artifact: ${{ steps.preprocess.outputs.release_artifact }}
+      docker: ${{ steps.preprocess.outputs.docker }}
+      application_name: ${{ steps.preprocess.outputs.application_name }}
+      application_version: ${{ steps.preprocess.outputs.application_version }}
+      organization: ${{ steps.preprocess.outputs.organization }}
+      product: ${{ steps.preprocess.outputs.product }}
+      sonar_cli_args: ${{ steps.preprocess.outputs.sonar_cli_args }}
+      branch: ${{ steps.preprocess.outputs.branch }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build preprocess
+        id: preprocess
+        uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/build-preprocess@build-preprocess/v2.0.0
+        with:
+          app_build_type: ng-ui
+          bot_name: ${{ inputs.bot_name }}
+
+  build-and-unit-test-lint:
+    name: build-and-unit-test-lint
+    needs: [build-preprocess]
+    if: contains(format(',{0},', needs.build-preprocess.outputs.stages), ',build_and_unit_test,')
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - name: Install
+        run: |
+          set -euo pipefail
+          npm ci
+
+      - name: Lint
+        run: |
+          set -euo pipefail
+          npm run lint
+
+      - name: Unit test
+        env:
+          CI: "true"
+        run: |
+          set -euo pipefail
+          npm test
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          npm run build
+
+      - name: Upload dist
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ng-ui-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload coverage
+        if: hashFiles('coverage/lcov.info') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ng-ui-coverage
+          path: coverage/lcov.info
+          if-no-files-found: warn
+          retention-days: 7
+
+  owasp:
+    name: owasp
+    needs: [build-preprocess]
+    if: contains(format(',{0},', needs.build-preprocess.outputs.stages), ',owasp,')
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Restore OWASP NVD cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .owasp-data
+          key: ng-ui-owasp-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ng-ui-owasp-
+
+      - name: OWASP Dependency-Check
+        uses: ./actions/security/owasp-dependency-check
+        with:
+          scan_profile: ng-ui
+          project: ${{ needs.build-preprocess.outputs.application_name }}
+          path: .
+          out: reports
+          data_dir: ${{ github.workspace }}/.owasp-data
+          nvdApiKey: ${{ secrets.NVD_API_KEY }}
+
+      - name: Upload OWASP reports
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: owasp-report
+          path: reports
+          if-no-files-found: error
+          retention-days: 7
+
+  sonarqube:
+    name: sonarqube
+    needs: [build-preprocess, build-and-unit-test-lint, owasp]
+    if: >-
+      needs.build-and-unit-test-lint.result == 'success'
+      && (needs.owasp.result == 'success' || needs.owasp.result == 'skipped')
+      && contains(format(',{0},', needs.build-preprocess.outputs.stages), ',sonar,')
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    outputs:
+      quality_gate_status: ${{ steps.scan.outputs.quality_gate_status }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Download coverage
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ng-ui-coverage
+          path: coverage
+
+      - name: Download OWASP reports
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: owasp-report
+          path: reports
+
+      - name: Resolve Sonar project key
+        id: sonar_meta
+        env:
+          KEY_IN: ${{ inputs.sonar_project_key }}
+          APP: ${{ needs.build-preprocess.outputs.application_name }}
+        run: |
+          set -euo pipefail
+          KEY="${KEY_IN}"
+          if [[ -z "${KEY}" ]]; then
+            KEY="${APP}"
+          fi
+          if [[ ! "${KEY}" =~ ^[A-Za-z0-9_.:-]+$ ]]; then
+            echo "ERROR: sonar project key '${KEY}' is invalid" >&2
+            exit 1
+          fi
+          echo "project_key=${KEY}" >> "${GITHUB_OUTPUT}"
+
+      - name: SonarQube scan
+        id: scan
+        uses: ravichandrapatel/gha-reusable-actions-workflows/actions/security/sonar-scan@sonar-scan/v1.2.0
+        with:
+          sonar_token: ${{ secrets.SONAR_TOKEN }}
+          sonar_host_url: ${{ inputs.sonar_host_url }}
+          project_key: ${{ steps.sonar_meta.outputs.project_key }}
+          organization: ${{ needs.build-preprocess.outputs.organization }}
+          product: ${{ needs.build-preprocess.outputs.product }}
+          platform: ${{ inputs.sonar_platform }}
+          application_name: ${{ needs.build-preprocess.outputs.application_name }}
+          app_build_type: ng-ui
+          pr_key: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
+          pr_branch: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || '' }}
+          pr_base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
+          args: ${{ needs.build-preprocess.outputs.sonar_cli_args }}
+
+  publish:
+    name: publish
+    needs: [build-preprocess, build-and-unit-test-lint, sonarqube]
+    if: >-
+      needs.build-and-unit-test-lint.result == 'success'
+      && (needs.sonarqube.result == 'success' || needs.sonarqube.result == 'skipped')
+      && (needs.build-preprocess.outputs.snapshot_artifact == 'true'
+          || needs.build-preprocess.outputs.release_artifact == 'true')
+    runs-on: ${{ inputs.runner }}
+    environment: ${{ inputs.deploy_environment }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ secrets.GH_TOKEN != '' && secrets.GH_TOKEN || github.token }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - name: Install
+        run: |
+          set -euo pipefail
+          npm ci
+
+      - name: semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN != '' && secrets.GH_TOKEN || github.token }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_REGISTRY: ${{ inputs.npm_registry }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${NPM_REGISTRY}" ]]; then
+            HOST="${NPM_REGISTRY#https://}"
+            HOST="${HOST#http://}"
+            HOST="${HOST%%/*}"
+            printf 'registry=%s\n' "${NPM_REGISTRY}" >> .npmrc
+            printf '//%s/:_authToken=%s\n' "${HOST}" "${NPM_TOKEN}" >> .npmrc
+          fi
+          npx --no-install semantic-release
+
+  docker-build:
+    name: docker-build
+    needs: [build-preprocess, build-and-unit-test-lint, sonarqube]
+    if: >-
+      needs.build-and-unit-test-lint.result == 'success'
+      && (needs.sonarqube.result == 'success' || needs.sonarqube.result == 'skipped')
+      && needs.build-preprocess.outputs.docker == 'true'
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download dist
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ng-ui-dist
+          path: dist
+
+      - name: Check docker registry
+        env:
+          DOCKER_REGISTRY: ${{ inputs.docker_registry }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${DOCKER_REGISTRY}" ]]; then
+            echo "ERROR: docker_registry is required when the docker stage runs" >&2
+            exit 1
+          fi
+
+      - name: Docker login
+        uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/docker-login@docker-login/v1.2.0
+        with:
+          registry: ${{ inputs.docker_registry }}
+          username: ${{ secrets.NEXUS_USERNAME }}
+          password: ${{ secrets.NEXUS_PASSWORD }}
+
+      - name: Docker build and push
+        id: push
+        uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/docker-build-and-push@docker-build-and-push/v1.4.0
+        with:
+          registry: ${{ inputs.docker_registry }}
+          organization: ${{ needs.build-preprocess.outputs.organization }}
+          application: ${{ needs.build-preprocess.outputs.application_name }}
+          project_version: ${{ needs.build-preprocess.outputs.application_version }}
+          application_version: ${{ needs.build-preprocess.outputs.application_version }}
+          environment: ${{ inputs.docker_environment }}
+          file: ${{ inputs.docker_file }}
+          context: ${{ inputs.docker_context }}
+          branch: ${{ needs.build-preprocess.outputs.branch }}

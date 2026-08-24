@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: commit_message_lib.sh
 # DESCRIPTION: Shared commit subject validation and semver bump classification.
-# VERSION: 1.3.0
+# VERSION: 1.4.0
 # EXIT_CODES/SIGNALS: Sourced only; functions return 0/1 or print values.
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -12,6 +12,8 @@
 #   3) TICKET: keyword() message
 #   4) TICKET keyword(): message
 # Keywords: feat, fix, chore, docs, refactor, perf, test, style
+# SemVer: any scope (or unscoped) counts; keyword alone drives the bump.
+# Optional 2nd arg to classify is accepted for callers (safe_name) but does not filter.
 
 COMMIT_MSG_KEYWORDS=(feat fix chore docs refactor perf test style)
 COMMIT_MSG_SEMVER_MINOR_TYPES=(feat)
@@ -93,12 +95,29 @@ commit_msg_has_conventional_type() {
 }
 
 # shellcheck disable=SC2329
+commit_msg_extract_scope() {
+  # INTENT: Extract conventional-commit scope from a body (empty if unscoped).
+  # INPUT: body after ticket prefix.
+  # OUTPUT: scope text on stdout (may be empty); always returns 0.
+  # SIDE_EFFECTS: none.
+  local body="$1"
+  # Pattern in a variable so ')' inside [[ ]] does not end the conditional.
+  local re='^(feat|fix|chore|docs|refactor|perf|test|style)\(([^)]*)\)'
+  if [[ "${body}" =~ $re ]]; then
+    printf '%s' "${BASH_REMATCH[2]}"
+    return 0
+  fi
+  printf ''
+}
+
+# shellcheck disable=SC2329
 commit_msg_classify_semver_bump() {
   # INTENT: Map a conventional commit body to semver bump behavior.
-  # INPUT: body after ticket prefix.
+  # INPUT: body after ticket prefix; optional component safe_name (ignored; API compat).
   # OUTPUT: prints minor|patch|skip|none.
   # SIDE_EFFECTS: none.
   local body="$1"
+  # $2 = component safe_name — reserved for callers; scopes do not gate the bump.
   local t
 
   for t in "${COMMIT_MSG_VALID_NON_BUMP_TYPES[@]}"; do

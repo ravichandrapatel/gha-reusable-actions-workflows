@@ -1,0 +1,29 @@
+# FILE_NAME: dependabot.yml
+# DESCRIPTION: Native Dependabot — marketplace GitHub Action pins across workflows and composite actions.
+# VERSION: 2.0.0
+
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    # Glob roots (no per-action path list). "/" covers .github/workflows; the others cover
+    # house composite actions and reusable workflow templates outside .github/workflows.
+    directories:
+      - ".github/workflows/release-manager.yml"
+      - ".github/workflows/owasp-dependency-check-image.yml"
+      - "/actions/**"
+      - "/workflows/**"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    groups:
+      all-action-pins:
+        patterns:
+          - "*"
+    ignore:
+      # House reusable actions are versioned separately (release tags), not marketplace semver.
+      - dependency-name: "ravichandrapatel/gha-reusable-actions-workflows*"
+    commit-message:
+      prefix: "chore(deps)"

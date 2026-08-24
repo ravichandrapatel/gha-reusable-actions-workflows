@@ -1,2 +1,0 @@
-# PR Bot (prbot): zero external dependencies.
-# Uses only Python standard library: argparse, json, os, urllib, datetime, typing.

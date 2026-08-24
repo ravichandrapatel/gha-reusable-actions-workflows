@@ -1,0 +1,202 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Email GitHub team members and/or explicit recipients via SMTP.
+# VERSION: 1.0.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: 'Notification Email'
+description: 'Resolve GitHub team member emails (or use explicit recipients) and send SMTP mail'
+
+inputs:
+  recipients:
+    description: 'Direct To addresses (comma, semicolon, or newline). Used as-is when resolve_teams is false; otherwise merged with team emails'
+    required: false
+    default: ''
+  resolve_teams:
+    description: 'If true, list GitHub teams on repository and expand member emails'
+    required: false
+    default: 'true'
+  repository:
+    description: 'owner/repo or repo name whose teams are expanded. Empty uses github.repository'
+    required: false
+    default: ''
+  github_token:
+    description: 'Token with read:org (team members) and actions:read (attachments). GITHUB_TOKEN is often insufficient'
+    required: false
+    default: ${{ github.token }}
+  github_api_url:
+    description: 'GitHub REST API base. Empty uses GITHUB_API_URL or https://api.github.com'
+    required: false
+    default: ''
+  email_domain:
+    description: 'Fallback {login}@{email_domain} when a member has no public GitHub email'
+    required: false
+    default: ''
+  smtp_host:
+    description: 'SMTP hostname, or host:port. Map from an org secret'
+    required: false
+    default: ''
+  smtp_port:
+    description: 'SMTP port when smtp_host has no :port. Default 587 (STARTTLS)'
+    required: false
+    default: '587'
+  smtp_username:
+    description: 'SMTP username. Map from an org secret'
+    required: false
+    default: ''
+  smtp_password:
+    description: 'SMTP password. Map from an org secret; never print it'
+    required: false
+    default: ''
+  smtp_from:
+    description: 'From address'
+    required: false
+    default: ''
+  smtp_use_tls:
+    description: 'If true, SMTP STARTTLS before login'
+    required: false
+    default: 'true'
+  subject:
+    description: 'Subject template. Placeholders {name} or {{name}}. Empty uses the default subject'
+    required: false
+    default: ''
+  body:
+    description: 'Custom email template provided as the message body (text or HTML). Placeholders {name} or {{name}}. HTML is auto-detected. When template_file also contains {body}, this value fills that placeholder'
+    required: false
+    default: ''
+  template_file:
+    description: 'Optional template file. Used when body is empty. If the file contains {body}, the body input is inserted there'
+    required: false
+    default: ''
+  html:
+    description: 'If true, send as text/html. Default auto-detects HTML in body or template_file'
+    required: false
+    default: 'false'
+  template_vars:
+    description: 'JSON object merged into the template context (string values)'
+    required: false
+    default: '{}'
+  attach_artifacts:
+    description: 'If true, zip this run’s artifacts into build-artifacts.zip'
+    required: false
+    default: 'true'
+  attach_logs:
+    description: 'If true, attach Actions run logs as pipeline-logs.zip'
+    required: false
+    default: 'true'
+  artifact_name_filter:
+    description: 'Only include artifacts whose names contain this substring'
+    required: false
+    default: ''
+  dry_run:
+    description: 'If true, resolve recipients and render the template without SMTP or downloads'
+    required: false
+    default: 'false'
+
+outputs:
+  recipients:
+    description: 'De-duplicated To addresses that were used'
+    value: ${{ steps.notify.outputs.recipients }}
+  recipient_count:
+    description: 'Number of To addresses'
+    value: ${{ steps.notify.outputs.recipient_count }}
+  sent:
+    description: 'true when SMTP send succeeded; false on dry_run'
+    value: ${{ steps.notify.outputs.sent }}
+  subject:
+    description: 'Rendered subject'
+    value: ${{ steps.notify.outputs.subject }}
+  teams:
+    description: 'Comma-separated team slugs that were expanded'
+    value: ${{ steps.notify.outputs.teams }}
+
+runs:
+  using: composite
+  steps:
+    - name: Send notification email
+      id: notify
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        RECIPIENTS: ${{ inputs.recipients }}
+        RESOLVE_TEAMS: ${{ inputs.resolve_teams }}
+        REPOSITORY_INPUT: ${{ inputs.repository }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GITHUB_API_URL_INPUT: ${{ inputs.github_api_url }}
+        EMAIL_DOMAIN: ${{ inputs.email_domain }}
+        SMTP_HOST: ${{ inputs.smtp_host }}
+        SMTP_PORT: ${{ inputs.smtp_port }}
+        SMTP_USERNAME: ${{ inputs.smtp_username }}
+        SMTP_PASSWORD: ${{ inputs.smtp_password }}
+        SMTP_FROM: ${{ inputs.smtp_from }}
+        SMTP_USE_TLS: ${{ inputs.smtp_use_tls }}
+        SUBJECT: ${{ inputs.subject }}
+        BODY: ${{ inputs.body }}
+        TEMPLATE_FILE: ${{ inputs.template_file }}
+        HTML: ${{ inputs.html }}
+        TEMPLATE_VARS: ${{ inputs.template_vars }}
+        ATTACH_ARTIFACTS: ${{ inputs.attach_artifacts }}
+        ATTACH_LOGS: ${{ inputs.attach_logs }}
+        ARTIFACT_NAME_FILTER: ${{ inputs.artifact_name_filter }}
+        DRY_RUN: ${{ inputs.dry_run }}
+        GITHUB_REPOSITORY_VALUE: ${{ github.repository }}
+        GITHUB_REPOSITORY_OWNER_VALUE: ${{ github.repository_owner }}
+        GITHUB_SHA_VALUE: ${{ github.sha }}
+        GITHUB_REF_VALUE: ${{ github.ref }}
+        GITHUB_ACTOR_VALUE: ${{ github.actor }}
+        GITHUB_RUN_ID_VALUE: ${{ github.run_id }}
+        GITHUB_RUN_NUMBER_VALUE: ${{ github.run_number }}
+        GITHUB_SERVER_URL_VALUE: ${{ github.server_url }}
+        GITHUB_EVENT_NAME_VALUE: ${{ github.event_name }}
+        GITHUB_WORKFLOW_VALUE: ${{ github.workflow }}
+        GITHUB_API_URL_DEFAULT: ${{ github.api_url }}
+        PYTHONUNBUFFERED: "1"
+      run: |
+        set -euo pipefail
+        REPO="${REPOSITORY_INPUT}"
+        if [ -z "${REPO}" ]; then
+          REPO="${GITHUB_REPOSITORY_VALUE}"
+        fi
+        API_URL="${GITHUB_API_URL_INPUT}"
+        if [ -z "${API_URL}" ]; then
+          API_URL="${GITHUB_API_URL_DEFAULT}"
+        fi
+        BODY_FILE=""
+        if [ -n "${BODY}" ]; then
+          BODY_FILE="${RUNNER_TEMP:-/tmp}/notification-email-body.$$"
+          printf '%s' "${BODY}" > "${BODY_FILE}"
+        fi
+        python3 -u "${ACTION_PATH}/notify.py" \
+          --recipients "${RECIPIENTS}" \
+          --resolve-teams "${RESOLVE_TEAMS}" \
+          --repository "${REPO}" \
+          --repository-owner "${GITHUB_REPOSITORY_OWNER_VALUE}" \
+          --github-token "${GITHUB_TOKEN}" \
+          --github-api-url "${API_URL}" \
+          --email-domain "${EMAIL_DOMAIN}" \
+          --smtp-host "${SMTP_HOST}" \
+          --smtp-port "${SMTP_PORT}" \
+          --smtp-username "${SMTP_USERNAME}" \
+          --smtp-password "${SMTP_PASSWORD}" \
+          --smtp-from "${SMTP_FROM}" \
+          --smtp-use-tls "${SMTP_USE_TLS}" \
+          --subject "${SUBJECT}" \
+          --body-file "${BODY_FILE}" \
+          --template-file "${TEMPLATE_FILE}" \
+          --html "${HTML}" \
+          --template-vars "${TEMPLATE_VARS}" \
+          --attach-artifacts "${ATTACH_ARTIFACTS}" \
+          --attach-logs "${ATTACH_LOGS}" \
+          --artifact-name-filter "${ARTIFACT_NAME_FILTER}" \
+          --run-id "${GITHUB_RUN_ID_VALUE}" \
+          --run-number "${GITHUB_RUN_NUMBER_VALUE}" \
+          --sha "${GITHUB_SHA_VALUE}" \
+          --ref "${GITHUB_REF_VALUE}" \
+          --actor "${GITHUB_ACTOR_VALUE}" \
+          --server-url "${GITHUB_SERVER_URL_VALUE}" \
+          --event-name "${GITHUB_EVENT_NAME_VALUE}" \
+          --workflow "${GITHUB_WORKFLOW_VALUE}" \
+          --dry-run "${DRY_RUN}" \
+          --action-path "${ACTION_PATH}" \
+          --output "${GITHUB_OUTPUT}"

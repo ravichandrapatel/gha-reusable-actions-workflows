@@ -17,7 +17,8 @@ For multi-job `workflow_call` CI (build → OWASP → Sonar → gate → publish
 1. **Checkout** each job that needs the repo (`actions/checkout@<SHA>` from pin catalog, or `./` wrapper).
 2. **Cross-job artifacts** via `actions/upload-artifact` + `actions/download-artifact` (SHA-pinned). Local `mkdir` staging alone does **not** share across jobs.
 3. **OWASP:** `uses: ./actions/security/owasp-dependency-check` (Podman/ARC; see SPVS lifecycle).
-4. If pins/recipe missing after pack → **corpus** (`actions/`, `workflows/`) → **live** upstream → **write-back** to OKF. Do not invent floating `@vN`.
+4. **Notification (optional always-on job):** `uses: ./actions/common/notification-email` with `if: always()`; map org `SMTP_*` + org read token via inputs (see [Notification Email](/vault/concepts/notification-email.md)).
+5. If pins/recipe missing after pack → **corpus** (`actions/`, `workflows/`) → **live** upstream → **write-back** to OKF. Do not invent floating `@vN`.
 
 ## FORBIDDEN
 
@@ -30,6 +31,7 @@ For multi-job `workflow_call` CI (build → OWASP → Sonar → gate → publish
 ```text
 CI multi-job MUST: checkout; upload-artifact+download-artifact for cross-job;
 OWASP via ./actions/security/owasp-dependency-check.
+Notify: ./actions/common/notification-email if: always() + org SMTP/token inputs.
 FORBIDDEN: stub local staging as design; @vN tags.
 Missing pins → corpus → live → write-back (never Conftest-green stubs).
 ```
@@ -38,4 +40,4 @@ Missing pins → corpus → live → write-back (never Conftest-green stubs).
 
 - Reference: [GHA action pin catalog](/vault/references/gha-action-pin-catalog.md)
 - Standards: [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [OKF Prompt Injection](/standards/okf-prompt-injection.md)
-- Concepts: [SPVS Lifecycle](/vault/concepts/spvs-lifecycle.md), [GitHub Actions Domain](/vault/concepts/github-actions.md)
+- Concepts: [SPVS Lifecycle](/vault/concepts/spvs-lifecycle.md), [GitHub Actions Domain](/vault/concepts/github-actions.md), [Notification Email composite](/vault/concepts/notification-email.md)

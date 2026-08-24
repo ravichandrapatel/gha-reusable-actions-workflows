@@ -3,7 +3,7 @@ type: System
 title: gha-reusable-actions-workflows
 description: Monorepo for reusable GitHub Actions, reusable workflows, SPVS Conftest policies, and Release Manager lifecycle.
 tags: [github-actions, spvs, release-manager, monorepo, system]
-timestamp: 2026-07-28T00:30:00Z
+timestamp: 2026-08-17T02:14:00Z
 status: active
 ---
 
@@ -22,7 +22,7 @@ Monorepo that publishes composite GitHub Actions and reusable workflows under an
 | `.github/workflows/` | Release Manager, OKF lint, synced published workflows |
 | `AGENTS.md` + `_okf_knowledge/` | Portable Aegis OKF package (this brain) |
 
-## Components (observed 2026-07-28)
+## Components (observed 2026-08-10)
 
 | Kind | Path |
 | --- | --- |
@@ -30,6 +30,7 @@ Monorepo that publishes composite GitHub Actions and reusable workflows under an
 | Action | `actions/common/drift-auditor` |
 | Action | `actions/common/git-path-filter` |
 | Action | `actions/common/prbot` |
+| Action | `actions/common/notification-email` |
 | Action | `actions/security/owasp-dependency-check` |
 | Workflow | `workflows/common/dummy-workflow` |
 | Workflow | `workflows/common/tfvars-matrix-sync` |
@@ -38,9 +39,9 @@ Monorepo that publishes composite GitHub Actions and reusable workflows under an
 
 ## Release plane
 
-Modes: `release` (sandbox versioned tag), `promote` (stable `{name}-v1`), `rollback` (previous versioned tag).
+Modes: `release` (sandbox versioned tag), `release-promote` (security + versioned + stable `/v1`), `promote` (stable `{name}/v1`), `rollback` (previous versioned tag).
 
-Tag patterns: `{safe_name}-{X.Y.Z}` and `{safe_name}-v1`.
+Tag patterns: `{safe_name}/v{X.Y.Z}` and `{safe_name}/v1`.
 
 ## Prerequisites
 
@@ -50,7 +51,7 @@ Tag patterns: `{safe_name}-{X.Y.Z}` and `{safe_name}-v1`.
 
 ```text
 Monorepo: actions/{cat}/{name}/ (action.yml+readme); workflows/{cat}/{name}/.
-Actions: semver, drift-auditor, git-path-filter, prbot, owasp-dependency-check.
+Actions: semver, drift-auditor, git-path-filter, prbot, notification-email, owasp-dependency-check.
 Workflows: dummy-workflow, tfvars-matrix-sync.
 Release: release-manager.yml. OKF: AGENTS.md + _okf_knowledge/ at package root.
 ```
@@ -58,6 +59,7 @@ Release: release-manager.yml. OKF: AGENTS.md + _okf_knowledge/ at package root.
 ## Related
 
 - [GitHub Actions](/vault/concepts/github-actions.md)
+- [Notification Email composite](/vault/concepts/notification-email.md)
 - [Release Manager modes](/vault/concepts/release-manager-modes.md)
 - [GHA component layout](/standards/gha-component-layout.md)
 - [GHA SPVS YAML](/standards/gha-spvs-yaml.md)

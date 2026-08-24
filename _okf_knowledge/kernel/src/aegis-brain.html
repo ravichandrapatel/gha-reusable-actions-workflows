@@ -691,7 +691,7 @@ AUTHORS: contributors
         "commits",
         "semver"
       ],
-      "content": "# GHA Commit Subjects\n\nHouse rules for subjects in `gha-reusable-actions-workflows`. Enforced by `policies/scripts/commit_message_lib.sh` (global `commit-msg` hook) and Release Manager SemVer.\n\n## MUST\n\n1. Subject **MUST** start with a ticket: `sctask<number>`, `inc<number>`, or `DCDT-<number>` (case-insensitive). Optional `:` after ticket.\n2. Subject **MUST** use a keyword: `feat`, `fix`, `chore`, `docs`, `refactor`, `perf`, `test`, `style`.\n3. Subject **MUST** match one of the four supported ticket+keyword formats documented in the repo README.\n4. Empty subjects **MUST** fail validation.\n5. A `release` **MUST** include at least one `feat`, `fix`, or `chore` since the last component tag (or release fails).\n\n## SHOULD\n\n1. Dependabot commits **SHOULD** use prefix `DCDT-0000 chore`.\n\n## Exemptions\n\n- Merge commits (`Merge ...`) **MUST** be exempt from validation.\n\n## SemVer mapping\n\n| Keyword | Bump |\n| :--- | :--- |\n| `feat` | Minor |\n| `fix`, `chore` | Patch |\n| `docs`, `refactor`, `perf`, `test`, `style` | None |\n\n## Prompt Card\n\n```text\nCommit subject MUST:\n- ticket prefix: sctaskN | incN | DCDT-N (optional :)\n- keyword: feat|fix|chore|docs|refactor|perf|test|style\n- empty subject fails; Merge commits exempt\n- Dependabot SHOULD: DCDT-0000 chore\nSemVer: feat=minor; fix|chore=patch; docs|refactor|perf|test|style=none\nRelease needs \u22651 feat|fix|chore since last tag\n```\n\n## Related\n\n- Concept: [SemVer from commits](/vault/concepts/semver-from-commits.md)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)\n- Standard: [Simplicity First](/standards/simplicity-first.md), [OKF Prompt Injection](/standards/okf-prompt-injection.md)"
+      "content": "# GHA Commit Subjects\n\nHouse rules for subjects in `gha-reusable-actions-workflows`. Enforced by `policies/scripts/commit_message_lib.sh` (global `commit-msg` hook) and Release Manager SemVer.\n\n## MUST\n\n1. Subject **MUST** start with a ticket: `sctask<number>`, `inc<number>`, or `DCDT-<number>` (case-insensitive). Optional `:` after ticket.\n2. Subject **MUST** use a keyword: `feat`, `fix`, `chore`, `docs`, `refactor`, `perf`, `test`, `style`.\n3. Subject **MUST** match one of the four supported ticket+keyword formats documented in the repo README.\n4. Empty subjects **MUST** fail validation.\n5. A `release` **MUST** include at least one `feat`, `fix`, or `chore` since the last component tag (or release fails). Scope is optional (`feat:`, `feat({safe_name}):`, `feat(prbot):`, etc.) and does not change whether the keyword bumps.\n\n## SHOULD\n\n1. Dependabot commits **SHOULD** use prefix `DCDT-0000 chore`.\n\n## Exemptions\n\n- Merge commits (`Merge ...`) **MUST** be exempt from validation.\n\n## SemVer mapping\n\n| Keyword | Bump |\n| :--- | :--- |\n| `feat` | Minor |\n| `fix`, `chore` | Patch |\n| `docs`, `refactor`, `perf`, `test`, `style` | None |\n\n**Scope:** optional. `feat:`, `feat():`, `feat({safe_name}):`, and `feat(other):` (e.g. `feat(prbot):`) all bump when the keyword is `feat`/`fix`/`chore`.\n\n## Prompt Card\n\n```text\nCommit subject MUST:\n- ticket prefix: sctaskN | incN | DCDT-N (optional :)\n- keyword: feat|fix|chore|docs|refactor|perf|test|style\n- empty subject fails; Merge commits exempt\n- Dependabot SHOULD: DCDT-0000 chore\nSemVer: feat=minor; fix|chore=patch; docs|refactor|perf|test|style=none\nScope optional (feat(prbot) etc. still bumps); keyword drives bump\nRelease needs \u22651 feat|fix|chore since last tag\n```\n\n## Related\n\n- Concept: [SemVer from commits](/vault/concepts/semver-from-commits.md)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)\n- Standard: [Simplicity First](/standards/simplicity-first.md), [OKF Prompt Injection](/standards/okf-prompt-injection.md)"
     },
     {
       "id": "standards/gha-component-layout",
@@ -732,7 +732,7 @@ AUTHORS: contributors
         "conventions",
         "python"
       ],
-      "content": "# Metadata Headers\n\n**Scope:** new/edited files under `_okf_knowledge/kernel/` and other house Python tooling. GHA YAML follows SPVS and component-layout standards.\n\n## File header\n\n```python\n# file_name: okf.py\n# description: Thin CLI caller for the Aegis OKF kernel.\n# version: 1.3.0\n# authors: contributors\n```\n\n## Function / class docstring fields\n\n`intent`, `input`, `output`, `role`, `side_effects` (snake_case) \u2014 match existing kernel style.\n\n## Prompt Card\n\n```text\nKernel/house Python: file headers (file_name, description, version, authors).\nNew functions: intent, input, output, role, side_effects. GHA YAML: SPVS + layout standards.\n```\n\n# Related\n\n- [Simplicity First](/standards/simplicity-first.md)\n- [GHA SPVS YAML](/standards/gha-spvs-yaml.md)"
+      "content": "# Metadata Headers\n\n**Scope:** new/edited files under `_okf_knowledge/kernel/` and other house Python tooling. GHA YAML follows SPVS and component-layout standards.\n\n## File header\n\n```python\n# file_name: okf.py\n# description: Thin CLI caller for the Aegis OKF kernel.\n# version: 1.3.0\n# authors: contributors\n```\n\n## Function / class docstring fields\n\n`intent`, `input`, `output`, `role`, `side_effects` (snake_case) \u2014 match existing kernel style.\n\n## Prompt Card\n\n```text\nKernel/house Python: file headers (file_name, description, version, authors).\nNew functions: intent, input, output, role, side_effects. GHA YAML: SPVS + layout standards.\n```\n\n# Related\n\n- [Simplicity First](/standards/simplicity-first.md)\n- [Python CLI Args](/standards/python-cli-args.md)\n- [GHA SPVS YAML](/standards/gha-spvs-yaml.md)"
     },
     {
       "id": "standards/okf-house-schema",
@@ -761,6 +761,20 @@ AUTHORS: contributors
         "retrieval"
       ],
       "content": "# OKF Prompt Injection\n\nImplements **Rule #1 \u2014 Pack first** from [AGENTS.md](/AGENTS.md).\n\nCurated OKF stays in the vault. Generation context gets a **dynamic Prompt Pack**: slim `## Prompt Card` text from this turn\u2019s `okf.py pack` / `lookup --card` \u2014 not a full-brain dump.\n\n## Retrieval ladder\n\n| Priority | Lane | How | Use for |\n| :---: | :--- | :--- | :--- |\n| 1 | OKF | `okf.py pack` / `lookup --card` | Standards, playbooks, catalogs, pins on cards |\n| 2 | Card pointers | Read only paths the **current cards** name | One deep dive |\n| 3 | Task corpus | Glob \u2192 Grep \u2192 Read | Product code (`actions/`, `workflows/`, \u2026) |\n| 4 | Live external | Official Git/OCI/`gh` | Pins still missing/stale after 1\u20133 |\n| 5 | Grader | Only to explain/fix a failure | Not for inventing compliance at author time |\n\nLane 1 **MUST** run before corpus or authoring. Write-back durable pins/recipes to `_inbox/` (Rung 1); ingest via maintain playbook.\n\n**FORBIDDEN:** paste `graph.json` / full standards into the prompt; skip pack and grep the vault for compliance; invent stub designs that omit required checkout/artifact/house-action wiring when the task needs them.\n\n## Budgets\n\n- Each card **SHOULD** be \u2264 ~600 characters (~150 tokens).\n- Pack for one turn **SHOULD** stay near the budget passed to `pack` (default guidance ~1200 tokens).\n- Concepts may set `pack_force_when: [keywords]` so pack force-includes them.\n\n## Prompt Card\n\n```text\nRule #1: okf.py pack (or lookup --card) before authoring; inject ## Prompt Card text only.\nLadder: OKF \u2192 card paths \u2192 repo corpus \u2192 live upstream \u2192 write-back _inbox.\nNo graph/full-doc paste; no grader mining to invent compliance.\n```\n\n# Related\n\n- DNA: [AGENTS.md](/AGENTS.md)\n- Schema: [OKF House Schema](/standards/okf-house-schema.md)\n- Pins: [GHA action pin catalog](/vault/references/gha-action-pin-catalog.md)"
+    },
+    {
+      "id": "standards/python-cli-args",
+      "type": "Concept",
+      "title": "Python CLI Args",
+      "description": "House Python scripts MUST use argparse so they run standalone outside GitHub Actions.",
+      "tags": [
+        "standard",
+        "python",
+        "argparse",
+        "gha",
+        "cli"
+      ],
+      "content": "# Python CLI Args\n\nHouse Python (composite helpers and other runnable scripts) **MUST** expose a CLI via `argparse` so the file can be executed individually, not only from a GitHub Actions `run:` block.\n\n## MUST\n\n1. Parse inputs with `argparse` (`--kebab-case` flags). Do not require env vars as the only interface.\n2. Composite `action.yml` maps `${{ inputs.* }}` to `env`, then passes those values as CLI args to `python3 -u`.\n3. Defaults that enable a local run: `--action-path` (else `ACTION_PATH` / `GITHUB_ACTION_PATH` / script dir) plus a basename; omit `--output` to print JSON/results to stdout.\n4. Env fallbacks (`GITHUB_REPOSITORY`) are optional convenience for Actions, never the sole way to pass data.\n\n## FORBIDDEN\n\n1. Logic that can only run when `GITHUB_ACTION_PATH` / `GITHUB_OUTPUT` are set.\n2. Reading `${{ inputs.* }}` from Python, or treating undocumented env names as the public API.\n\n## Example\n\n```bash\npython3 -u actions/common/build-preprocess/checkInventory.py --repo my-app\n```\n\n## Prompt Card\n\n```text\nPython helpers MUST use argparse so they run standalone.\naction.yml: map inputs via env, then python3 -u script.py --flag \"$ENV\".\nDo not require GITHUB_* env as the only interface; omit --output to print stdout.\nFORBIDDEN: env-only scripts; interpolating inputs in Python.\n```\n\n# Related\n\n- Standard: [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [Metadata Headers](/standards/metadata-headers.md)\n- Playbook: [Author GHA Composite Action](/vault/playbooks/author-gha-composite-action.md)"
     },
     {
       "id": "standards/simplicity-first",
@@ -799,7 +813,7 @@ AUTHORS: contributors
         "release",
         "concepts"
       ],
-      "content": "# Component Tagging\n\n| Item | Rule |\n| :--- | :--- |\n| `safe_name` | Basename of `component_path` (Release Manager rejects duplicate basenames across categories) |\n| Versioned tag | `{safe_name}-{X.Y.Z}` e.g. `janitor-bot-1.2.3` |\n| Stable tag | `{safe_name}-v1` e.g. `janitor-bot-v1` |\n| Promote | Delete remote stable tag then recreate at target SHA (no force-push) |\n| Rollback previous | Sorted versioned tags; previous index of target `{safe_name}-{version}` |\n| Workflow sync | On release, copy `workflows/.../workflow.yml` to `.github/workflows/{name}.yml` then tag |\n\nConsumers typically reference `@v1` (stable) or a versioned tag / commit SHA.\n\n## Prompt Card\n\n```text\nTags: versioned {safe_name}-{X.Y.Z}; stable {safe_name}-v1.\nsafe_name = basename(component_path); duplicate basenames rejected.\nPromote = delete+recreate stable tag at target SHA (never force-push).\nWorkflow release also syncs .github/workflows/{name}.yml before tagging.\n```\n\n## Related\n\n- Concept: [Release Manager modes](/vault/concepts/release-manager-modes.md), [SemVer from commits](/vault/concepts/semver-from-commits.md)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)"
+      "content": "# Component Tagging\n\n| Item | Rule |\n| :--- | :--- |\n| `safe_name` | Basename of `component_path` (Release Manager rejects duplicate basenames across categories) |\n| Versioned tag | `{safe_name}/v{X.Y.Z}` e.g. `janitor-bot/v1.2.3` |\n| Stable tag | `{safe_name}/v1` e.g. `janitor-bot/v1` |\n| Promote | Delete remote `/v1` then recreate at **peeled commit** of `{safe_name}/v{X.Y.Z}` (`git rev-parse tag^{commit}`). Do not point `/v1` at the versioned tag object \u2014 nested annotated tags break nektos/act (`unsupported object type`). No force-push. |\n| Rollback previous | Sorted versioned tags (`{safe_name}/v*.*.*`); previous index of target `{safe_name}/v{version}` |\n| Workflow sync | On release, copy `workflows/.../workflow.yml` to `.github/workflows/{name}.yml` then tag |\n\nConsumers typically reference `@{safe_name}/v1` (stable) or a versioned tag / commit SHA.\n\n## Prompt Card\n\n```text\nTags: versioned {safe_name}/v{X.Y.Z}; stable {safe_name}/v1.\nsafe_name = basename(component_path); duplicate basenames rejected.\nPromote = delete+recreate /v1 at peeled commit of versioned tag (not nested tag).\nWorkflow release also syncs .github/workflows/{name}.yml before tagging.\n```\n\n## Related\n\n- Concept: [Release Manager modes](/vault/concepts/release-manager-modes.md), [SemVer from commits](/vault/concepts/semver-from-commits.md)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)"
     },
     {
       "id": "vault/concepts/extending-aegis",
@@ -826,7 +840,7 @@ AUTHORS: contributors
         "owasp",
         "workflow_call"
       ],
-      "content": "# GHA CI pipeline recipe\n\nFor multi-job `workflow_call` CI (build \u2192 OWASP \u2192 Sonar \u2192 gate \u2192 publish):\n\n## MUST\n\n1. **Checkout** each job that needs the repo (`actions/checkout@<SHA>` from pin catalog, or `./` wrapper).\n2. **Cross-job artifacts** via `actions/upload-artifact` + `actions/download-artifact` (SHA-pinned). Local `mkdir` staging alone does **not** share across jobs.\n3. **OWASP:** `uses: ./actions/security/owasp-dependency-check` (Podman/ARC; see SPVS lifecycle).\n4. If pins/recipe missing after pack \u2192 **corpus** (`actions/`, `workflows/`) \u2192 **live** upstream \u2192 **write-back** to OKF. Do not invent floating `@vN`.\n\n## FORBIDDEN\n\n1. Approving \u201crun-oriented staging / promote later\u201d as the design when the task requires real artifact sharing.\n2. Stubbing OWASP/Sonar with echo reports when house actions or pin cards exist (or can be resolved via ladder).\n3. Mining grader/Rego to invent compliance while authoring.\n\n## Prompt Card\n\n```text\nCI multi-job MUST: checkout; upload-artifact+download-artifact for cross-job;\nOWASP via ./actions/security/owasp-dependency-check.\nFORBIDDEN: stub local staging as design; @vN tags.\nMissing pins \u2192 corpus \u2192 live \u2192 write-back (never Conftest-green stubs).\n```\n\n## Related\n\n- Reference: [GHA action pin catalog](/vault/references/gha-action-pin-catalog.md)\n- Standards: [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [OKF Prompt Injection](/standards/okf-prompt-injection.md)\n- Concepts: [SPVS Lifecycle](/vault/concepts/spvs-lifecycle.md), [GitHub Actions Domain](/vault/concepts/github-actions.md)"
+      "content": "# GHA CI pipeline recipe\n\nFor multi-job `workflow_call` CI (build \u2192 OWASP \u2192 Sonar \u2192 gate \u2192 publish):\n\n## MUST\n\n1. **Checkout** each job that needs the repo (`actions/checkout@<SHA>` from pin catalog, or `./` wrapper).\n2. **Cross-job artifacts** via `actions/upload-artifact` + `actions/download-artifact` (SHA-pinned). Local `mkdir` staging alone does **not** share across jobs.\n3. **OWASP:** `uses: ./actions/security/owasp-dependency-check` (Podman/ARC; see SPVS lifecycle).\n4. **Notification (optional always-on job):** `uses: ./actions/common/notification-email` with `if: always()`; map org `SMTP_*` + org read token via inputs (see [Notification Email](/vault/concepts/notification-email.md)).\n5. If pins/recipe missing after pack \u2192 **corpus** (`actions/`, `workflows/`) \u2192 **live** upstream \u2192 **write-back** to OKF. Do not invent floating `@vN`.\n\n## FORBIDDEN\n\n1. Approving \u201crun-oriented staging / promote later\u201d as the design when the task requires real artifact sharing.\n2. Stubbing OWASP/Sonar with echo reports when house actions or pin cards exist (or can be resolved via ladder).\n3. Mining grader/Rego to invent compliance while authoring.\n\n## Prompt Card\n\n```text\nCI multi-job MUST: checkout; upload-artifact+download-artifact for cross-job;\nOWASP via ./actions/security/owasp-dependency-check.\nNotify: ./actions/common/notification-email if: always() + org SMTP/token inputs.\nFORBIDDEN: stub local staging as design; @vN tags.\nMissing pins \u2192 corpus \u2192 live \u2192 write-back (never Conftest-green stubs).\n```\n\n## Related\n\n- Reference: [GHA action pin catalog](/vault/references/gha-action-pin-catalog.md)\n- Standards: [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [OKF Prompt Injection](/standards/okf-prompt-injection.md)\n- Concepts: [SPVS Lifecycle](/vault/concepts/spvs-lifecycle.md), [GitHub Actions Domain](/vault/concepts/github-actions.md), [Notification Email composite](/vault/concepts/notification-email.md)"
     },
     {
       "id": "vault/concepts/gha-yaml-anchors",
@@ -852,19 +866,34 @@ AUTHORS: contributors
         "spvs",
         "domain"
       ],
-      "content": "# GitHub Actions Domain\n\n**Triggers:** \"github action\", \"reusable workflow\", \"release manager\", \"SPVS\", \"action.yml\", \"workflow_call\", \"promote tag\", \"conftest gha\", \"yaml anchor\", \"workflow alias\"\n\n**Minimum evidence:** component path under `actions/` or `workflows/` (or YAML in `_inbox/`) plus intent (author, review, release, promote, rollback, policy). Halt BLOCKED if unmet.\n\nRoute via Related \u2014 do not restate layout, SPVS rules, SemVer, or release semantics here.\n\n## Prompt Card\n\n```text\nGHA domain: route to layout + gha-spvs-yaml + release-manager-modes cards.\nComponents under actions/{cat}/{name}/ or workflows/{cat}/{name}/ only.\nInject slim cards \u2014 never full SPVS/layout docs.\n```\n\n## Related\n\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)\n- Standards: [GHA component layout](/standards/gha-component-layout.md), [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [OKF Prompt Injection](/standards/okf-prompt-injection.md)\n- Concepts: [SPVS Lifecycle](/vault/concepts/spvs-lifecycle.md), [GHA CI pipeline recipe](/vault/concepts/gha-ci-pipeline-recipe.md), [Release Manager modes](/vault/concepts/release-manager-modes.md), [SemVer from commits](/vault/concepts/semver-from-commits.md), [GHA YAML Anchors](/vault/concepts/gha-yaml-anchors.md)\n- Reference: [GHA action pin catalog](/vault/references/gha-action-pin-catalog.md)\n- Playbooks: [Author composite action](/vault/playbooks/author-gha-composite-action.md), [Release component](/vault/playbooks/release-gha-component.md)"
+      "content": "# GitHub Actions Domain\n\n**Triggers:** \"github action\", \"reusable workflow\", \"release manager\", \"SPVS\", \"action.yml\", \"workflow_call\", \"promote tag\", \"conftest gha\", \"yaml anchor\", \"workflow alias\"\n\n**Minimum evidence:** component path under `actions/` or `workflows/` (or YAML in `_inbox/`) plus intent (author, review, release, promote, rollback, policy). Halt BLOCKED if unmet.\n\nRoute via Related \u2014 do not restate layout, SPVS rules, SemVer, or release semantics here.\n\n## Prompt Card\n\n```text\nGHA domain: route to layout + gha-spvs-yaml + release-manager-modes cards.\nComponents under actions/{cat}/{name}/ or workflows/{cat}/{name}/ only.\nInject slim cards \u2014 never full SPVS/layout docs.\n```\n\n## Related\n\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)\n- Standards: [GHA component layout](/standards/gha-component-layout.md), [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [OKF Prompt Injection](/standards/okf-prompt-injection.md)\n- Concepts: [SPVS Lifecycle](/vault/concepts/spvs-lifecycle.md), [GHA CI pipeline recipe](/vault/concepts/gha-ci-pipeline-recipe.md), [Notification Email composite](/vault/concepts/notification-email.md), [Release Manager modes](/vault/concepts/release-manager-modes.md), [SemVer from commits](/vault/concepts/semver-from-commits.md), [GHA YAML Anchors](/vault/concepts/gha-yaml-anchors.md)\n- Reference: [GHA action pin catalog](/vault/references/gha-action-pin-catalog.md)\n- Playbooks: [Author composite action](/vault/playbooks/author-gha-composite-action.md), [Release component](/vault/playbooks/release-gha-component.md)"
+    },
+    {
+      "id": "vault/concepts/notification-email",
+      "type": "Concept",
+      "title": "Notification Email composite",
+      "description": "House composite that fans out SMTP mail to GitHub team members with build artifacts and pipeline-logs.zip.",
+      "tags": [
+        "github-actions",
+        "notification",
+        "email",
+        "smtp",
+        "teams",
+        "artifacts"
+      ],
+      "content": "# Notification Email composite\n\n**Path:** `actions/common/notification-email/` (`action.yml` + `notify.py` + `readme.md`).\n\nHouse composite for always-on (or on-demand) pipeline email.\n\n## Behavior\n\n1. List GitHub teams with access to the target repo.\n2. Expand each team\u2019s members; prefer public/API `email`, else `{login}@{email_domain}`.\n3. Merge optional `extra_recipients`; dedupe; **fail if empty**.\n4. Attach `build-artifacts.zip` (run artifacts; optional name filter) and a separate `pipeline-logs.zip` (Actions run logs API).\n5. Send via SMTP STARTTLS (default port 587). Callers map org secrets into inputs \u2014 the composite cannot read org secrets itself.\n\n## Token / secrets\n\n| Need | Source |\n| --- | --- |\n| List teams + members | Org token with `read:org` (default `GITHUB_TOKEN` often insufficient) |\n| Download artifacts/logs | `actions:read` (+ `repo` for private) |\n| SMTP | Org secrets \u2192 inputs: `smtp_host`, `smtp_port`, `smtp_username`, `smtp_password` |\n\nPrefer `./actions/common/notification-email` in this monorepo; when consumed elsewhere pin a release SHA (never `@vN`).\n\n## Verification\n\n```bash\npython3 -m unittest discover -s actions/common/notification-email/tests -v\nconftest test --parser yaml -n composite \\\n  -p policies/conftest/github_actions/composite \\\n  -p policies/conftest/github_actions/lib \\\n  actions/common/notification-email/action.yml\n```\n\n## Prompt Card\n\n```text\nnotification-email: ./actions/common/notification-email\nTeams\u2192members\u2192email (API else login@domain); fail if empty.\nAttach build-artifacts.zip + separate pipeline-logs.zip; SMTP STARTTLS.\nMap org SMTP_* + ORG_READ_TOKEN (read:org+actions:read) via inputs.\nif: always(); no @vN \u2014 pin SHA when external.\n```\n\n## Related\n\n- Concept: [GitHub Actions Domain](/vault/concepts/github-actions.md)\n- Concept: [GHA CI pipeline recipe](/vault/concepts/gha-ci-pipeline-recipe.md)\n- Playbook: [Author GHA Composite Action](/vault/playbooks/author-gha-composite-action.md)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)\n- Standards: [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [GHA component layout](/standards/gha-component-layout.md)\n- Reference: [GHA action pin catalog](/vault/references/gha-action-pin-catalog.md)"
     },
     {
       "id": "vault/concepts/release-manager-modes",
       "type": "Concept",
       "title": "Release Manager Modes",
-      "description": "release, promote, and rollback semantics for the gha-reusable-actions-workflows Release Manager.",
+      "description": "release, release-promote, promote, and rollback semantics for the gha-reusable-actions-workflows Release Manager.",
       "tags": [
         "github-actions",
         "release-manager",
         "concepts"
       ],
-      "content": "# Release Manager Modes\n\nOrchestrator: `.github/workflows/release-manager.yml` (`workflow_dispatch`).\n\n## Inputs\n\n| Input | Required | Notes |\n| :--- | :--- | :--- |\n| `component_path` | Yes | e.g. `actions/common/janitor-bot` |\n| `mode` | Yes | `release` \\| `promote` \\| `rollback` |\n| `version` | No | Release: auto-derived if empty. Promote/rollback: defaults to latest versioned tag if empty. |\n\n## Stages\n\n1. **Validate** \u2014 path/type, SemVer derivation (release), tag checks\n2. **Security** \u2014 Conftest, Actionlint, Bandit, Shellcheck (**release only**)\n3. **Execute** \u2014 tag, sync workflow file, promote/rollback stable tag\n\nEnvironments: `sandbox` (release), `production` (promote/rollback).\n\n## Mode behavior\n\n| Mode | Security | Result |\n| :--- | :--- | :--- |\n| `release` | Full | Create `{safe_name}-{X.Y.Z}`; sync workflow to `.github/workflows/{name}.yml` when applicable |\n| `promote` | Skipped | Point `{safe_name}-v1` at chosen versioned tag (delete+recreate, no force-push) |\n| `rollback` | Skipped | Move `v1` to previous versioned tag; restore prior workflow file if needed |\n\n## Prompt Card\n\n```text\nRelease Manager (workflow_dispatch): inputs component_path, mode, version(optional).\nrelease = versioned tag + FULL security stage (Conftest/Actionlint/Bandit/Shellcheck).\npromote = move {safe_name}-v1 to chosen tag (security skipped, env production).\nrollback = v1 to previous versioned tag; restore synced workflow file if needed.\n```\n\n## Related\n\n- Concept: [SemVer from commits](/vault/concepts/semver-from-commits.md), [Component tagging](/vault/concepts/component-tagging.md)\n- Playbook: [Release component](/vault/playbooks/release-gha-component.md)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)"
+      "content": "# Release Manager Modes\n\nOrchestrator: `.github/workflows/release-manager.yml` (`workflow_dispatch`).\n\n## Inputs\n\n| Input | Required | Notes |\n| :--- | :--- | :--- |\n| `component_path` | Yes | e.g. `actions/common/janitor-bot` |\n| `mode` | Yes | `release` \\| `release-promote` \\| `promote` \\| `rollback` |\n| `version` | No | Release / release-promote: auto-derived if empty. Promote/rollback: defaults to latest versioned tag if empty. |\n\n## Stages\n\n1. **Validate** \u2014 path/type, SemVer derivation (release / release-promote), tag checks\n2. **Security** \u2014 Conftest, Actionlint, Bandit, Shellcheck (**release and release-promote**)\n3. **Execute** \u2014 tag, sync workflow file, promote/rollback stable tag\n\nEnvironments: `sandbox` (release), `production` (release-promote / promote / rollback).\n\n## Concurrency\n\n| Kind | Group | Effect |\n| :--- | :--- | :--- |\n| `workflows/...` | `release-manager-workflow` | One workflow deploy at a time (queue; no cancel). Protects `main` sync. |\n| `actions/...` | `release-manager-action-{component_path}` | Different actions run in parallel; same path queues. |\n\n## Mode behavior\n\n| Mode | Security | Env | Result |\n| :--- | :--- | :--- | :--- |\n| `release` | Full | sandbox | Create `{safe_name}/v{X.Y.Z}`; sync workflow to `.github/workflows/{name}.yml` when applicable |\n| `release-promote` | Full | production | Same as release, then point `{safe_name}/v1` at the new versioned tag |\n| `promote` | Skipped | production | Point `{safe_name}/v1` at chosen versioned tag (delete+recreate, no force-push) |\n| `rollback` | Skipped | production | Move `{safe_name}/v1` to previous versioned tag; restore prior workflow file if needed |\n\n## Prompt Card\n\n```text\nRelease Manager (workflow_dispatch): inputs component_path, mode, version(optional).\nrelease = versioned tag + FULL security (env sandbox).\nrelease-promote = security + versioned tag + move {safe_name}/v1 (env production).\npromote = move {safe_name}/v1 (security skipped, env production).\nrollback = /v1 to previous versioned tag; restore synced workflow file if needed.\nConcurrency: all workflows serialize (one at a time); actions parallel per component_path.\n```\n\n## Related\n\n- Concept: [SemVer from commits](/vault/concepts/semver-from-commits.md), [Component tagging](/vault/concepts/component-tagging.md)\n- Playbook: [Release component](/vault/playbooks/release-gha-component.md)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)"
     },
     {
       "id": "vault/concepts/semver-from-commits",
@@ -877,7 +906,7 @@ AUTHORS: contributors
         "commits",
         "concepts"
       ],
-      "content": "# SemVer from Commits\n\nImplemented by `actions/common/semver` using `policies/scripts/commit_message_lib.sh`.\n\n## Rules\n\n1. Lookup latest tag `{safe_name}-[0-9]*`; version is the suffix.\n2. No prior tag: treat current as `0.0.0` then next is **`1.0.0`**.\n3. Scan commits since last tag; classify by keyword.\n4. Any `feat` -> minor bump; else `fix`/`chore` -> patch; else docs/refactor/perf/test/style -> no bump.\n5. Release fails if no bump-capable commits since last tag.\n6. Explicit `version` input on Release Manager bypasses auto-calculation.\n\n## Prompt Card\n\n```text\nSemVer from commits since last {safe_name}-* tag:\nfeat -> minor; fix/chore -> patch; docs/refactor/perf/test/style -> no bump.\nNo prior tag -> first release is 1.0.0. No bump-capable commits -> release FAILS.\nExplicit version input bypasses auto-calculation.\n```\n\n## Related\n\n- Standard: [GHA commit subjects](/standards/gha-commit-subjects.md)\n- Concept: [Release Manager modes](/vault/concepts/release-manager-modes.md), [Component tagging](/vault/concepts/component-tagging.md)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)"
+      "content": "# SemVer from Commits\n\nImplemented by `actions/common/semver` using `policies/scripts/commit_message_lib.sh`.\n\n## Rules\n\n1. Lookup latest tag `{safe_name}/v*.*.*`; version is the suffix after `/v`.\n2. No prior tag: treat current as `0.0.0` then next is **`1.0.0`**.\n3. Scan commits since last tag; classify by keyword.\n4. Any `feat` -> minor bump; else `fix`/`chore` -> patch; else docs/refactor/perf/test/style -> no bump.\n5. Scope is optional and does not gate the bump: `feat:`, `feat():`, `feat({safe_name}):`, and `feat(other):` (e.g. `feat(prbot):`) all count when the keyword is bump-capable.\n6. Release fails if no bump-capable commits since last tag.\n7. Explicit `version` input on Release Manager bypasses auto-calculation.\n\n## Prompt Card\n\n```text\nSemVer from commits since last {safe_name}/v*.*.* tag:\nfeat -> minor; fix/chore -> patch; docs/refactor/perf/test/style -> no bump.\nScope optional: unscoped, feat(safe_name), or feat(other) e.g. feat(prbot) all count.\nNo prior tag -> first release is 1.0.0. No bump-capable commits -> release FAILS.\nExplicit version input bypasses auto-calculation.\n```\n\n## Related\n\n- Standard: [GHA commit subjects](/standards/gha-commit-subjects.md)\n- Concept: [Release Manager modes](/vault/concepts/release-manager-modes.md), [Component tagging](/vault/concepts/component-tagging.md)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)"
     },
     {
       "id": "vault/concepts/spvs-lifecycle",
@@ -891,7 +920,7 @@ AUTHORS: contributors
         "owasp",
         "concepts"
       ],
-      "content": "# SPVS Lifecycle\n\n| Stage | This repository |\n| :--- | :--- |\n| Plan / Develop | Commit-msg hook; ticket conventional commits; SemVer derivation |\n| Integrate | Pre-commit Conftest, Actionlint, Bandit, Shellcheck (change-scoped) |\n| Release | Release Manager security job; versioned tags; workflow sync |\n| Operate | Promote / rollback; stable `v1` tags; branch protection / App bypass |\n\nBranch protection, signed commits, CODEOWNERS are GitHub settings \u2014 not workflow YAML.\n\n## Dependency-Check\n\nWhen scanning with OWASP Dependency-Check: require Podman/ARC-compatible runners; no Docker-only assumptions. YAML policy itself stays in [GHA SPVS YAML](/standards/gha-spvs-yaml.md).\n\n## Prompt Card\n\n```text\nSPVS stages: Plan=commit-msg+SemVer; Integrate=pre-commit Conftest/Actionlint/Bandit/Shellcheck;\nRelease=RM security+tags; Operate=promote/rollback v1.\nBranch protection/CODEOWNERS = GitHub settings, not YAML.\nDependency-Check: Podman/ARC runners only \u2014 no Docker-only assumptions.\n```\n\n## Related\n\n- Standard: [GHA SPVS YAML](/standards/gha-spvs-yaml.md)\n- Concept: [GitHub Actions Domain](/vault/concepts/github-actions.md)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)"
+      "content": "# SPVS Lifecycle\n\n| Stage | This repository |\n| :--- | :--- |\n| Plan / Develop | Commit-msg hook; ticket conventional commits; SemVer derivation |\n| Integrate | Pre-commit Conftest, Actionlint, Bandit, Shellcheck (change-scoped) |\n| Release | Release Manager security job; versioned tags; workflow sync |\n| Operate | Promote / rollback; stable `{name}/v1` tags; branch protection / App bypass |\n\nBranch protection, signed commits, CODEOWNERS are GitHub settings \u2014 not workflow YAML.\n\n## Dependency-Check\n\nWhen scanning with OWASP Dependency-Check: require Podman/ARC-compatible runners; no Docker-only assumptions. YAML policy itself stays in [GHA SPVS YAML](/standards/gha-spvs-yaml.md).\n\n## Prompt Card\n\n```text\nSPVS stages: Plan=commit-msg+SemVer; Integrate=pre-commit Conftest/Actionlint/Bandit/Shellcheck;\nRelease=RM security+tags; Operate=promote/rollback {name}/v1.\nBranch protection/CODEOWNERS = GitHub settings, not YAML.\nDependency-Check: Podman/ARC runners only \u2014 no Docker-only assumptions.\n```\n\n## Related\n\n- Standard: [GHA SPVS YAML](/standards/gha-spvs-yaml.md)\n- Concept: [GitHub Actions Domain](/vault/concepts/github-actions.md)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)"
     },
     {
       "id": "vault/playbooks/author-gha-composite-action",
@@ -903,7 +932,7 @@ AUTHORS: contributors
         "playbook",
         "authoring"
       ],
-      "content": "# Trigger\n\nYou need a new composite GitHub Action in the monorepo.\n\n# Preconditions\n\n- Layout standard understood: [GHA component layout](/standards/gha-component-layout.md).\n- Local SPVS tooling available (or use Release Manager later).\n\n# Steps\n\n1. Create `actions/{category}/{name}/` with `action.yml` and `readme.md`.\n2. When an agent authors the action, assemble a **Prompt Pack** with `python3 _okf_knowledge/kernel/okf.py card` on layout + SPVS (+ pins) \u2014 see [OKF Prompt Injection](/standards/okf-prompt-injection.md). **MUST NOT** paste full standards.\n3. Follow SPVS shell/env patterns: `set -euo pipefail`, map inputs via `env`, pin third-party `uses:` to SHA.\n4. Keep `readme.md` short (inputs/outputs + one usage example).\n5. Run Conftest composite scan:\n\n```bash\nconftest test --parser yaml -n composite \\\n  -p policies/conftest/github_actions/composite \\\n  -p policies/conftest/github_actions/lib \\\n  actions/{category}/{name}/action.yml\n```\n\n6. If Conftest fails on `CKV2_SPVS_5`, remediate with a **pin cache** (tag\u2192SHA) rather than asking the agent to discover SHAs from scratch.\n7. Run Bandit/Shellcheck on helpers if present.\n8. Open PR with a ticket-prefixed conventional subject.\n\n# Verification\n\n- [ ] Directory matches layout standard\n- [ ] Conftest composite scan passes\n- [ ] `readme.md` documents inputs/outputs\n- [ ] Agent prompt used a minimal card (not full SPVS dump)\n\n## Prompt Card\n\n```text\nNew composite action: actions/{category}/{name}/ with action.yml + short readme.md.\nShell: set -euo pipefail; map inputs via env (no ${{ inputs.* }} in run);\npin third-party uses: to 40-char SHA (use pin cache on CKV2_SPVS_5).\nGate: conftest test --parser yaml -n composite -p policies/conftest/github_actions/{composite,lib}.\nPR subject: ticket-prefixed conventional commit.\n```\n\n# Related\n\n- Standard: [OKF Prompt Injection](/standards/okf-prompt-injection.md)\n- Standard: [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [GHA component layout](/standards/gha-component-layout.md)\n- Concept: [GitHub Actions](/vault/concepts/github-actions.md)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)"
+      "content": "# Trigger\n\nYou need a new composite GitHub Action in the monorepo.\n\n# Preconditions\n\n- Layout standard understood: [GHA component layout](/standards/gha-component-layout.md).\n- Local SPVS tooling available (or use Release Manager later).\n\n# Steps\n\n1. Create `actions/{category}/{name}/` with `action.yml` and `readme.md`.\n2. When an agent authors the action, assemble a **Prompt Pack** with `python3 _okf_knowledge/kernel/okf.py card` on layout + SPVS (+ pins) \u2014 see [OKF Prompt Injection](/standards/okf-prompt-injection.md). **MUST NOT** paste full standards.\n3. Follow SPVS shell/env patterns: `set -euo pipefail`, map inputs via `env`, pin third-party `uses:` to SHA.\n4. Python helpers **MUST** use `argparse` and be runnable standalone \u2014 [Python CLI Args](/standards/python-cli-args.md). The composite passes mapped env values as CLI flags to `python3 -u`.\n5. Keep `readme.md` short (inputs/outputs + one usage example).\n6. Run Conftest composite scan:\n\n```bash\nconftest test --parser yaml -n composite \\\n  -p policies/conftest/github_actions/composite \\\n  -p policies/conftest/github_actions/lib \\\n  actions/{category}/{name}/action.yml\n```\n\n7. If Conftest fails on `CKV2_SPVS_5`, remediate with a **pin cache** (tag\u2192SHA) rather than asking the agent to discover SHAs from scratch.\n8. Run Bandit/Shellcheck on helpers if present.\n9. Open PR with a ticket-prefixed conventional subject.\n\n# Verification\n\n- [ ] Directory matches layout standard\n- [ ] Conftest composite scan passes\n- [ ] Python helpers use argparse and run standalone\n- [ ] `readme.md` documents inputs/outputs\n- [ ] Agent prompt used a minimal card (not full SPVS dump)\n\n## Prompt Card\n\n```text\nNew composite action: actions/{category}/{name}/ with action.yml + short readme.md.\nShell: set -euo pipefail; map inputs via env (no ${{ inputs.* }} in run);\npython3 -u with argparse flags (standalone runnable); pin uses: to 40-char SHA.\nGate: conftest test --parser yaml -n composite -p policies/conftest/github_actions/{composite,lib}.\nPR subject: ticket-prefixed conventional commit.\n```\n\n# Related\n\n- Standard: [OKF Prompt Injection](/standards/okf-prompt-injection.md)\n- Standard: [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [GHA component layout](/standards/gha-component-layout.md), [Python CLI Args](/standards/python-cli-args.md)\n- Concept: [GitHub Actions](/vault/concepts/github-actions.md)\n- Concept: [Notification Email composite](/vault/concepts/notification-email.md) (example house composite)\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)"
     },
     {
       "id": "vault/playbooks/bootstrap-spvs-dev-environment",
@@ -936,13 +965,13 @@ AUTHORS: contributors
       "id": "vault/playbooks/release-gha-component",
       "type": "Playbook",
       "title": "Release GHA Component",
-      "description": "Run Release Manager mode release/promote/rollback for a monorepo component.",
+      "description": "Run Release Manager mode release/release-promote/promote/rollback for a monorepo component.",
       "tags": [
         "github-actions",
         "playbook",
         "release"
       ],
-      "content": "# Trigger\n\nYou need to release, promote, or roll back a composite action or reusable workflow.\n\n# Preconditions\n\n- Component path valid under `actions/` or `workflows/`.\n- Secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` configured.\n- Understand [Release Manager modes](/vault/concepts/release-manager-modes.md).\n\n# Steps\n\n1. Ensure commits since last tag include `feat`/`fix`/`chore` if auto-bumping ([SemVer from commits](/vault/concepts/semver-from-commits.md)).\n2. Open Actions -> **Release Manager** (`workflow_dispatch`).\n3. Set `component_path` (e.g. `actions/common/janitor-bot`).\n4. Set `mode`:\n   - `release` \u2014 sandbox versioned tag + security stage\n   - `promote` \u2014 move `{safe_name}-v1` to chosen version\n   - `rollback` \u2014 previous versioned tag (+ restore workflow file if needed)\n5. Optionally set `version` to pin SemVer / target.\n6. Wait for Validate -> Security (release only) -> Execute.\n\n# Verification\n\n- [ ] Versioned or stable tag exists remotely as expected ([Component tagging](/vault/concepts/component-tagging.md))\n- [ ] For workflow releases, `.github/workflows/{name}.yml` matches source\n- [ ] Consumers can reference `@v1` after promote\n\n## Prompt Card\n\n```text\nRelease: Actions -> Release Manager (workflow_dispatch); set component_path + mode\n(release|promote|rollback), optional version. Auto-bump needs feat/fix/chore commits\nsince last tag. Verify remote tag ({safe_name}-{X.Y.Z} or -v1) and synced workflow file.\n```\n\n# Related\n\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)\n- Concept: [Release Manager modes](/vault/concepts/release-manager-modes.md)\n- Standard: [GHA commit subjects](/standards/gha-commit-subjects.md)"
+      "content": "# Trigger\n\nYou need to release, promote, release-and-promote, or roll back a composite action or reusable workflow.\n\n# Preconditions\n\n- Component path valid under `actions/` or `workflows/`.\n- Secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` configured.\n- Understand [Release Manager modes](/vault/concepts/release-manager-modes.md). Workflow deploys queue globally; action deploys run in parallel.\n\n# Steps\n\n1. Ensure commits since last tag include `feat`/`fix`/`chore` if auto-bumping ([SemVer from commits](/vault/concepts/semver-from-commits.md)); scope is optional (`feat(prbot):` counts).\n2. Open Actions -> **Release Manager** (`workflow_dispatch`).\n3. Set `component_path` (e.g. `actions/common/janitor-bot`).\n4. Set `mode`:\n   - `release` \u2014 sandbox versioned tag + security stage\n   - `release-promote` \u2014 security + versioned tag + stable `{safe_name}/v1` in one run (production)\n   - `promote` \u2014 move `{safe_name}/v1` to chosen version\n   - `rollback` \u2014 previous versioned tag (+ restore workflow file if needed)\n5. Optionally set `version` to pin SemVer / target.\n6. Wait for Validate -> Security (release / release-promote) -> Execute.\n\n# Verification\n\n- [ ] Versioned or stable tag exists remotely as expected ([Component tagging](/vault/concepts/component-tagging.md))\n- [ ] For workflow releases, `.github/workflows/{name}.yml` matches source\n- [ ] Consumers can reference `@{safe_name}/v1` after promote\n\n## Prompt Card\n\n```text\nRelease: Actions -> Release Manager (workflow_dispatch); set component_path + mode\n(release|release-promote|promote|rollback), optional version. Auto-bump needs feat/fix/chore\ncommits since last tag (any scope, e.g. feat(prbot)). Verify remote tag ({safe_name}/v{X.Y.Z}\nor /v1) and synced workflow file.\n```\n\n# Related\n\n- System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)\n- Concept: [Release Manager modes](/vault/concepts/release-manager-modes.md)\n- Standard: [GHA commit subjects](/standards/gha-commit-subjects.md)"
     },
     {
       "id": "vault/playbooks/run-gha-local-policy-tests",
@@ -970,7 +999,7 @@ AUTHORS: contributors
         "pins",
         "spvs"
       ],
-      "content": "# GHA action pin catalog\n\n**Evidence grade:** `observed` (corpus + live GitHub API + bench workflows in this monorepo). Refresh via live GitHub/OCI when stale or missing; write-back updates here.\n\n| Action | SHA (40-char) | Tag note |\n| :--- | :--- | :--- |\n| `actions/checkout` | `11bd71901bbe5b1630ceea73d27597364c9af683` | v4.2.2 |\n| `actions/cache` | `5a3ec84eff668545956fd18022155c47e93e2684` | v4.2.3 |\n| `actions/upload-artifact` | `ea165f8d65b6e75b540449e92b4886f43607fa02` | v4.6.2 |\n| `actions/download-artifact` | `95815c38cf2ff2164869cbab79da8d1f422bc89e` | v4.2.1 |\n| `sonarsource/sonarqube-scan-action` | `7451daf950bc136c497f29045f2b4d4f9f7ba43a` | master @ 2026-07-20 |\n| `sonarsource/sonarqube-quality-gate-action` | `8e9b0ca0a7273d6f16986388d98393efdfcf56fd` | master @ 2026-07-20 |\n| `docker/login-action` | `c66a8fcb2472d4283042d726b2a061b43b3f49ab` | master @ 2026-07-20 |\n| `docker/build-push-action` | `cb941d0b895b09c17fa011d41c411b33c752cf28` | master @ 2026-07-20 |\n\nSPVS: never `@vN` floating tags. Prefer house `./actions/...` when a composite exists.\n\n## Prompt Card\n\n```text\nGHA pins (observed): checkout@11bd71901bbe5b1630ceea73d27597364c9af683\ncache@5a3ec84eff668545956fd18022155c47e93e2684\nupload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\ndownload-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e\nsonarqube-scan@7451daf950bc136c497f29045f2b4d4f9f7ba43a\nsonarqube-quality-gate@8e9b0ca0a7273d6f16986388d98393efdfcf56fd\ndocker/login@c66a8fcb2472d4283042d726b2a061b43b3f49ab\ndocker/build-push@cb941d0b895b09c17fa011d41c411b33c752cf28\nNo @vN. Prefer ./actions/* house composites when present.\nMissing pin \u2192 corpus \u2192 live Git \u2192 write-back.\n```\n\n## Related\n\n- Standard: [GHA SPVS YAML](/standards/gha-spvs-yaml.md)\n- Standard: [OKF Prompt Injection](/standards/okf-prompt-injection.md)\n- Concept: [GHA CI pipeline recipe](/vault/concepts/gha-ci-pipeline-recipe.md)\n- Concept: [GitHub Actions Domain](/vault/concepts/github-actions.md)\n\n# Citations\n\n1. Workspace observed pins: `_ab_bench/*/ci-pipeline/workflow.yml`, `workflows/common/tfvars-matrix-sync/workflow.yml`"
+      "content": "# GHA action pin catalog\n\n**Evidence grade:** `verified` (live GitHub Releases API peel to commit SHA, 2026-08-10). Refresh via live GitHub/OCI when stale or missing; write-back updates here.\n\n| Action | SHA (40-char) | Tag note |\n| :--- | :--- | :--- |\n| `actions/checkout` | `3d3c42e5aac5ba805825da76410c181273ba90b1` | v7.0.1 |\n| `actions/setup-python` | `5fda3b95a4ea91299a34e894583c3862153e4b97` | v7.0.0 |\n| `actions/setup-java` | `b6effb05e454b25005698d916606bdc6ffcbf961` | v5.7.0 |\n| `actions/setup-node` | `820762786026740c76f36085b0efc47a31fe5020` | v7.0.0 |\n| `actions/cache` | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | v6.1.0 |\n| `actions/upload-artifact` | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` | v7.0.1 |\n| `actions/download-artifact` | `3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c` | v8.0.1 |\n| `actions/create-github-app-token` | `bcd2ba49218906704ab6c1aa796996da409d3eb1` | v3.2.0 |\n| `hashicorp/setup-terraform` | `dfe3c3f87815947d99a8997f908cb6525fc44e9e` | v4.0.1 |\n| `docker/login-action` | `dbcb813823bdd20940b903addbd779551569679f` | v4.6.0 |\n| `docker/build-push-action` | `53b7df96c91f9c12dcc8a07bcb9ccacbed38856a` | v7.3.0 |\n| `docker/setup-buildx-action` | `bb05f3f5519dd87d3ba754cc423b652a5edd6d2c` | v4.2.0 |\n| `SonarSource/sonarqube-scan-action` | `22918119ff8e1ca75a623e15c8296b6ea4fbe28f` | v8.2.1 |\n| `SonarSource/sonarqube-quality-gate-action` | `7a5fffe8e523c40e0c740b6bc2712ab503e52efa` | v1.2.1 |\n\nSPVS: never `@vN` floating tags. Prefer house `./actions/...` when a composite exists.\n\n## Prompt Card\n\n```text\nGHA pins (2026-08-10): checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\nsetup-python@5fda3b95a4ea91299a34e894583c3862153e4b97\ncache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9\nupload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\ndownload-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c\ncreate-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1\nsetup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e\ndocker/login@dbcb813823bdd20940b903addbd779551569679f\ndocker/build-push@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a\nNo @vN. Prefer ./actions/* house composites when present.\nMissing pin \u2192 corpus \u2192 live Git \u2192 write-back.\n```\n\n## Related\n\n- Standard: [GHA SPVS YAML](/standards/gha-spvs-yaml.md)\n- Standard: [OKF Prompt Injection](/standards/okf-prompt-injection.md)\n- Concept: [GHA CI pipeline recipe](/vault/concepts/gha-ci-pipeline-recipe.md)\n- Concept: [GitHub Actions Domain](/vault/concepts/github-actions.md)\n- Concept: [Notification Email composite](/vault/concepts/notification-email.md)\n\n# Citations\n\n1. Live GitHub Releases API peeled to commit SHAs on 2026-08-10.\n2. Applied across `.github/workflows/`, `actions/`, `workflows/`, `_ab_bench/`."
     },
     {
       "id": "vault/references/gha-reusable-readme",
@@ -1008,7 +1037,7 @@ AUTHORS: contributors
         "monorepo",
         "system"
       ],
-      "content": "# gha-reusable-actions-workflows\n\nMonorepo that publishes composite GitHub Actions and reusable workflows under an OWASP SPVS-aligned release plane (Validate \u2192 Security \u2192 Execute).\n\n## Directory map\n\n| Path | Role |\n| --- | --- |\n| `actions/{category}/{name}/` | Composite actions (`action.yml` + `readme.md`) |\n| `workflows/{category}/{name}/` | Reusable workflows (`workflow.yml` + `readme.md`) |\n| `policies/conftest/github_actions/` | Conftest Rego |\n| `policies/scripts/` | Commit-msg lib, hooks, Conftest runners |\n| `.github/workflows/` | Release Manager, OKF lint, synced published workflows |\n| `AGENTS.md` + `_okf_knowledge/` | Portable Aegis OKF package (this brain) |\n\n## Components (observed 2026-07-28)\n\n| Kind | Path |\n| --- | --- |\n| Action | `actions/common/semver` |\n| Action | `actions/common/drift-auditor` |\n| Action | `actions/common/git-path-filter` |\n| Action | `actions/common/prbot` |\n| Action | `actions/security/owasp-dependency-check` |\n| Workflow | `workflows/common/dummy-workflow` |\n| Workflow | `workflows/common/tfvars-matrix-sync` |\n| Orchestrator | `.github/workflows/release-manager.yml` |\n| E2E | `.github/workflows/git-path-filter-e2e.yml` |\n\n## Release plane\n\nModes: `release` (sandbox versioned tag), `promote` (stable `{name}-v1`), `rollback` (previous versioned tag).\n\nTag patterns: `{safe_name}-{X.Y.Z}` and `{safe_name}-v1`.\n\n## Prerequisites\n\n- GitHub App secrets: `RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY` (`contents: write`, `workflows: write`)\n\n## Prompt Card\n\n```text\nMonorepo: actions/{cat}/{name}/ (action.yml+readme); workflows/{cat}/{name}/.\nActions: semver, drift-auditor, git-path-filter, prbot, owasp-dependency-check.\nWorkflows: dummy-workflow, tfvars-matrix-sync.\nRelease: release-manager.yml. OKF: AGENTS.md + _okf_knowledge/ at package root.\n```\n\n## Related\n\n- [GitHub Actions](/vault/concepts/github-actions.md)\n- [Release Manager modes](/vault/concepts/release-manager-modes.md)\n- [GHA component layout](/standards/gha-component-layout.md)\n- [GHA SPVS YAML](/standards/gha-spvs-yaml.md)\n- [Release component](/vault/playbooks/release-gha-component.md)"
+      "content": "# gha-reusable-actions-workflows\n\nMonorepo that publishes composite GitHub Actions and reusable workflows under an OWASP SPVS-aligned release plane (Validate \u2192 Security \u2192 Execute).\n\n## Directory map\n\n| Path | Role |\n| --- | --- |\n| `actions/{category}/{name}/` | Composite actions (`action.yml` + `readme.md`) |\n| `workflows/{category}/{name}/` | Reusable workflows (`workflow.yml` + `readme.md`) |\n| `policies/conftest/github_actions/` | Conftest Rego |\n| `policies/scripts/` | Commit-msg lib, hooks, Conftest runners |\n| `.github/workflows/` | Release Manager, OKF lint, synced published workflows |\n| `AGENTS.md` + `_okf_knowledge/` | Portable Aegis OKF package (this brain) |\n\n## Components (observed 2026-08-10)\n\n| Kind | Path |\n| --- | --- |\n| Action | `actions/common/semver` |\n| Action | `actions/common/drift-auditor` |\n| Action | `actions/common/git-path-filter` |\n| Action | `actions/common/prbot` |\n| Action | `actions/common/notification-email` |\n| Action | `actions/security/owasp-dependency-check` |\n| Workflow | `workflows/common/dummy-workflow` |\n| Workflow | `workflows/common/tfvars-matrix-sync` |\n| Orchestrator | `.github/workflows/release-manager.yml` |\n| E2E | `.github/workflows/git-path-filter-e2e.yml` |\n\n## Release plane\n\nModes: `release` (sandbox versioned tag), `release-promote` (security + versioned + stable `/v1`), `promote` (stable `{name}/v1`), `rollback` (previous versioned tag).\n\nTag patterns: `{safe_name}/v{X.Y.Z}` and `{safe_name}/v1`.\n\n## Prerequisites\n\n- GitHub App secrets: `RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY` (`contents: write`, `workflows: write`)\n\n## Prompt Card\n\n```text\nMonorepo: actions/{cat}/{name}/ (action.yml+readme); workflows/{cat}/{name}/.\nActions: semver, drift-auditor, git-path-filter, prbot, notification-email, owasp-dependency-check.\nWorkflows: dummy-workflow, tfvars-matrix-sync.\nRelease: release-manager.yml. OKF: AGENTS.md + _okf_knowledge/ at package root.\n```\n\n## Related\n\n- [GitHub Actions](/vault/concepts/github-actions.md)\n- [Notification Email composite](/vault/concepts/notification-email.md)\n- [Release Manager modes](/vault/concepts/release-manager-modes.md)\n- [GHA component layout](/standards/gha-component-layout.md)\n- [GHA SPVS YAML](/standards/gha-spvs-yaml.md)\n- [Release component](/vault/playbooks/release-gha-component.md)"
     }
   ],
   "edges": [
@@ -1078,6 +1107,10 @@ AUTHORS: contributors
     },
     {
       "source": "standards/metadata-headers",
+      "target": "standards/python-cli-args"
+    },
+    {
+      "source": "standards/metadata-headers",
       "target": "standards/gha-spvs-yaml"
     },
     {
@@ -1095,6 +1128,18 @@ AUTHORS: contributors
     {
       "source": "standards/okf-prompt-injection",
       "target": "vault/references/gha-action-pin-catalog"
+    },
+    {
+      "source": "standards/python-cli-args",
+      "target": "standards/gha-spvs-yaml"
+    },
+    {
+      "source": "standards/python-cli-args",
+      "target": "standards/metadata-headers"
+    },
+    {
+      "source": "standards/python-cli-args",
+      "target": "vault/playbooks/author-gha-composite-action"
     },
     {
       "source": "standards/simplicity-first",
@@ -1138,6 +1183,10 @@ AUTHORS: contributors
     },
     {
       "source": "vault/concepts/gha-ci-pipeline-recipe",
+      "target": "vault/concepts/notification-email"
+    },
+    {
+      "source": "vault/concepts/gha-ci-pipeline-recipe",
       "target": "vault/references/gha-action-pin-catalog"
     },
     {
@@ -1155,6 +1204,10 @@ AUTHORS: contributors
     {
       "source": "vault/concepts/gha-ci-pipeline-recipe",
       "target": "vault/concepts/github-actions"
+    },
+    {
+      "source": "vault/concepts/gha-ci-pipeline-recipe",
+      "target": "vault/concepts/notification-email"
     },
     {
       "source": "vault/concepts/gha-yaml-anchors",
@@ -1198,6 +1251,10 @@ AUTHORS: contributors
     },
     {
       "source": "vault/concepts/github-actions",
+      "target": "vault/concepts/notification-email"
+    },
+    {
+      "source": "vault/concepts/github-actions",
       "target": "vault/concepts/release-manager-modes"
     },
     {
@@ -1219,6 +1276,34 @@ AUTHORS: contributors
     {
       "source": "vault/concepts/github-actions",
       "target": "vault/playbooks/release-gha-component"
+    },
+    {
+      "source": "vault/concepts/notification-email",
+      "target": "vault/concepts/github-actions"
+    },
+    {
+      "source": "vault/concepts/notification-email",
+      "target": "vault/concepts/gha-ci-pipeline-recipe"
+    },
+    {
+      "source": "vault/concepts/notification-email",
+      "target": "vault/playbooks/author-gha-composite-action"
+    },
+    {
+      "source": "vault/concepts/notification-email",
+      "target": "vault/systems/gha-reusable-actions-workflows"
+    },
+    {
+      "source": "vault/concepts/notification-email",
+      "target": "standards/gha-spvs-yaml"
+    },
+    {
+      "source": "vault/concepts/notification-email",
+      "target": "standards/gha-component-layout"
+    },
+    {
+      "source": "vault/concepts/notification-email",
+      "target": "vault/references/gha-action-pin-catalog"
     },
     {
       "source": "vault/concepts/release-manager-modes",
@@ -1278,6 +1363,10 @@ AUTHORS: contributors
     },
     {
       "source": "vault/playbooks/author-gha-composite-action",
+      "target": "standards/python-cli-args"
+    },
+    {
+      "source": "vault/playbooks/author-gha-composite-action",
       "target": "standards/okf-prompt-injection"
     },
     {
@@ -1290,7 +1379,15 @@ AUTHORS: contributors
     },
     {
       "source": "vault/playbooks/author-gha-composite-action",
+      "target": "standards/python-cli-args"
+    },
+    {
+      "source": "vault/playbooks/author-gha-composite-action",
       "target": "vault/concepts/github-actions"
+    },
+    {
+      "source": "vault/playbooks/author-gha-composite-action",
+      "target": "vault/concepts/notification-email"
     },
     {
       "source": "vault/playbooks/author-gha-composite-action",
@@ -1369,6 +1466,10 @@ AUTHORS: contributors
       "target": "vault/concepts/github-actions"
     },
     {
+      "source": "vault/references/gha-action-pin-catalog",
+      "target": "vault/concepts/notification-email"
+    },
+    {
       "source": "vault/references/gha-reusable-readme",
       "target": "vault/systems/gha-reusable-actions-workflows"
     },
@@ -1379,6 +1480,10 @@ AUTHORS: contributors
     {
       "source": "vault/systems/gha-reusable-actions-workflows",
       "target": "vault/concepts/github-actions"
+    },
+    {
+      "source": "vault/systems/gha-reusable-actions-workflows",
+      "target": "vault/concepts/notification-email"
     },
     {
       "source": "vault/systems/gha-reusable-actions-workflows",
@@ -1399,10 +1504,10 @@ AUTHORS: contributors
   ]
 }</script>
   <script id="lint-data" type="application/json">{
-  "generated": "2026-07-29T19:57:43Z",
+  "generated": "2026-08-17T15:43:07Z",
   "vault": "_okf_knowledge",
   "summary": {
-    "concepts": 25,
+    "concepts": 27,
     "errors": 0,
     "warnings": 0
   },

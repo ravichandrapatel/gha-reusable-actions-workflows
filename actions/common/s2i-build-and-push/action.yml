@@ -1,0 +1,205 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Binary S2I image from a pre-built artifact, then buildah push.
+# VERSION: 1.1.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: 'S2I Build and Push'
+description: 'Stage a pre-built artifact and build with Red Hat s2i, then retried buildah push'
+
+inputs:
+  builder_image:
+    description: 'S2I builder image (build-preprocess builder_base_image / BUILDER_BASE_IMAGE)'
+    required: true
+  artifact_path:
+    description: 'Pre-built artifact file or directory from a prior job (jar/war, dotnet publish dir)'
+    required: true
+  app_build_type:
+    description: 'maven, dotnet, or other. ng-ui is rejected (use docker-build-and-push)'
+    required: true
+  pull_policy:
+    description: 's2i builder image pull policy: always, if-not-present, or never'
+    required: false
+    default: 'if-not-present'
+  log_level:
+    description: 's2i log level 0-5'
+    required: false
+    default: '1'
+  registry:
+    description: 'Nexus registry host (image registry)'
+    required: true
+  organization:
+    description: 'Organization path segment'
+    required: true
+  application:
+    description: 'Application name from build-preprocess (image path and tag segment)'
+    required: true
+  project_version:
+    description: 'Snapshot/project version from build-preprocess'
+    required: true
+  application_version:
+    description: 'Application version from build-preprocess'
+    required: true
+  environment:
+    description: 'Path segment after organization'
+    required: false
+    default: 'production'
+  repo:
+    description: 'owner/repo or repo name; archetype is the last two hyphen parts. Empty uses GITHUB_REPOSITORY'
+    required: false
+    default: ''
+  branch:
+    description: 'Git branch; empty uses GITHUB_HEAD_REF then GITHUB_REF_NAME. Tag uses first 3 sanitized chars'
+    required: false
+    default: ''
+  sha:
+    description: 'Git SHA; empty uses GITHUB_SHA. Tag uses first 5 sanitized chars'
+    required: false
+    default: ''
+  build_number:
+    description: 'CI build number; empty uses GITHUB_RUN_NUMBER. Tag uses 5 characters, zero-padded'
+    required: false
+    default: ''
+  tls_verify:
+    description: 's2i/buildah --tls-verify true or false'
+    required: false
+    default: 'true'
+  max_attempts:
+    description: 'Retry attempts for buildah push'
+    required: false
+    default: '3'
+  retry_wait_seconds:
+    description: 'Seconds to wait between failed pushes'
+    required: false
+    default: '5'
+  timeout_seconds:
+    description: 'Per-attempt push timeout in seconds; 0 means no timeout'
+    required: false
+    default: '300'
+
+outputs:
+  tag:
+    description: 'Generated image tag'
+    value: ${{ steps.tag.outputs.tag }}
+  image:
+    description: 'Full registry/org/env/app:tag reference'
+    value: ${{ steps.tag.outputs.image }}
+  app_archetype:
+    description: 'Last two hyphen parts of the repo name (jsb-ui, ng-ui, dnc-svc)'
+    value: ${{ steps.tag.outputs.app_archetype }}
+  application_name:
+    description: 'Sanitized application name used in the tag'
+    value: ${{ steps.tag.outputs.application_name }}
+  project_version:
+    description: 'Snapshot/project version used in the tag'
+    value: ${{ steps.tag.outputs.project_version }}
+  application_version:
+    description: 'Application version used in the tag'
+    value: ${{ steps.tag.outputs.application_version }}
+  short_branch:
+    description: 'First 3 sanitized chars of the branch'
+    value: ${{ steps.tag.outputs.short_branch }}
+  short_sha:
+    description: 'First 5 sanitized chars of the git SHA'
+    value: ${{ steps.tag.outputs.short_sha }}
+  build_number:
+    description: '5-character build number used in the tag'
+    value: ${{ steps.tag.outputs.build_number }}
+  succeeded:
+    description: 'true when push exited 0'
+    value: ${{ steps.push.outputs.succeeded }}
+  source:
+    description: 'Staged S2I source directory passed to s2i build'
+    value: ${{ steps.prep.outputs.source }}
+
+runs:
+  using: composite
+  steps:
+    - name: Generate image tag
+      id: tag
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        REGISTRY: ${{ inputs.registry }}
+        ORGANIZATION: ${{ inputs.organization }}
+        APPLICATION: ${{ inputs.application }}
+        PROJECT_VERSION: ${{ inputs.project_version }}
+        APPLICATION_VERSION: ${{ inputs.application_version }}
+        ENVIRONMENT: ${{ inputs.environment }}
+        REPO: ${{ inputs.repo }}
+        BRANCH: ${{ inputs.branch }}
+        SHA: ${{ inputs.sha }}
+        BUILD_NUMBER: ${{ inputs.build_number }}
+      run: |
+        set -euo pipefail
+        ARGS=(
+          --registry "${REGISTRY}"
+          --organization "${ORGANIZATION}"
+          --application "${APPLICATION}"
+          --project-version "${PROJECT_VERSION}"
+          --application-version "${APPLICATION_VERSION}"
+          --environment "${ENVIRONMENT}"
+          --output "${GITHUB_OUTPUT}"
+        )
+        if [[ -n "${REPO}" ]]; then
+          ARGS+=(--repo "${REPO}")
+        fi
+        if [[ -n "${BRANCH}" ]]; then
+          ARGS+=(--branch "${BRANCH}")
+        fi
+        if [[ -n "${SHA}" ]]; then
+          ARGS+=(--sha "${SHA}")
+        fi
+        if [[ -n "${BUILD_NUMBER}" ]]; then
+          ARGS+=(--build-number "${BUILD_NUMBER}")
+        fi
+        bash "${ACTION_PATH}/tag.sh" "${ARGS[@]}"
+
+    - name: Stage S2I source
+      id: prep
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        ARTIFACT: ${{ inputs.artifact_path }}
+        APP_BUILD_TYPE: ${{ inputs.app_build_type }}
+      run: |
+        set -euo pipefail
+        bash "${ACTION_PATH}/prepare.sh" \
+          --artifact "${ARTIFACT}" \
+          --app-build-type "${APP_BUILD_TYPE}" \
+          --output "${GITHUB_OUTPUT}"
+
+    - name: s2i build
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        SOURCE: ${{ steps.prep.outputs.source }}
+        BUILDER_IMAGE: ${{ inputs.builder_image }}
+        IMAGE: ${{ steps.tag.outputs.image }}
+        TLS_VERIFY: ${{ inputs.tls_verify }}
+        PULL_POLICY: ${{ inputs.pull_policy }}
+        LOG_LEVEL: ${{ inputs.log_level }}
+      run: |
+        set -euo pipefail
+        bash "${ACTION_PATH}/s2i-build.sh" \
+          --source "${SOURCE}" \
+          --builder-image "${BUILDER_IMAGE}" \
+          --image "${IMAGE}" \
+          --tls-verify "${TLS_VERIFY}" \
+          --pull-policy "${PULL_POLICY}" \
+          --loglevel "${LOG_LEVEL}"
+
+    - name: buildah push
+      id: push
+      uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/retry@retry/v1.2.0
+      env:
+        IMAGE: ${{ steps.tag.outputs.image }}
+        TLS_VERIFY: ${{ inputs.tls_verify }}
+      with:
+        command: buildah push --tls-verify="${TLS_VERIFY}" "${IMAGE}" "docker://${IMAGE}"
+        max_attempts: ${{ inputs.max_attempts }}
+        retry_wait_seconds: ${{ inputs.retry_wait_seconds }}
+        timeout_seconds: ${{ inputs.timeout_seconds }}
+        retry_on: any
+        shell: bash

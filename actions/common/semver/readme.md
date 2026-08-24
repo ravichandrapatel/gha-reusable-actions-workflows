@@ -21,9 +21,10 @@ Derives the next **semantic version** from ticket-prefixed conventional commits 
 
 ## What it does
 
-- Resolves the last versioned tag as `{safe_name}-{current_version}`.
+- Resolves the last versioned tag as `{safe_name}/v{current_version}`.
 - Collects commits since that tag (or all commits if no tag exists).
 - Maps each commit subject through ticket strip + conventional keyword classification.
+- **Scope:** unscoped, `feat({safe_name})`, or any other scope (e.g. `feat(prbot)`) all count; keyword alone drives minor/patch.
 - Applies highest bump: **minor** beats **patch**; `docs`, `refactor`, `perf`, `test`, `style` do not bump.
 - Sets `next_version` to `1.0.0` when `current_version` is `0.0.0`.
 
@@ -56,7 +57,7 @@ Derives the next **semantic version** from ticket-prefixed conventional commits 
 ### Consumer repository
 
 ```yaml
-- uses: my-org/gha-reusable-actions-workflows/actions/common/semver@v1
+- uses: my-org/gha-reusable-actions-workflows/actions/common/semver@semver/v1
   with:
     current_version: "1.2.3"
     safe_name: "my-component"

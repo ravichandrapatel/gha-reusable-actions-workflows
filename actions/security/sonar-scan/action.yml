@@ -1,0 +1,216 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Generate sonar-project.properties, scan, tags, then quality gate.
+# VERSION: 1.2.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: 'Sonar Scan'
+description: 'Generate sonar-project.properties, official scan, tags, then quality gate'
+
+inputs:
+  sonar_token:
+    description: 'SonarQube token. Map from a secret; never print it'
+    required: true
+  sonar_host_url:
+    description: 'SonarQube server URL (for example https://sonar.example.com)'
+    required: true
+  project_key:
+    description: 'SonarQube project key'
+    required: true
+  organization:
+    description: 'Organization used in tag organizations-<value>'
+    required: true
+  product:
+    description: 'Product used in tag product-<value>'
+    required: true
+  platform:
+    description: 'Platform used in tag platform-<value>'
+    required: false
+    default: 'cap'
+  application_name:
+    description: 'Sonar projectName; defaults to project_key when empty'
+    required: false
+    default: ''
+  app_build_type:
+    description: 'maven, ng-ui, or dotnet. ng-ui writes JS/OWASP/lcov properties'
+    required: false
+    default: ''
+  pr_key:
+    description: 'Pull request key (sonar.pullrequest.key). Set with pr_branch and pr_base'
+    required: false
+    default: ''
+  pr_branch:
+    description: 'Pull request head branch (sonar.pullrequest.branch)'
+    required: false
+    default: ''
+  pr_base:
+    description: 'Pull request base branch (sonar.pullrequest.base)'
+    required: false
+    default: ''
+  args:
+    description: 'Extra sonar-scanner CLI arguments (for example -Dsonar.exclusions=...)'
+    required: false
+    default: ''
+  project_base_dir:
+    description: 'sonar.projectBaseDir passed to the official scan action'
+    required: false
+    default: '.'
+  scanner_version:
+    description: 'Sonar Scanner CLI version used by the official scan action'
+    required: false
+    default: '8.1.0.6389'
+  continue_on_error:
+    description: 'If true, a failed quality gate does not fail this action'
+    required: false
+    default: 'false'
+  polling_timeout_sec:
+    description: 'Seconds to poll for the quality gate status'
+    required: false
+    default: '300'
+
+outputs:
+  properties_path:
+    description: 'Path of the generated sonar-project.properties file'
+    value: ${{ steps.props.outputs.properties_path }}
+  properties:
+    description: 'Generated sonar-project.properties contents'
+    value: ${{ steps.props.outputs.properties }}
+  tags:
+    description: 'Comma-separated tags on the project after the merge'
+    value: ${{ steps.tags.outputs.tags }}
+  tags_added:
+    description: 'Comma-separated tags that were missing and written'
+    value: ${{ steps.tags.outputs.tags_added }}
+  tags_matched:
+    description: 'Comma-separated desired tags that already existed'
+    value: ${{ steps.tags.outputs.tags_matched }}
+  tags_updated:
+    description: 'true when at least one desired tag was written'
+    value: ${{ steps.tags.outputs.tags_updated }}
+  quality_gate_status:
+    description: 'Quality gate status: PASSED, WARN, or FAILED'
+    value: ${{ steps.gate.outputs.quality-gate-status }}
+
+runs:
+  using: composite
+  steps:
+    - name: Generate sonar-project.properties
+      id: props
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PROJECT_KEY: ${{ inputs.project_key }}
+        APPLICATION_NAME: ${{ inputs.application_name }}
+        APP_BUILD_TYPE: ${{ inputs.app_build_type }}
+        PR_KEY: ${{ inputs.pr_key }}
+        PR_BRANCH: ${{ inputs.pr_branch }}
+        PR_BASE: ${{ inputs.pr_base }}
+        PROJECT_BASE_DIR: ${{ inputs.project_base_dir }}
+        PYTHONUNBUFFERED: "1"
+      run: |
+        set -euo pipefail
+        python3 -u "${ACTION_PATH}/generate_properties.py" \
+          --project-key "${PROJECT_KEY}" \
+          --application-name "${APPLICATION_NAME}" \
+          --app-build-type "${APP_BUILD_TYPE}" \
+          --pr-key "${PR_KEY}" \
+          --pr-branch "${PR_BRANCH}" \
+          --pr-base "${PR_BASE}" \
+          --project-base-dir "${PROJECT_BASE_DIR}" \
+          --output "${GITHUB_OUTPUT}"
+
+    - name: Build scanner args
+      id: prep
+      shell: bash
+      env:
+        PROJECT_KEY: ${{ inputs.project_key }}
+        EXTRA_ARGS: ${{ inputs.args }}
+        APP_BUILD_TYPE: ${{ inputs.app_build_type }}
+        ORGANIZATION: ${{ inputs.organization }}
+        PRODUCT: ${{ inputs.product }}
+        PLATFORM: ${{ inputs.platform }}
+        SONAR_HOST_URL: ${{ inputs.sonar_host_url }}
+        SONAR_TOKEN: ${{ inputs.sonar_token }}
+        CONTINUE_ON_ERROR: ${{ inputs.continue_on_error }}
+        POLLING_TIMEOUT_SEC: ${{ inputs.polling_timeout_sec }}
+      run: |
+        set -euo pipefail
+        if [[ -z "${SONAR_TOKEN}" ]]; then
+          echo "ERROR: sonar_token is required" >&2
+          exit 1
+        fi
+        if [[ -z "${SONAR_HOST_URL}" ]]; then
+          echo "ERROR: sonar_host_url is required" >&2
+          exit 1
+        fi
+        if [[ ! "${PROJECT_KEY}" =~ ^[A-Za-z0-9_.:-]+$ ]]; then
+          echo "ERROR: project_key must match [A-Za-z0-9_.:-]+" >&2
+          exit 1
+        fi
+        if [[ -z "${ORGANIZATION}" || -z "${PRODUCT}" || -z "${PLATFORM}" ]]; then
+          echo "ERROR: organization, product, and platform are required" >&2
+          exit 1
+        fi
+        if [[ "${CONTINUE_ON_ERROR}" != "true" && "${CONTINUE_ON_ERROR}" != "false" ]]; then
+          echo "ERROR: continue_on_error must be true or false" >&2
+          exit 1
+        fi
+        if [[ ! "${POLLING_TIMEOUT_SEC}" =~ ^[0-9]+$ ]] || [[ "${POLLING_TIMEOUT_SEC}" -lt 1 ]]; then
+          echo "ERROR: polling_timeout_sec must be an integer >= 1" >&2
+          exit 1
+        fi
+        FILTERED_ARGS="${EXTRA_ARGS}"
+        if [[ "${APP_BUILD_TYPE}" == "ng-ui" && -n "${FILTERED_ARGS}" ]]; then
+          FILTERED_ARGS="$(printf '%s\n' "${FILTERED_ARGS}" | sed -E 's/[[:space:]]*-Dsonar\.inclusions=[^[:space:]]*//g')"
+          FILTERED_ARGS="${FILTERED_ARGS#"${FILTERED_ARGS%%[![:space:]]*}"}"
+          FILTERED_ARGS="${FILTERED_ARGS%"${FILTERED_ARGS##*[![:space:]]}"}"
+        fi
+        SCANNER_ARGS="-Dsonar.projectKey=${PROJECT_KEY}"
+        if [[ -n "${FILTERED_ARGS}" ]]; then
+          SCANNER_ARGS="${SCANNER_ARGS} ${FILTERED_ARGS}"
+        fi
+        echo "scanner_args=${SCANNER_ARGS}" >> "${GITHUB_OUTPUT}"
+
+    - name: SonarQube scan
+      uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
+      env:
+        SONAR_TOKEN: ${{ inputs.sonar_token }}
+        SONAR_HOST_URL: ${{ inputs.sonar_host_url }}
+      with:
+        args: ${{ steps.prep.outputs.scanner_args }}
+        projectBaseDir: ${{ inputs.project_base_dir }}
+        scannerVersion: ${{ inputs.scanner_version }}
+
+    - name: Ensure project tags
+      id: tags
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        SONAR_HOST_URL: ${{ inputs.sonar_host_url }}
+        SONAR_TOKEN: ${{ inputs.sonar_token }}
+        PROJECT_KEY: ${{ inputs.project_key }}
+        ORGANIZATION: ${{ inputs.organization }}
+        PRODUCT: ${{ inputs.product }}
+        PLATFORM: ${{ inputs.platform }}
+        PYTHONUNBUFFERED: "1"
+      run: |
+        set -euo pipefail
+        python3 -u "${ACTION_PATH}/ensure_tags.py" \
+          --host-url "${SONAR_HOST_URL}" \
+          --token "${SONAR_TOKEN}" \
+          --project-key "${PROJECT_KEY}" \
+          --organization "${ORGANIZATION}" \
+          --product "${PRODUCT}" \
+          --platform "${PLATFORM}" \
+          --output "${GITHUB_OUTPUT}"
+
+    - name: SonarQube quality gate
+      id: gate
+      continue-on-error: ${{ inputs.continue_on_error == 'true' }}
+      uses: SonarSource/sonarqube-quality-gate-action@7a5fffe8e523c40e0c740b6bc2712ab503e52efa # v1.2.1
+      env:
+        SONAR_TOKEN: ${{ inputs.sonar_token }}
+        SONAR_HOST_URL: ${{ inputs.sonar_host_url }}
+      with:
+        pollingTimeoutSec: ${{ inputs.polling_timeout_sec }}

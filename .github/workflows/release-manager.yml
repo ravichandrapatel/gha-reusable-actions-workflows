@@ -1,8 +1,8 @@
 # =============================================================================
 # FILE_NAME: release-manager.yml
-# DESCRIPTION: Release, Promote, and Rollback manager for actions and workflows.
+# DESCRIPTION: Release, Promote, Rollback, and combined release-promote manager for actions and workflows.
 # ALIGNMENT: OWASP SPVS (Secure Pipeline Verification Standard) 1.0
-# VERSION: 1.8.1
+# VERSION: 1.11.0
 # EXIT_CODES/SIGNALS: 0 on success, 1 on failure.
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -21,16 +21,18 @@ on:
         required: true
         type: choice
         options:
-          - release   # Create versioned tag (name-X.Y.Z) on main
-          - promote   # Update stable tag (name-v1) to version
-          - rollback  # Revert stable tag (name-v1) to previous version
+          - release           # Create versioned tag (name/vX.Y.Z) on main
+          - release-promote   # Release then update stable tag (name/v1) in one run
+          - promote           # Update stable tag (name/v1) to version
+          - rollback          # Revert stable tag (name/v1) to previous version
       version:
-        description: 'Optional. Release: auto-derived if empty. Promote/rollback: defaults to latest versioned tag if empty (pass explicitly to target a specific X.Y.Z).'
+        description: 'Optional. Release / release-promote: auto-derived if empty. Promote/rollback: defaults to latest versioned tag if empty (pass explicitly to target a specific X.Y.Z).'
         required: false
         type: string
 
+# Workflows share one group (sync + push to main). Actions run in parallel per path.
 concurrency:
-  group: release-${{ github.event.inputs.component_path }}
+  group: ${{ startsWith(github.event.inputs.component_path, 'workflows/') && 'release-manager-workflow' || format('release-manager-action-{0}', github.event.inputs.component_path) }}
   cancel-in-progress: false
 
 permissions:
@@ -54,7 +56,7 @@ jobs:
       workflow_file: ${{ steps.validate_init.outputs.workflow_file }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -122,14 +124,16 @@ jobs:
             WORKFLOW_FILE_OUTPUT="$WF_FILE"
           fi
 
-          # Get current version for semver action
+          # Get current version for semver action (versioned tags only: name/vX.Y.Z, not name/v1)
           echo "[DBG-003] Fetching latest tag for $SAFE_NAME"
-          LATEST_TAG=$(git tag -l "${SAFE_NAME}-[0-9]*" | sort -V | tail -n1 || true)
+          VERSIONED_TAG_GLOB="${SAFE_NAME}/v*.*.*"
+          TAG_PREFIX="${SAFE_NAME}/v"
+          LATEST_TAG=$(git tag -l "${VERSIONED_TAG_GLOB}" | sort -V | tail -n1 || true)
           if [[ -z "$LATEST_TAG" ]]; then
             CURRENT_VER="0.0.0"
             echo "[DBG-004] No existing tags found, starting from 0.0.0"
           else
-            CURRENT_VER="${LATEST_TAG#"${SAFE_NAME}"-}"
+            CURRENT_VER="${LATEST_TAG#"${TAG_PREFIX}"}"
             echo "[DBG-004] Latest tag found: $LATEST_TAG (version: $CURRENT_VER)"
           fi
 
@@ -142,7 +146,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Calculate Next Version
-        if: github.event.inputs.mode == 'release' && github.event.inputs.version == ''
+        if: (github.event.inputs.mode == 'release' || github.event.inputs.mode == 'release-promote') && github.event.inputs.version == ''
         id: semver
         uses: ./actions/common/semver
         with:
@@ -162,8 +166,10 @@ jobs:
         run: |
           set -euo pipefail
           echo "[DBG-005] Finalizing validation for mode: $MODE"
+          VERSIONED_TAG_GLOB="${SAFE_NAME}/v*.*.*"
+          TAG_PREFIX="${SAFE_NAME}/v"
           
-          if [[ "$MODE" == "release" ]]; then
+          if [[ "$MODE" == "release" || "$MODE" == "release-promote" ]]; then
             if [[ -n "$VERSION_INPUT" ]]; then
               VERSION="$VERSION_INPUT"
               echo "[DBG-006] Using provided version: $VERSION"
@@ -173,7 +179,7 @@ jobs:
             fi
             
             # [T-03] Checking for tag collision (Artifact Integrity)
-            TAG_NAME="${SAFE_NAME}-${VERSION}"
+            TAG_NAME="${TAG_PREFIX}${VERSION}"
             echo "[DBG-007] Checking for tag collision: $TAG_NAME"
             if git rev-parse "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
               echo "[ERR-T-03] Tag $TAG_NAME already exists. Collision detected." >&2
@@ -187,17 +193,17 @@ jobs:
             else
               # Default to latest versioned tag
               echo "[DBG-009] No version provided, looking for latest versioned tag"
-              LATEST_TAG=$(git tag -l "${SAFE_NAME}-[0-9]*" | sort -V | tail -n1 || true)
+              LATEST_TAG=$(git tag -l "${VERSIONED_TAG_GLOB}" | sort -V | tail -n1 || true)
               if [[ -z "$LATEST_TAG" ]]; then
                 echo "[ERR-T-04] No versioned tags found for $SAFE_NAME. Cannot $MODE." >&2
                 exit 1
               fi
-              VERSION="${LATEST_TAG#"${SAFE_NAME}"-}"
+              VERSION="${LATEST_TAG#"${TAG_PREFIX}"}"
               echo "[DBG-010] Using latest version: $VERSION"
             fi
             
             # Verify tag exists for promote/rollback
-            TAG_NAME="${SAFE_NAME}-${VERSION}"
+            TAG_NAME="${TAG_PREFIX}${VERSION}"
             echo "[DBG-011] Verifying tag exists for $MODE: $TAG_NAME"
             if ! git rev-parse "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
               echo "[ERR-T-05] Tag $TAG_NAME does not exist. Cannot $MODE." >&2
@@ -215,16 +221,16 @@ jobs:
   security:
     name: Security Scans
     needs: validate
-    if: github.event.inputs.mode == 'release'
+    if: github.event.inputs.mode == 'release' || github.event.inputs.mode == 'release-promote'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
@@ -375,7 +381,7 @@ jobs:
     if: always() && needs.validate.result == 'success' && (needs.security.result == 'success' || needs.security.result == 'skipped')
     runs-on: ubuntu-latest
     environment:
-      name: ${{ github.event.inputs.mode == 'release' && 'sandbox' || 'production' }}
+      name: ${{ github.event.inputs.mode == 'release' && 'sandbox' || 'production' }} # release-promote uses production (mutates stable /v1)
     permissions:
       contents: write
     steps:
@@ -387,7 +393,7 @@ jobs:
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ steps.generate_token.outputs.token }}
           fetch-depth: 0
@@ -416,16 +422,30 @@ jobs:
           set -euo pipefail
           echo "[DBG-030] Starting execution for mode: $MODE"
           
-          # Stable tag is always v1 with component prefix as per user request
-          STABLE_TAG="${SAFE_NAME}-v1"
-          VERSION_TAG="${SAFE_NAME}-${VERSION}"
+          # Stable tag is always /v1; versioned tags are /vX.Y.Z
+          STABLE_TAG="${SAFE_NAME}/v1"
+          VERSION_TAG="${SAFE_NAME}/v${VERSION}"
+          VERSIONED_TAG_GLOB="${SAFE_NAME}/v*.*.*"
 
           sync_main_with_retry() {
             # Reduce race with concurrent merges on main before push
             git pull --rebase origin main
           }
 
-          if [[ "$MODE" == "release" ]]; then
+          # Annotated /v1 MUST point at a commit. Pointing at /vX.Y.Z (nested tag)
+          # works on GitHub Actions but act fails: "unsupported object type".
+          assert_stable_tag_is_commit() {
+            local tag="$1"
+            local inner
+            inner="$(git cat-file -p "refs/tags/${tag}" | awk '/^type / { print $2; exit }')"
+            if [[ "${inner}" != "commit" ]]; then
+              echo "[ERR-T-11] ${tag} points at '${inner:-unknown}', not commit. Nested tags break act (@v1 fails, @vX.Y.Z works)." >&2
+              exit 1
+            fi
+            echo "[DBG-033c] ${tag} -> commit $(git rev-parse "${tag}^{commit}")"
+          }
+
+          if [[ "$MODE" == "release" || "$MODE" == "release-promote" ]]; then
             if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
               # [T-12] Syncing workflow to .github/workflows/ (Do this in release so tag includes it)
               SRC_WF="$COMPONENT_PATH/$WF_FILE"
@@ -449,14 +469,20 @@ jobs:
             git tag -a "$VERSION_TAG" -m "Release $VERSION_TAG"
             git push origin "$VERSION_TAG"
             echo "[DBG-032] Successfully pushed versioned tag"
-            
-          elif [[ "$MODE" == "promote" ]]; then
+          fi
+
+          if [[ "$MODE" == "promote" || "$MODE" == "release-promote" ]]; then
             echo "[DBG-033] Starting promotion of $VERSION_TAG to $STABLE_TAG"
             
-            # [T-11] Promoting to stable tag: "$STABLE_TAG" (Point to versioned tag commit)
-            echo "[DBG-033a] Updating stable tag $STABLE_TAG to point to $VERSION_TAG"
+            # [T-11] Promoting to stable tag: "$STABLE_TAG"
+            # MUST peel annotated versioned tags to a commit. Tagging $VERSION_TAG
+            # nests v1 → vX.Y.Z (tag object); GitHub peels it, act does not
+            # ("unsupported object type").
+            echo "[DBG-033a] Updating stable tag $STABLE_TAG to commit of $VERSION_TAG"
             git tag -d "$STABLE_TAG" || true
-            git tag -a "$STABLE_TAG" "$VERSION_TAG" -m "Promote to $VERSION_TAG"
+            TARGET_COMMIT="$(git rev-parse "${VERSION_TAG}^{commit}")"
+            git tag -a "$STABLE_TAG" "$TARGET_COMMIT" -m "Promote to $VERSION_TAG"
+            assert_stable_tag_is_commit "$STABLE_TAG"
             
             # [T-11b] Push tag without --force by deleting remote first
             echo "[DBG-033b] Pushing stable tag to remote"
@@ -467,7 +493,7 @@ jobs:
           elif [[ "$MODE" == "rollback" ]]; then
             echo "[DBG-038] Starting rollback for $STABLE_TAG"
             # Previous versioned tag via sorted list index (not grep -B1)
-            mapfile -t VERSION_TAGS < <(git tag -l "${SAFE_NAME}-[0-9]*" | sort -V)
+            mapfile -t VERSION_TAGS < <(git tag -l "${VERSIONED_TAG_GLOB}" | sort -V)
             PREV_TAG=""
             for i in "${!VERSION_TAGS[@]}"; do
               if [[ "${VERSION_TAGS[$i]}" == "$VERSION_TAG" ]]; then
@@ -501,10 +527,12 @@ jobs:
               echo "[DBG-043] Successfully restored workflow file to main"
             fi
 
-            # [T-13] Rolling back stable tag: "$STABLE_TAG" (Point to previous versioned tag)
-            echo "[DBG-040] Updating stable tag $STABLE_TAG to point to $PREV_TAG"
+            # [T-13] Rolling back stable tag: "$STABLE_TAG" (commit of previous versioned tag)
+            echo "[DBG-040] Updating stable tag $STABLE_TAG to commit of $PREV_TAG"
             git tag -d "$STABLE_TAG" || true
-            git tag -a "$STABLE_TAG" "$PREV_TAG" -m "Rollback to $PREV_TAG"
+            TARGET_COMMIT="$(git rev-parse "${PREV_TAG}^{commit}")"
+            git tag -a "$STABLE_TAG" "$TARGET_COMMIT" -m "Rollback to $PREV_TAG"
+            assert_stable_tag_is_commit "$STABLE_TAG"
             
             # Push tag without --force
             git push origin :refs/tags/"$STABLE_TAG" || true
@@ -518,6 +546,7 @@ jobs:
           COMPONENT_PATH: ${{ github.event.inputs.component_path }}
           MODE: ${{ github.event.inputs.mode }}
           VERSION: ${{ needs.validate.outputs.version }}
+          SAFE_NAME: ${{ needs.validate.outputs.safe_name }}
           VALIDATE_RESULT: ${{ needs.validate.result }}
           SECURITY_RESULT: ${{ needs.security.result }}
           EXECUTE_RESULT: ${{ steps.execute_step.outcome }}
@@ -538,6 +567,8 @@ jobs:
             echo "- **Component:** \`$COMPONENT_PATH\`"
             echo "- **Mode:** \`$MODE\`"
             echo "- **Version:** \`$VERSION\`"
+            echo "- **Versioned tag:** \`${SAFE_NAME}/v${VERSION}\`"
+            echo "- **Stable tag:** \`${SAFE_NAME}/v1\`"
           } >> "$GITHUB_STEP_SUMMARY"
           
           echo "[DBG-045] Summary generation completed"

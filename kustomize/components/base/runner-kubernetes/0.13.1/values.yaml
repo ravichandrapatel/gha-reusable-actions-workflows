@@ -1,0 +1,40 @@
+# Helm values: gha-runner-scale-set 0.13.1 with containerMode.type=kubernetes.
+# storageClassName omitted so the cluster default StorageClass is used (kind: standard, ROSA: gp3-csi).
+githubConfigUrl: "https://github.com/ravichandrapatel/gha-reusable-actions-workflows"
+githubConfigSecret: github-config
+runnerGroup: default
+minRunners: 0
+maxRunners: 2
+
+containerMode:
+  type: kubernetes
+  kubernetesModeWorkVolumeClaim:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1Gi
+
+# controllerServiceAccount.namespace is a helm-time stub; overlay `namespace:`
+# replacements rewrite the rendered manager RoleBinding subject.
+controllerServiceAccount:
+  name: gha-runner-scale-set-controller-gha-rs-controller
+  namespace: CHANGE_ME
+
+template:
+  spec:
+    # ROSA/OpenShift SCC github-arc (uid 1001, gid 123). Uncomment on ROSA.
+    # securityContext:
+    #   fsGroup: 123
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["/home/runner/run.sh"]
+        # securityContext:
+        #   allowPrivilegeEscalation: false
+        #   capabilities:
+        #     drop:
+        #       - ALL
+        #   runAsNonRoot: true
+        #   runAsUser: 1001
+        #   runAsGroup: 123

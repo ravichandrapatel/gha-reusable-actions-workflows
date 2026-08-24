@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: test_commit_message_lib.sh
 # DESCRIPTION: Unit tests for commit_message_lib.sh validation and semver mapping.
-# VERSION: 1.2.0
+# VERSION: 1.3.0
 # EXIT_CODES/SIGNALS: 0 pass, 1 assertion failure
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -31,11 +31,12 @@ assert_invalid() {
 assert_bump() {
   local subject="$1"
   local expected="$2"
+  local component_scope="${3:-}"
   local body bump
   body="$(commit_msg_strip_ticket_prefix "${subject}")"
-  bump="$(commit_msg_classify_semver_bump "${body}")"
+  bump="$(commit_msg_classify_semver_bump "${body}" "${component_scope}")"
   if [[ "${bump}" != "${expected}" ]]; then
-    echo "FAIL bump for '${subject}': expected ${expected}, got ${bump}" >&2
+    echo "FAIL bump for '${subject}' scope='${component_scope}': expected ${expected}, got ${bump}" >&2
     exit 1
   fi
 }
@@ -90,5 +91,18 @@ assert_bump "DCDT-1002: feat(release) new capability" "minor"
 assert_bump "DCDT-1003: fix() bug fix" "patch"
 assert_bump "DCDT-1004 feat(): new capability" "minor"
 assert_bump "SCTASK55: chore() maintenance" "patch"
+
+# Hybrid component examples (any scope still bumps; keyword drives class)
+assert_bump "DCDT-12 feat: send smtp" "minor" "notification-email"
+assert_bump "DCDT-12: feat(notification-email) send smtp" "minor" "notification-email"
+assert_bump "DCDT-12 feat(notification-email): send smtp" "minor" "notification-email"
+assert_bump "DCDT-12 fix(notification-email): recipients" "patch" "notification-email"
+assert_bump "DCDT-12 chore(notification-email): deps" "patch" "notification-email"
+assert_bump "DCDT-12 feat(): send smtp" "minor" "notification-email"
+assert_bump "DCDT-12 feat(prbot): other component" "minor" "notification-email"
+assert_bump "DCDT-12 fix(semver): unrelated" "patch" "notification-email"
+assert_bump "DCDT-12 docs(notification-email): readme" "skip" "notification-email"
+assert_bump "DCDT-12 docs(prbot): readme" "skip" "notification-email"
+assert_bump "DCDT-12 feat(prbot): ship bot" "minor" "prbot"
 
 echo "All commit_message_lib tests passed"

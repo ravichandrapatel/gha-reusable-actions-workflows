@@ -1,0 +1,19 @@
+# Local act caller — not a published GitHub workflow.
+# Exercises the tagged consumer path:
+#   @{safe_name}/v1  on the live file .github/workflows/ng-ui-build-pipeline.yml
+# Sync first: ./act-platform/sync-workflows-for-act.sh workflows/programming/ng-ui-build-pipeline
+name: act-tagged-ng-ui-build-pipeline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    uses: ravichandrapatel/gha-reusable-actions-workflows/.github/workflows/ng-ui-build-pipeline.yml@ng-ui-build-pipeline/v1
+    with:
+      sonar_host_url: https://sonar.example.invalid
+      runner: ubuntu-latest
+    secrets: inherit

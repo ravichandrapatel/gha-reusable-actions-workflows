@@ -250,6 +250,59 @@
       "pack_force_when": []
     },
     {
+      "id": "standards/python-cli-args",
+      "path": "standards/python-cli-args.md",
+      "title": "Python CLI Args",
+      "description": "House Python scripts MUST use argparse so they run standalone outside GitHub Actions.",
+      "tags": [
+        "standard",
+        "python",
+        "argparse",
+        "gha",
+        "cli"
+      ],
+      "type": "Concept",
+      "id_norm": "standards python cli args",
+      "title_norm": "python cli args",
+      "desc_norm": "house python scripts must use argparse so they run standalone outside github actions.",
+      "tags_norm": "standard python argparse gha cli",
+      "type_norm": "concept",
+      "tokens": [
+        "action",
+        "actions",
+        "argparse",
+        "args",
+        "check",
+        "cli",
+        "composite",
+        "concept",
+        "gha",
+        "git",
+        "house",
+        "hub",
+        "inventory",
+        "must",
+        "outside",
+        "python",
+        "run",
+        "script",
+        "scripts",
+        "so",
+        "standalone",
+        "standard",
+        "standards",
+        "they",
+        "use"
+      ],
+      "pack_force_when": [
+        "python",
+        "argparse",
+        "checkInventory",
+        "composite action",
+        "standalone script"
+      ]
+    },
+    {
       "id": "standards/simplicity-first",
       "path": "standards/simplicity-first.md",
       "title": "Simplicity First (Laziness Ladder)",
@@ -587,10 +640,68 @@
       "pack_force_when": []
     },
     {
+      "id": "vault/concepts/notification-email",
+      "path": "vault/concepts/notification-email.md",
+      "title": "Notification Email composite",
+      "description": "House composite that fans out SMTP mail to GitHub team members with build artifacts and pipeline-logs.zip.",
+      "tags": [
+        "github-actions",
+        "notification",
+        "email",
+        "smtp",
+        "teams",
+        "artifacts"
+      ],
+      "type": "Concept",
+      "id_norm": "vault concepts notification email",
+      "title_norm": "notification email composite",
+      "desc_norm": "house composite that fans out smtp mail to github team members with build artifacts and pipeline-logs.zip.",
+      "tags_norm": "github-actions notification email smtp teams artifacts",
+      "type_norm": "concept",
+      "tokens": [
+        "actions",
+        "and",
+        "artifacts",
+        "build",
+        "composite",
+        "concept",
+        "concepts",
+        "email",
+        "fans",
+        "git",
+        "github",
+        "house",
+        "hub",
+        "logs",
+        "mail",
+        "members",
+        "notification",
+        "notify",
+        "out",
+        "pipeline",
+        "smtp",
+        "team",
+        "teams",
+        "that",
+        "to",
+        "vault",
+        "with",
+        "zip"
+      ],
+      "pack_force_when": [
+        "notification-email",
+        "smtp",
+        "notify",
+        "email notification",
+        "pipeline-logs",
+        "team members"
+      ]
+    },
+    {
       "id": "vault/concepts/release-manager-modes",
       "path": "vault/concepts/release-manager-modes.md",
       "title": "Release Manager Modes",
-      "description": "release, promote, and rollback semantics for the gha-reusable-actions-workflows Release Manager.",
+      "description": "release, release-promote, promote, and rollback semantics for the gha-reusable-actions-workflows Release Manager.",
       "tags": [
         "github-actions",
         "release-manager",
@@ -599,7 +710,7 @@
       "type": "Concept",
       "id_norm": "vault concepts release manager modes",
       "title_norm": "release manager modes",
-      "desc_norm": "release, promote, and rollback semantics for the gha-reusable-actions-workflows release manager.",
+      "desc_norm": "release, release-promote, promote, and rollback semantics for the gha-reusable-actions-workflows release manager.",
       "tags_norm": "github-actions release-manager concepts",
       "type_norm": "concept",
       "tokens": [
@@ -829,7 +940,7 @@
       "id": "vault/playbooks/release-gha-component",
       "path": "vault/playbooks/release-gha-component.md",
       "title": "Release GHA Component",
-      "description": "Run Release Manager mode release/promote/rollback for a monorepo component.",
+      "description": "Run Release Manager mode release/release-promote/promote/rollback for a monorepo component.",
       "tags": [
         "github-actions",
         "playbook",
@@ -838,7 +949,7 @@
       "type": "Playbook",
       "id_norm": "vault playbooks release gha component",
       "title_norm": "release gha component",
-      "desc_norm": "run release manager mode release/promote/rollback for a monorepo component.",
+      "desc_norm": "run release manager mode release/release-promote/promote/rollback for a monorepo component.",
       "tags_norm": "github-actions playbook release",
       "type_norm": "playbook",
       "tokens": [
@@ -923,6 +1034,7 @@
       "tokens": [
         "action",
         "actions",
+        "app",
         "artifact",
         "artifacts",
         "cache",
@@ -931,22 +1043,29 @@
         "checkout",
         "ci",
         "common",
+        "create",
         "docker",
         "download",
         "for",
         "gha",
         "github",
         "in",
+        "java",
         "marketplace",
+        "node",
         "observed",
         "pin",
         "pins",
         "pipeline",
+        "python",
         "reference",
         "references",
+        "setup",
         "sha",
         "sonarqube",
         "spvs",
+        "terraform",
+        "token",
         "upload",
         "used",
         "vault",
@@ -962,7 +1081,12 @@
         "workflow_call",
         "ci-pipeline",
         "sonarqube",
-        "docker"
+        "docker",
+        "setup-python",
+        "setup-java",
+        "setup-node",
+        "setup-terraform",
+        "create-github-app-token"
       ]
     },
     {
@@ -1089,10 +1213,12 @@
       "standards/gha-commit-subjects",
       "standards/gha-component-layout",
       "standards/gha-spvs-yaml",
+      "standards/python-cli-args",
       "vault/concepts/component-tagging",
       "vault/concepts/gha-ci-pipeline-recipe",
       "vault/concepts/gha-yaml-anchors",
       "vault/concepts/github-actions",
+      "vault/concepts/notification-email",
       "vault/concepts/release-manager-modes",
       "vault/concepts/semver-from-commits",
       "vault/concepts/spvs-lifecycle",
@@ -1115,6 +1241,7 @@
       "vault/concepts/extending-aegis",
       "vault/concepts/gha-yaml-anchors",
       "vault/concepts/github-actions",
+      "vault/concepts/notification-email",
       "vault/concepts/release-manager-modes",
       "vault/playbooks/author-gha-composite-action",
       "vault/playbooks/bootstrap-spvs-dev-environment",
@@ -1139,6 +1266,7 @@
       "standards/metadata-headers",
       "standards/okf-house-schema",
       "standards/okf-prompt-injection",
+      "standards/python-cli-args",
       "standards/simplicity-first",
       "vault/concepts/aegis-capability-discovery",
       "vault/concepts/component-tagging",
@@ -1146,6 +1274,7 @@
       "vault/concepts/gha-ci-pipeline-recipe",
       "vault/concepts/gha-yaml-anchors",
       "vault/concepts/github-actions",
+      "vault/concepts/notification-email",
       "vault/concepts/release-manager-modes",
       "vault/concepts/semver-from-commits",
       "vault/concepts/spvs-lifecycle"
@@ -1176,6 +1305,7 @@
       "standards/gha-commit-subjects",
       "standards/gha-component-layout",
       "standards/gha-spvs-yaml",
+      "standards/python-cli-args",
       "vault/concepts/component-tagging",
       "vault/concepts/gha-ci-pipeline-recipe",
       "vault/concepts/gha-yaml-anchors",
@@ -1197,6 +1327,7 @@
       "vault/concepts/gha-ci-pipeline-recipe",
       "vault/concepts/gha-yaml-anchors",
       "vault/concepts/github-actions",
+      "vault/concepts/notification-email",
       "vault/concepts/release-manager-modes",
       "vault/concepts/semver-from-commits",
       "vault/concepts/spvs-lifecycle",
@@ -1237,6 +1368,7 @@
       "standards/metadata-headers",
       "standards/okf-house-schema",
       "standards/okf-prompt-injection",
+      "standards/python-cli-args",
       "standards/simplicity-first"
     ],
     "standards": [
@@ -1246,6 +1378,7 @@
       "standards/metadata-headers",
       "standards/okf-house-schema",
       "standards/okf-prompt-injection",
+      "standards/python-cli-args",
       "standards/simplicity-first"
     ],
     "subjects": [
@@ -1268,7 +1401,9 @@
     "composite": [
       "standards/gha-component-layout",
       "standards/gha-spvs-yaml",
+      "standards/python-cli-args",
       "vault/concepts/github-actions",
+      "vault/concepts/notification-email",
       "vault/playbooks/author-gha-composite-action"
     ],
     "contract": [
@@ -1321,6 +1456,7 @@
     ],
     "action": [
       "standards/gha-spvs-yaml",
+      "standards/python-cli-args",
       "vault/concepts/gha-ci-pipeline-recipe",
       "vault/playbooks/author-gha-composite-action",
       "vault/references/gha-action-pin-catalog"
@@ -1340,7 +1476,8 @@
       "standards/gha-spvs-yaml"
     ],
     "must": [
-      "standards/gha-spvs-yaml"
+      "standards/gha-spvs-yaml",
+      "standards/python-cli-args"
     ],
     "no": [
       "standards/gha-spvs-yaml",
@@ -1405,7 +1542,9 @@
     "house": [
       "standards/metadata-headers",
       "standards/okf-house-schema",
-      "vault/concepts/gha-ci-pipeline-recipe"
+      "standards/python-cli-args",
+      "vault/concepts/gha-ci-pipeline-recipe",
+      "vault/concepts/notification-email"
     ],
     "kernel": [
       "standards/metadata-headers",
@@ -1427,13 +1566,16 @@
     ],
     "python": [
       "standards/metadata-headers",
-      "vault/concepts/aegis-capability-discovery"
+      "standards/python-cli-args",
+      "vault/concepts/aegis-capability-discovery",
+      "vault/references/gha-action-pin-catalog"
     ],
     "quality": [
       "standards/metadata-headers"
     ],
     "scripts": [
-      "standards/metadata-headers"
+      "standards/metadata-headers",
+      "standards/python-cli-args"
     ],
     "aegis": [
       "standards/okf-house-schema",
@@ -1520,6 +1662,62 @@
     "write": [
       "standards/okf-prompt-injection"
     ],
+    "argparse": [
+      "standards/python-cli-args"
+    ],
+    "args": [
+      "standards/python-cli-args"
+    ],
+    "check": [
+      "standards/python-cli-args",
+      "vault/concepts/spvs-lifecycle"
+    ],
+    "cli": [
+      "standards/python-cli-args"
+    ],
+    "git": [
+      "standards/python-cli-args",
+      "vault/concepts/aegis-capability-discovery",
+      "vault/concepts/gha-yaml-anchors",
+      "vault/concepts/github-actions",
+      "vault/concepts/notification-email",
+      "vault/references/github-actions/workflow-syntax",
+      "vault/systems/gha-reusable-actions-workflows"
+    ],
+    "hub": [
+      "standards/python-cli-args",
+      "vault/concepts/gha-yaml-anchors",
+      "vault/concepts/github-actions",
+      "vault/concepts/notification-email",
+      "vault/references/github-actions/workflow-syntax",
+      "vault/systems/gha-reusable-actions-workflows"
+    ],
+    "inventory": [
+      "standards/python-cli-args"
+    ],
+    "outside": [
+      "standards/python-cli-args"
+    ],
+    "run": [
+      "standards/python-cli-args",
+      "vault/playbooks/release-gha-component",
+      "vault/playbooks/run-gha-local-policy-tests"
+    ],
+    "script": [
+      "standards/python-cli-args"
+    ],
+    "so": [
+      "standards/python-cli-args"
+    ],
+    "standalone": [
+      "standards/python-cli-args"
+    ],
+    "they": [
+      "standards/python-cli-args"
+    ],
+    "use": [
+      "standards/python-cli-args"
+    ],
     "before": [
       "standards/simplicity-first",
       "vault/concepts/aegis-capability-discovery"
@@ -1559,7 +1757,8 @@
       "standards/simplicity-first"
     ],
     "that": [
-      "standards/simplicity-first"
+      "standards/simplicity-first",
+      "vault/concepts/notification-email"
     ],
     "tooling": [
       "standards/simplicity-first"
@@ -1590,6 +1789,7 @@
       "vault/concepts/gha-ci-pipeline-recipe",
       "vault/concepts/gha-yaml-anchors",
       "vault/concepts/github-actions",
+      "vault/concepts/notification-email",
       "vault/concepts/release-manager-modes",
       "vault/concepts/semver-from-commits",
       "vault/concepts/spvs-lifecycle"
@@ -1602,13 +1802,6 @@
     ],
     "fs": [
       "vault/concepts/aegis-capability-discovery"
-    ],
-    "git": [
-      "vault/concepts/aegis-capability-discovery",
-      "vault/concepts/gha-yaml-anchors",
-      "vault/concepts/github-actions",
-      "vault/references/github-actions/workflow-syntax",
-      "vault/systems/gha-reusable-actions-workflows"
     ],
     "lint": [
       "vault/concepts/aegis-capability-discovery",
@@ -1653,6 +1846,7 @@
       "vault/concepts/gha-ci-pipeline-recipe",
       "vault/concepts/gha-yaml-anchors",
       "vault/concepts/github-actions",
+      "vault/concepts/notification-email",
       "vault/concepts/release-manager-modes",
       "vault/concepts/semver-from-commits",
       "vault/concepts/spvs-lifecycle",
@@ -1757,6 +1951,7 @@
     ],
     "to": [
       "vault/concepts/extending-aegis",
+      "vault/concepts/notification-email",
       "vault/concepts/semver-from-commits",
       "vault/references/gha-reusable-readme"
     ],
@@ -1769,6 +1964,7 @@
     ],
     "artifacts": [
       "vault/concepts/gha-ci-pipeline-recipe",
+      "vault/concepts/notification-email",
       "vault/references/gha-action-pin-catalog"
     ],
     "as": [
@@ -1800,6 +1996,7 @@
     ],
     "pipeline": [
       "vault/concepts/gha-ci-pipeline-recipe",
+      "vault/concepts/notification-email",
       "vault/references/gha-action-pin-catalog"
     ],
     "real": [
@@ -1834,12 +2031,6 @@
     "env": [
       "vault/concepts/gha-yaml-anchors"
     ],
-    "hub": [
-      "vault/concepts/gha-yaml-anchors",
-      "vault/concepts/github-actions",
-      "vault/references/github-actions/workflow-syntax",
-      "vault/systems/gha-reusable-actions-workflows"
-    ],
     "inside": [
       "vault/concepts/gha-yaml-anchors"
     ],
@@ -1863,7 +2054,8 @@
       "vault/concepts/gha-yaml-anchors"
     ],
     "with": [
-      "vault/concepts/gha-yaml-anchors"
+      "vault/concepts/gha-yaml-anchors",
+      "vault/concepts/notification-email"
     ],
     "manager": [
       "vault/concepts/github-actions",
@@ -1873,6 +2065,45 @@
     ],
     "routing": [
       "vault/concepts/github-actions"
+    ],
+    "build": [
+      "vault/concepts/notification-email"
+    ],
+    "email": [
+      "vault/concepts/notification-email"
+    ],
+    "fans": [
+      "vault/concepts/notification-email"
+    ],
+    "logs": [
+      "vault/concepts/notification-email"
+    ],
+    "mail": [
+      "vault/concepts/notification-email"
+    ],
+    "members": [
+      "vault/concepts/notification-email"
+    ],
+    "notification": [
+      "vault/concepts/notification-email"
+    ],
+    "notify": [
+      "vault/concepts/notification-email"
+    ],
+    "out": [
+      "vault/concepts/notification-email"
+    ],
+    "smtp": [
+      "vault/concepts/notification-email"
+    ],
+    "team": [
+      "vault/concepts/notification-email"
+    ],
+    "teams": [
+      "vault/concepts/notification-email"
+    ],
+    "zip": [
+      "vault/concepts/notification-email"
     ],
     "modes": [
       "vault/concepts/release-manager-modes"
@@ -1896,9 +2127,6 @@
     ],
     "tags": [
       "vault/concepts/semver-from-commits"
-    ],
-    "check": [
-      "vault/concepts/spvs-lifecycle"
     ],
     "constraints": [
       "vault/concepts/spvs-lifecycle"
@@ -2013,10 +2241,6 @@
     "mode": [
       "vault/playbooks/release-gha-component"
     ],
-    "run": [
-      "vault/playbooks/release-gha-component",
-      "vault/playbooks/run-gha-local-policy-tests"
-    ],
     "execute": [
       "vault/playbooks/run-gha-local-policy-tests"
     ],
@@ -2035,10 +2259,16 @@
     "verify": [
       "vault/playbooks/run-gha-local-policy-tests"
     ],
+    "app": [
+      "vault/references/gha-action-pin-catalog"
+    ],
     "cache": [
       "vault/references/gha-action-pin-catalog"
     ],
     "common": [
+      "vault/references/gha-action-pin-catalog"
+    ],
+    "create": [
       "vault/references/gha-action-pin-catalog"
     ],
     "docker": [
@@ -2047,7 +2277,13 @@
     "download": [
       "vault/references/gha-action-pin-catalog"
     ],
+    "java": [
+      "vault/references/gha-action-pin-catalog"
+    ],
     "marketplace": [
+      "vault/references/gha-action-pin-catalog"
+    ],
+    "node": [
       "vault/references/gha-action-pin-catalog"
     ],
     "observed": [
@@ -2069,7 +2305,16 @@
       "vault/references/gha-reusable-readme",
       "vault/references/github-actions/workflow-syntax"
     ],
+    "setup": [
+      "vault/references/gha-action-pin-catalog"
+    ],
     "sha": [
+      "vault/references/gha-action-pin-catalog"
+    ],
+    "terraform": [
+      "vault/references/gha-action-pin-catalog"
+    ],
+    "token": [
       "vault/references/gha-action-pin-catalog"
     ],
     "used": [

@@ -107,14 +107,14 @@ sonarqube-gate  ──FAIL blocks publish──┐
 
 | Use | Ref |
 | --- | --- |
-| checkout | `actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683` |
-| cache | `actions/cache@5a3ec84eff668545956fd18022155c47e93e2684` |
-| upload-artifact | `actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02` |
-| download-artifact | `actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e` |
-| sonarqube-scan | `SonarSource/sonarqube-scan-action@7451daf950bc136c497f29045f2b4d4f9f7ba43a` |
-| sonarqube-quality-gate | `SonarSource/sonarqube-quality-gate-action@8e9b0ca0a7273d6f16986388d98393efdfcf56fd` |
-| docker/login | `docker/login-action@c66a8fcb2472d4283042d726b2a061b43b3f49ab` |
-| docker/build-push | `docker/build-push-action@cb941d0b895b09c17fa011d41c411b33c752cf28` |
+| checkout | `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1` |
+| cache | `actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0` |
+| upload-artifact | `actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1` |
+| download-artifact | `actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1` |
+| sonarqube-scan | `SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1` |
+| sonarqube-quality-gate | `SonarSource/sonarqube-quality-gate-action@7a5fffe8e523c40e0c740b6bc2712ab503e52efa # v1.2.1` |
+| docker/login | `docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0` |
+| docker/build-push | `docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0` |
 | OWASP | `./actions/security/owasp-dependency-check` |
 | preprocess | `./actions/common/build-preprocess` |
 

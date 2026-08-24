@@ -1,5 +1,19 @@
 # Brain Update Log
 
+## 2026-08-17
+
+* **Stable tag peel:** Release Manager promote/rollback points `{safe_name}/v1` at `git rev-parse {versioned}^{commit}` so `/v1` is not a nested annotated tag (act: `unsupported object type`).
+* **Python CLI args:** House Python helpers MUST use argparse and run standalone (`standards/python-cli-args.md`). Output flag is `--output` (not `--github-output`). `checkInventory.py` also has `--soft` (miss → `matched=false`, exit 0). Cross-linked author-composite playbook + metadata-headers.
+* **Slash component tags:** Versioned `{safe_name}/v{X.Y.Z}`, stable `{safe_name}/v1` (was hyphen `{safe_name}-{X.Y.Z}` / `{safe_name}-v1`). Release Manager + semver lookup + CKV2_SPVS_5 regex; vault cards for tagging, RM modes, SemVer, release playbook, system, SPVS lifecycle.
+* **release-promote mode:** One dispatch runs full security, creates `{safe_name}/v{X.Y.Z}`, then points `{safe_name}/v1` at it (env production).
+* **Release concurrency:** All `workflows/` deploys share `release-manager-workflow` (one at a time). `actions/` deploys run in parallel per `component_path`.
+
+## 2026-08-10
+
+* **GHA pin refresh:** Live-resolved latest SHAs into workflows/actions/_ab_bench; updated `vault/references/gha-action-pin-catalog.md` (checkout v7.0.1, setup-python v7, download-artifact v8, cache v6, docker/sonar pins). No floating `@vN` left in scanned YAML.
+* **SemVer scope:** Keyword drives bump; scope optional — `feat:`, `feat({safe_name}):`, and `feat(prbot):` (any scope) all count. `commit_message_lib.sh` + OKF cards updated.
+* **Notification Email ingest:** Added `vault/concepts/notification-email.md` (`pack_force_when`) from `_inbox/2026-08-10-notification-email-action.md`. Updated CI recipe MUST #4, system inventory + Prompt Card, github-actions / author-composite / concepts index cross-links. House path: `actions/common/notification-email`.
+
 ## 2026-07-28
 
 * **Kernel ops restore:** Restored `scrape` / `enrich` / `optimize` / `serve` + `aegis-brain.html` (HTML embed on compile/lint). Fixed scrape NameError (`_BUILTIN_SCRAPE_CATALOGS`, `VAULT_ROOT`, imports). CLI: capabilities, lookup, pack, card, compile, lint, enrich, optimize, scrape, serve.

@@ -1,18 +1,28 @@
 #!/usr/bin/env bash
 # FILE_NAME: run-dependency-check.sh
 # DESCRIPTION: Run OWASP Dependency-Check via Podman using env-mapped action inputs.
-# VERSION: 1.0.0
+# VERSION: 1.2.1
 # EXIT_CODES/SIGNALS: 0 success, 1 failure.
 # AUTHORS: DevOps Team
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scan-profiles.sh
+source "${SCRIPT_DIR}/scan-profiles.sh"
 
 # Required env (mapped from action inputs in action.yml).
 : "${IMAGE:?IMAGE environment variable is required}"
 : "${project:?project environment variable is required}"
 : "${path:?path environment variable is required}"
-: "${format:?format environment variable is required}"
 : "${out:?out environment variable is required}"
 : "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE environment variable is required}"
+
+apply_scan_profile "${scan_profile:-full}"
+
+if [ -z "${format:-}" ]; then
+  echo "::error::format is required when scan_profile is full" >&2
+  exit 1
+fi
 
 if ! command -v podman &>/dev/null; then
   echo "::error::Podman is required. Use a runner with Podman (e.g. ARC runner pod). Docker is not used."
@@ -20,10 +30,41 @@ if ! command -v podman &>/dev/null; then
 fi
 RUNNER=podman
 echo "Using $RUNNER"
-$RUNNER pull --quiet "$IMAGE"
+if $RUNNER image exists "$IMAGE" &>/dev/null; then
+  echo "Image already present: $IMAGE"
+else
+  $RUNNER pull --quiet "$IMAGE"
+fi
 
 WS=/github/workspace
 EXTRA=()
+FORMAT_ARGS=()
+DATA_MOUNT=()
+
+if [ -n "${data_dir:-}" ]; then
+  mkdir -p "${data_dir}"
+  if ! find "${data_dir}" -mindepth 1 -print -quit 2>/dev/null | grep -q .; then
+    echo "Seeding empty data_dir from image NVD cache..."
+    if ! $RUNNER run --rm --entrypoint /bin/bash "$IMAGE" -c 'tar -C /usr/share/dependency-check/data -cf - .' \
+      | tar -C "${data_dir}" -xf -; then
+      echo "::warning::Could not seed NVD cache from image; first scan may download NVD data"
+    fi
+  fi
+  DATA_MOUNT=(-v "${data_dir}:/usr/share/dependency-check/data:z")
+  EXTRA+=(--data /usr/share/dependency-check/data)
+fi
+
+IFS=',' read -ra FORMATS <<< "${format}"
+for raw_format in "${FORMATS[@]}"; do
+  fmt="$(echo "${raw_format}" | xargs)"
+  if [ -n "${fmt}" ]; then
+    FORMAT_ARGS+=(--format "${fmt}")
+  fi
+done
+if [ "${#FORMAT_ARGS[@]}" -eq 0 ]; then
+  echo "::error::format must include at least one report type (for example JSON,HTML)" >&2
+  exit 1
+fi
 
 # Value options (paths under workspace mapped to container path)
 [ -n "${failOnCVSS}" ]                 && EXTRA+=(--failOnCVSS "${failOnCVSS}")
@@ -172,18 +213,16 @@ $RUNNER run --rm \
   -v /dev/pts:/dev/pts \
   -v /dev/ptmx:/dev/ptmx \
   -v "$GITHUB_WORKSPACE:$WS:z" \
+  "${DATA_MOUNT[@]}" \
   -w $WS \
   "$IMAGE" \
   --project "${project}" \
   --scan "$WS/${path}" \
-  --format "${format}" \
+  "${FORMAT_ARGS[@]}" \
   --out "$WS/${out}" \
   "${EXTRA[@]}"
 
-# Clean up image and storage to avoid runner disk space issues (ARC/ephemeral pods).
-# Run cleanup; capture exit codes and log on failure so we don't hide real errors (no blind || true).
-# Step still succeeds (we don't exit 1) so the job passes even if cleanup fails.
-if [ -n "$RUNNER" ] && [ -n "$IMAGE" ]; then
+if [ "${cleanup_image:-}" = 'true' ] && [ -n "$RUNNER" ] && [ -n "$IMAGE" ]; then
   echo "Removing owasp-dependency-check image and pruning storage..."
   if ! $RUNNER rmi "$IMAGE" 2>/dev/null; then
     echo "::notice::rmi $IMAGE failed (image may already be removed or in use)"

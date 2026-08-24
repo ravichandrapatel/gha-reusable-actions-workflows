@@ -27,12 +27,14 @@ graph TD
     subgraph "Stage 3: Execute"
     J --> K{Mode?}
     K -->|release| L[Create Versioned Tag]
+    K -->|release-promote| Q[Versioned tag + stable /v1]
     K -->|promote| M[Update Stable v1 Tag]
     K -->|rollback| N[Restore Previous Version]
     end
     
     L --> O[Sandbox Testing]
-    M --> P[Production Ready]
+    Q --> P[Production Ready]
+    M --> P
     N --> P
 ```
 
@@ -43,25 +45,39 @@ graph TD
 - **Behavior**: 
     - Automatically derives the next version based on commit history.
     - Performs full security scans.
-    - Creates a versioned tag (e.g., `janitor-bot-1.0.0`).
+    - Creates a versioned tag (e.g., `janitor-bot/v1.0.0`).
     - For workflows, it automatically syncs the file to `.github/workflows/`.
 - **Purpose**: Provides a versioned artifact for testing in sandbox environments.
 
-### 2. Promote (Production)
+### 2. Release + Promote (Production)
+- **Trigger**: Run the `Release Manager` workflow with `mode: release-promote`.
+- **Behavior**:
+    - Same validation and full security scans as `release`.
+    - Creates the versioned tag (e.g., `janitor-bot/v1.0.0`).
+    - Immediately updates the stable tag (e.g., `janitor-bot/v1`) to that version.
+    - Uses the **production** environment (stable tag is mutated).
+- **Purpose**: One dispatch when sandbox soak is not required.
+
+### 3. Promote (Production)
 - **Trigger**: Run the `Release Manager` workflow with `mode: promote`.
 - **Behavior**:
     - Skips security scans (assumes they passed during release).
-    - Updates the stable tag (e.g., `janitor-bot-v1`) to point to the selected versioned tag.
+    - Updates the stable tag (e.g., `janitor-bot/v1`) to point to the selected versioned tag.
     - Uses a secure "delete-and-recreate" approach for tags (no force-push).
 - **Purpose**: Marks a specific version as the stable production release.
 
-### 3. Rollback
+### 4. Rollback
 - **Trigger**: Run the `Release Manager` workflow with `mode: rollback`.
 - **Behavior**:
     - Identifies the previous versioned tag in the history.
-    - Updates the stable tag (`v1`) to point to that previous version.
+    - Updates the stable tag (`{name}/v1`) to point to that previous version.
     - For workflows, it restores the previous version of the file in `.github/workflows/` on the `main` branch.
 - **Purpose**: Quickly reverts to a known good state in case of production issues.
+
+## Concurrency
+
+- **Workflows** (`workflows/...`): one Release Manager run at a time. Extra workflow deploys **queue** (`cancel-in-progress: false`) so `.github/workflows/` syncs do not race on `main`.
+- **Actions** (`actions/...`): different components run **in parallel**. The same `component_path` still queues so tags do not collide.
 
 ## Commit Message Format
 
@@ -211,7 +227,7 @@ Each rule is implemented in Rego under [`policies/conftest/github_actions/`](pol
 | **CKV2_SPVS_2** | `workflow/steps.rego`, `composite/steps.rego` | Every bash `run:` block must contain `set -euo pipefail`. | First line of each shell script block; applies to composite action steps. |
 | **CKV2_SPVS_3** | `workflow/steps.rego`, `composite/steps.rego` | No `set -x`, `set -o xtrace`, or xtrace in `run:` blocks. | Use structured logging (`echo "::notice::"`, prefixed helpers) instead of xtrace. |
 | **CKV2_SPVS_4** | `workflow/steps.rego`, `composite/steps.rego` | Any step that invokes `python`/`python3` must use `-u` or `PYTHONUNBUFFERED=1`. | `python -u script.py` or step-level `env: PYTHONUNBUFFERED: "1"`. |
-| **CKV2_SPVS_5** | `workflow/steps.rego`, `composite/steps.rego` | Third-party `uses:` refs must pin to a **40-character commit SHA**, use `./` same-repo paths, `docker://`, or approved **internal** `/actions/` tags. | `actions/checkout@<sha> # v6.0.2`; monorepo refs like `org/repo/actions/name@v1` per regex in policy. |
+| **CKV2_SPVS_5** | `workflow/steps.rego`, `composite/steps.rego` | Third-party `uses:` refs must pin to a **40-character commit SHA**, use `./` same-repo paths, `docker://`, or approved **internal** `/actions/` tags. | `actions/checkout@<sha> # v6.0.2`; monorepo refs like `org/repo/actions/name@name/v1` per regex in policy. |
 | **CKV2_SPVS_5B** | `workflow/steps.rego`, `composite/steps.rego` | Local action refs must not start with `../`. | Use `./.github/actions/name` or pinned remote refs; skip via `SPVS_SKIP_POLICY` ([skip guide](docs/06-inline-policy-skips.md)). |
 | **CKV2_SPVS_6** | `workflow/steps.rego`, `composite/steps.rego` | `${{ inputs.* }}`, `${{ github.event.inputs.* }}`, and mistaken `inputs.*` shell refs must not appear inside `run:` strings. | Map to `env:` (e.g. `MESSAGE: ${{ inputs.message }}`) and reference `"${MESSAGE}"` in shell. |
 | **CKV2_SPVS_13** | `workflow/steps.rego`, `composite/steps.rego` | No `curl\|bash`, `wget\|sh`, or `bash <(curl …)` installers. | Download to file, verify checksum, or use apt/brew/cached binaries (see `install_hooks.sh`). |
@@ -250,7 +266,7 @@ Custom `CKV2_SPVS_*` policies extend and specialize these rules for this monorep
 | **Plan / Develop** | Commit-msg hook; conventional commits with ticket IDs; SemVer derivation |
 | **Integrate** | Pre-commit Conftest, Actionlint, Bandit, Shellcheck on changed paths |
 | **Release** | Release Manager `security` job; versioned tags; workflow sync to `.github/workflows/` |
-| **Operate** | Promote / rollback modes; stable `v1` tags; branch protection and GitHub App bypass documented in prerequisites |
+| **Operate** | Promote / rollback modes; stable `{name}/v1` tags; branch protection and GitHub App bypass documented in prerequisites |
 
 Repository and branch controls (PR reviews, signed commits, force-push blocks, CODEOWNERS) are **not** expressed in workflow YAML—they must be configured in GitHub settings.
 
@@ -301,6 +317,12 @@ Portable kit: **[`act-platform/`](act-platform/README.md)** — Ubuntu + UBI9 ru
 ```bash
 ./act-platform/bootstrap.sh . --force   # refresh root .actrc + .act/ if needed
 ./act-platform/build-images.sh
+# Source lives in workflows/; act only sees .github/workflows/ — sync first:
+./act-platform/sync-workflows-for-act.sh
+# Tagged consumer path (@{safe_name}/vX.Y.Z) without cloning GitHub:
+export DOCKER_HOST=unix:///var/run/docker.sock   # WSL: not containerd.sock
+./act-platform/run-tagged-act.sh -W .act/callers/retry-smoke.yml
+./act-platform/run-tagged-act.sh --component workflows/programming/ng-ui-build-pipeline --dryrun
 act --list
 ```
 

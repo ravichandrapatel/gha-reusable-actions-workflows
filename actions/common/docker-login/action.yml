@@ -1,0 +1,91 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: buildah login via house retry action (bash only).
+# VERSION: 1.2.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: 'Docker Login'
+description: 'Log in to a container registry with buildah login, retried by the retry action'
+
+inputs:
+  registry:
+    description: 'Registry host to log in to (for example a Nexus host)'
+    required: true
+  username:
+    description: 'Registry username'
+    required: true
+  password:
+    description: 'Registry password or token. Map from a secret; never print it'
+    required: true
+  tls_verify:
+    description: 'buildah --tls-verify true or false'
+    required: false
+    default: 'true'
+  max_attempts:
+    description: 'Retry attempts for buildah login'
+    required: false
+    default: '3'
+  retry_wait_seconds:
+    description: 'Seconds to wait between failed login attempts'
+    required: false
+    default: '5'
+  timeout_seconds:
+    description: 'Per-attempt login timeout in seconds; 0 means no timeout'
+    required: false
+    default: '60'
+
+outputs:
+  attempts:
+    description: 'Number of login attempts'
+    value: ${{ steps.login.outputs.attempts }}
+  exit_code:
+    description: 'Exit code of the last login attempt'
+    value: ${{ steps.login.outputs.exit_code }}
+  succeeded:
+    description: 'true when buildah login exited 0'
+    value: ${{ steps.login.outputs.succeeded }}
+  timed_out:
+    description: 'true when the last attempt hit the timeout'
+    value: ${{ steps.login.outputs.timed_out }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check login inputs
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        REGISTRY_USERNAME: ${{ inputs.username }}
+        REGISTRY_PASSWORD: ${{ inputs.password }}
+        TLS_VERIFY: ${{ inputs.tls_verify }}
+      run: |
+        set -euo pipefail
+        if [[ -z "${REGISTRY}" || -z "${REGISTRY_USERNAME}" || -z "${REGISTRY_PASSWORD}" ]]; then
+          echo "ERROR: registry, username, and password are required" >&2
+          exit 1
+        fi
+        if [[ "${TLS_VERIFY}" != "true" && "${TLS_VERIFY}" != "false" ]]; then
+          echo "ERROR: tls_verify must be true or false" >&2
+          exit 1
+        fi
+        if ! command -v buildah >/dev/null; then
+          echo "ERROR: buildah not found on PATH" >&2
+          exit 1
+        fi
+
+    - name: buildah login
+      id: login
+      uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/retry@retry/v1.2.0
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        REGISTRY_USERNAME: ${{ inputs.username }}
+        REGISTRY_PASSWORD: ${{ inputs.password }}
+        TLS_VERIFY: ${{ inputs.tls_verify }}
+      with:
+        command: printf %s "${REGISTRY_PASSWORD}" | buildah login --username "${REGISTRY_USERNAME}" --password-stdin --tls-verify="${TLS_VERIFY}" "${REGISTRY}"
+        max_attempts: ${{ inputs.max_attempts }}
+        retry_wait_seconds: ${{ inputs.retry_wait_seconds }}
+        timeout_seconds: ${{ inputs.timeout_seconds }}
+        retry_on: any
+        shell: bash

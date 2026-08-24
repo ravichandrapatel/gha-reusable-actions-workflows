@@ -1,0 +1,70 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Change this field only. Replacements + the namespace transformer follow it.
+namespace: devtools-ci
+resources:
+  - ../../../base
+  - ../../../base/runner-kubernetes/0.13.1
+replacements:
+  - source:
+      kind: ServiceAccount
+      name: arc-eso
+      fieldPath: metadata.namespace
+    targets:
+      - select:
+          kind: Namespace
+        fieldPaths:
+          - metadata.name
+      - select:
+          kind: RoleBinding
+          name: gha-runner-scale-set-kubernetes-gha-rs-manager
+        fieldPaths:
+          - subjects.0.namespace
+      - select:
+          kind: RoleBinding
+          name: github-arc-scc
+        fieldPaths:
+          - subjects.0.namespace
+          - subjects.1.namespace
+          - subjects.2.namespace
+          - subjects.3.namespace
+          - subjects.4.namespace
+        options:
+          create: true
+# Uncomment and set the IRSA role and Secrets Manager path.
+# patches:
+#   - target:
+#       kind: ServiceAccount
+#       name: arc-eso
+#     patch: |-
+#       - op: replace
+#         path: /metadata/annotations/eks.amazonaws.com~1role-arn
+#         value: arn:aws:iam::ACCOUNT_ID:role/arc-eso
+#   - target:
+#       kind: ServiceAccount
+#       name: arc-runner-aws
+#     patch: |-
+#       - op: replace
+#         path: /metadata/annotations/eks.amazonaws.com~1role-arn
+#         value: arn:aws:iam::ACCOUNT_ID:role/arc-runner
+#   - target:
+#       group: external-secrets.io
+#       version: v1beta1
+#       kind: ExternalSecret
+#       name: github-config
+#     patch: |-
+#       - op: replace
+#         path: /spec/data/0/remoteRef/key
+#         value: github/arc
+#       - op: replace
+#         path: /spec/data/0/remoteRef/property
+#         value: github_app_private_key
+#   - target:
+#       group: external-secrets.io
+#       version: v1beta1
+#       kind: SecretStore
+#       name: aws-secretsmanager
+#     patch: |-
+#       - op: replace
+#         path: /spec/provider/aws/region
+#         value: us-east-1

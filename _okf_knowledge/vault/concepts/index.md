@@ -8,6 +8,7 @@
 | [GitHub Actions](github-actions.md) | Domain router for actions, workflows, Release Manager, SPVS. |
 | [GHA CI pipeline recipe](gha-ci-pipeline-recipe.md) | Multi-job CI: checkout + artifacts + house OWASP action. |
 | [GHA YAML Anchors](gha-yaml-anchors.md) | YAML anchors/aliases in one workflow — no merge keys. |
-| [Release Manager Modes](release-manager-modes.md) | release / promote / rollback semantics. |
+| [Notification Email composite](notification-email.md) | Teams→members→SMTP with artifacts + pipeline-logs.zip. |
+| [Release Manager Modes](release-manager-modes.md) | release / release-promote / promote / rollback semantics. |
 | [SemVer from Commits](semver-from-commits.md) | Conventional commits → SemVer bumps. |
 | [SPVS Lifecycle](spvs-lifecycle.md) | SPVS stages + Dependency-Check constraints. |

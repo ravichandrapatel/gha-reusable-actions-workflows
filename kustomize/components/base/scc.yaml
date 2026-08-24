@@ -1,0 +1,43 @@
+# Custom SCC for official actions-runner image (uid 1001, gid 123) on ROSA / OpenShift.
+# Do not apply on kind — the security.openshift.io API is absent there.
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: github-arc
+  labels:
+    app.kubernetes.io/part-of: github-arc
+allowPrivilegeEscalation: false
+allowPrivilegedContainer: false
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+readOnlyRootFilesystem: false
+requiredDropCapabilities:
+  - ALL
+runAsUser:
+  type: MustRunAs
+  uid: 1001
+fsGroup:
+  type: MustRunAs
+  ranges:
+    - min: 123
+      max: 123
+supplementalGroups:
+  type: MustRunAs
+  ranges:
+    - min: 123
+      max: 123
+seLinuxContext:
+  type: MustRunAs
+volumes:
+  - configMap
+  - downwardAPI
+  - emptyDir
+  - ephemeral
+  - persistentVolumeClaim
+  - projected
+  - secret
+users: []
+groups: []

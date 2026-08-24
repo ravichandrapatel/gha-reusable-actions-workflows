@@ -1,6 +1,6 @@
 # FILE_NAME: gha_common.rego
 # DESCRIPTION: Shared GitHub Actions step helpers and constants for workflow and composite packages.
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 # AUTHORS: DevOps Team
 
 package lib
@@ -68,7 +68,7 @@ uses_allowed(uses) if {
 }
 
 uses_allowed(uses) if {
-	regex.match(`^[^@]+/actions/.+@(v[0-9]+|[0-9]+\.[0-9]+\.[0-9]+|[A-Za-z0-9._-]+-v[0-9]+)$`, uses)
+	regex.match(`^[^@]+/actions/.+@(v[0-9]+|[0-9]+\.[0-9]+\.[0-9]+|[A-Za-z0-9._-]+/v[0-9]+(\.[0-9]+\.[0-9]+)?)$`, uses)
 }
 
 env_truthy(val) if {

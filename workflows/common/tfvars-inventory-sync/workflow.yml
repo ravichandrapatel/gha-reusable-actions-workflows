@@ -1,0 +1,219 @@
+# =============================================================================
+# FILE_NAME: workflow.yml
+# DESCRIPTION: Discover *.tfvars into inventory.json, push to build-preprocess, release it.
+# VERSION: 1.0.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: Tfvars Inventory Sync
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      folder_name:
+        description: 'Folder containing *.tfvars (relative to working_directory)'
+        required: true
+        type: string
+      working_directory:
+        description: 'Source working directory relative to the caller repo root'
+        required: false
+        type: string
+        default: '.'
+      destination_repo:
+        description: 'Destination owner/repo that owns actions/common/build-preprocess'
+        required: true
+        type: string
+      commit_message:
+        description: 'Commit subject used when inventory.json changes (ticket + chore)'
+        required: false
+        type: string
+        default: 'DCDT-0000 chore(build-preprocess): sync inventory.json'
+      release_version:
+        description: 'Optional explicit SemVer for Release Manager; empty = auto-derive'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      repos_count:
+        description: 'Number of repos discovered from *.tfvars'
+        value: ${{ jobs.sync_and_release.outputs.repos_count }}
+      inventory_changed:
+        description: 'true when inventory.json was committed to the destination'
+        value: ${{ jobs.sync_and_release.outputs.inventory_changed }}
+      commit_sha:
+        description: 'Destination commit SHA after the inventory push (empty when unchanged)'
+        value: ${{ jobs.sync_and_release.outputs.commit_sha }}
+      release_dispatched:
+        description: 'true when Release Manager was dispatched for build-preprocess'
+        value: ${{ jobs.sync_and_release.outputs.release_dispatched }}
+
+jobs:
+  sync_and_release:
+    name: Sync Inventory and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      repos_count: ${{ steps.build_inventory.outputs.repos_count }}
+      inventory_changed: ${{ steps.push_and_release.outputs.inventory_changed }}
+      commit_sha: ${{ steps.push_and_release.outputs.commit_sha }}
+      release_dispatched: ${{ steps.push_and_release.outputs.release_dispatched }}
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build inventory.json from tfvars
+        id: build_inventory
+        shell: bash
+        env:
+          WORKING_DIRECTORY: ${{ inputs.working_directory }}
+          FOLDER_NAME: ${{ inputs.folder_name }}
+        run: |
+          set -euo pipefail
+          # [T-01] Discover *.tfvars basenames and write stable inventory.json
+          VARS_DIR="${WORKING_DIRECTORY%/}/${FOLDER_NAME}"
+          VARS_DIR="${VARS_DIR#./}"
+          if [[ ! -d "${VARS_DIR}" ]]; then
+            echo "ERROR: folder not found: ${VARS_DIR}" >&2
+            exit 1
+          fi
+
+          mapfile -t TFVARS_FILES < <(find "${VARS_DIR}" -maxdepth 1 -type f -name '*.tfvars' | LC_ALL=C sort)
+          if [[ ${#TFVARS_FILES[@]} -eq 0 ]]; then
+            echo "ERROR: no *.tfvars files found in ${VARS_DIR}" >&2
+            exit 1
+          fi
+
+          INVENTORY_JSON="${RUNNER_TEMP}/inventory.json"
+          NAMES=()
+          for TFVARS_FILE in "${TFVARS_FILES[@]}"; do
+            BASE="$(basename "${TFVARS_FILE}" .tfvars)"
+            if [[ -z "${BASE}" || "${BASE}" == *.tfvars ]]; then
+              echo "ERROR: failed to derive repo name from ${TFVARS_FILE}" >&2
+              exit 1
+            fi
+            NAMES+=("${BASE}")
+          done
+
+          printf '%s\n' "${NAMES[@]}" | jq -R . | jq -s 'sort | unique | {repos: .}' > "${INVENTORY_JSON}"
+          COUNT="$(jq '.repos | length' "${INVENTORY_JSON}")"
+          if [[ "${COUNT}" -eq 0 ]]; then
+            echo "ERROR: failed to derive repo names from *.tfvars" >&2
+            exit 1
+          fi
+          echo "repos_count=${COUNT}" >> "${GITHUB_OUTPUT}"
+          echo "inventory_json=${INVENTORY_JSON}" >> "${GITHUB_OUTPUT}"
+          echo "Built inventory with ${COUNT} repo(s):"
+          cat "${INVENTORY_JSON}"
+
+      - name: Parse destination repository
+        id: dest
+        shell: bash
+        env:
+          DESTINATION_REPO: ${{ inputs.destination_repo }}
+        run: |
+          set -euo pipefail
+          # [T-02] Split owner/repo for App token scoping
+          if [[ "${DESTINATION_REPO}" != */* || "${DESTINATION_REPO}" == */*/* ]]; then
+            echo "ERROR: destination_repo must be owner/repo, got: ${DESTINATION_REPO}" >&2
+            exit 1
+          fi
+          OWNER="${DESTINATION_REPO%%/*}"
+          REPO="${DESTINATION_REPO#*/}"
+          if [[ -z "${OWNER}" || -z "${REPO}" ]]; then
+            echo "ERROR: invalid destination_repo: ${DESTINATION_REPO}" >&2
+            exit 1
+          fi
+          echo "owner=${OWNER}" >> "${GITHUB_OUTPUT}"
+          echo "repo=${REPO}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate GitHub App token
+        id: generate_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ steps.dest.outputs.owner }}
+          repositories: ${{ steps.dest.outputs.repo }}
+
+      - name: Checkout destination repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.destination_repo }}
+          token: ${{ steps.generate_token.outputs.token }}
+          ref: main
+          path: destination
+          fetch-depth: 0
+
+      - name: Push inventory.json and release build-preprocess
+        id: push_and_release
+        shell: bash
+        env:
+          DESTINATION_REPO: ${{ inputs.destination_repo }}
+          COMMIT_MESSAGE: ${{ inputs.commit_message }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          INVENTORY_JSON: ${{ steps.build_inventory.outputs.inventory_json }}
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          # [T-03] Commit inventory.json on main and dispatch Release Manager
+          COMPONENT_PATH="actions/common/build-preprocess"
+          INVENTORY_PATH="${COMPONENT_PATH}/inventory.json"
+          DEST_ROOT="${GITHUB_WORKSPACE}/destination"
+          TARGET_FILE="${DEST_ROOT}/${INVENTORY_PATH}"
+
+          echo "inventory_changed=false" >> "${GITHUB_OUTPUT}"
+          echo "commit_sha=" >> "${GITHUB_OUTPUT}"
+          echo "release_dispatched=false" >> "${GITHUB_OUTPUT}"
+
+          cd "${DEST_ROOT}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [[ ! -f "${COMPONENT_PATH}/action.yml" && ! -f "${COMPONENT_PATH}/action.yaml" ]]; then
+            echo "ERROR: ${COMPONENT_PATH} is missing action.yml on main" >&2
+            exit 1
+          fi
+
+          mkdir -p "$(dirname "${TARGET_FILE}")"
+          # Compare repo lists, not raw bytes — whitespace-only JSON must not release.
+          if [[ -f "${TARGET_FILE}" ]]; then
+            DEST_REPOS="$(jq -c '.repos | unique | sort' "${TARGET_FILE}")"
+            GEN_REPOS="$(jq -c '.repos | unique | sort' "${INVENTORY_JSON}")"
+            if [[ "${DEST_REPOS}" == "${GEN_REPOS}" ]]; then
+              echo "No inventory changes; skipping commit and release"
+              exit 0
+            fi
+          fi
+
+          cp "${INVENTORY_JSON}" "${TARGET_FILE}"
+          git add -- "${INVENTORY_PATH}"
+          if git diff --cached --quiet -- "${INVENTORY_PATH}"; then
+            echo "No inventory changes; skipping commit and release"
+            exit 0
+          fi
+
+          git commit -m "${COMMIT_MESSAGE}"
+          git push origin HEAD:refs/heads/main
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          echo "inventory_changed=true" >> "${GITHUB_OUTPUT}"
+          echo "commit_sha=${COMMIT_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "Pushed ${INVENTORY_PATH} @ ${COMMIT_SHA}"
+
+          # [T-04] Dispatch Release Manager for the preprocess action
+          GH_ARGS=(
+            workflow run release-manager.yml
+            --repo "${DESTINATION_REPO}"
+            --ref main
+            -f component_path="${COMPONENT_PATH}"
+            -f mode=release-promote
+          )
+          if [[ -n "${RELEASE_VERSION}" ]]; then
+            GH_ARGS+=(-f version="${RELEASE_VERSION}")
+          fi
+          gh "${GH_ARGS[@]}"
+          echo "release_dispatched=true" >> "${GITHUB_OUTPUT}"
+          echo "Dispatched Release Manager mode=release-promote for ${COMPONENT_PATH}"

@@ -1,0 +1,71 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Run Maven with caller-supplied goals and CLI arguments.
+# VERSION: 1.1.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: 'Maven'
+description: 'Run mvn with caller-supplied goals and options; select Java on self-hosted runners'
+
+inputs:
+  args:
+    description: 'Maven goals and options (e.g. clean package -DskipTests)'
+    required: true
+  java-version:
+    description: 'Major Java version from pom.xml (e.g. 21). Used to select JAVA_HOME on self-hosted runners'
+    required: false
+    default: ''
+  java-setup:
+    description: 'Java selection — auto (select when java-version set), skip (use existing JAVA_HOME), require (fail if JAVA_HOME unset)'
+    required: false
+    default: 'auto'
+  working-directory:
+    description: 'Directory containing pom.xml; empty uses GITHUB_WORKSPACE'
+    required: false
+    default: ''
+  maven-executable:
+    description: 'Maven executable on PATH'
+    required: false
+    default: 'mvn'
+  settings-file:
+    description: 'Path to settings.xml passed as mvn -s'
+    required: false
+    default: ''
+  maven-opts:
+    description: 'Value for MAVEN_OPTS environment variable'
+    required: false
+    default: ''
+
+outputs:
+  exit_code:
+    description: 'Maven process exit code'
+    value: ${{ steps.maven.outputs.exit_code }}
+  project_version:
+    description: 'project.version from pom.xml when readable after a successful run'
+    value: ${{ steps.maven.outputs.project_version }}
+  java_home:
+    description: 'JAVA_HOME used for the Maven run'
+    value: ${{ steps.maven.outputs.java_home }}
+
+runs:
+  using: composite
+  steps:
+    - name: Run Maven
+      id: maven
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        MAVEN_ARGS: ${{ inputs.args }}
+        MAVEN_EXECUTABLE: ${{ inputs.maven-executable }}
+        MAVEN_OPTS: ${{ inputs.maven-opts }}
+        SETTINGS_FILE: ${{ inputs.settings-file }}
+        JAVA_VERSION: ${{ inputs.java-version }}
+        JAVA_SETUP: ${{ inputs.java-setup }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory != '' && inputs.working-directory || github.workspace }}
+      run: |
+        set -euo pipefail
+        bash "${ACTION_PATH}/maven.sh"
+        if [[ -n "${JAVA_HOME:-}" ]]; then
+          echo "java_home=${JAVA_HOME}" >> "${GITHUB_OUTPUT}"
+        fi

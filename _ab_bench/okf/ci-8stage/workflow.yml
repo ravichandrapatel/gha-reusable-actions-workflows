@@ -178,7 +178,7 @@ jobs:
       app_build_type: ${{ steps.preprocess.outputs.app_build_type }}
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build preprocess
         id: preprocess
@@ -198,7 +198,7 @@ jobs:
       artifact-name: ${{ steps.meta.outputs.artifact_name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Map inputs to env
         id: meta
@@ -213,7 +213,7 @@ jobs:
           echo "java_version=${JAVA_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore build cache
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ inputs.cache-path }}
           key: ${{ runner.os }}-${{ steps.meta.outputs.cache_prefix }}-${{ steps.meta.outputs.java_version }}-${{ hashFiles('**/pom.xml', '**/package-lock.json', '**/yarn.lock', '**/go.sum') }}
@@ -229,7 +229,7 @@ jobs:
           eval "${BUILD_COMMAND}"
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.meta.outputs.artifact_name }}
           path: ${{ inputs.artifact-path }}
@@ -244,10 +244,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download build artifact
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ needs.build-test-lint.outputs.artifact-name }}
           path: ${{ inputs.artifact-path }}
@@ -275,7 +275,7 @@ jobs:
           noupdate: "true"
 
       - name: Upload OWASP report
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: owasp-report
           path: ${{ inputs.owasp-report-dir }}
@@ -290,24 +290,24 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Download build artifact
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ needs.build-test-lint.outputs.artifact-name }}
           path: ${{ inputs.artifact-path }}
 
       - name: Download OWASP report
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: owasp-report
           path: ${{ inputs.owasp-report-dir }}
 
       - name: SonarQube scan (import OWASP report)
-        uses: SonarSource/sonarqube-scan-action@7451daf950bc136c497f29045f2b4d4f9f7ba43a
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
@@ -320,7 +320,7 @@ jobs:
             -Dsonar.dependencyCheck.htmlReportPath=reports/owasp/dependency-check-report.html
 
       - name: Upload Sonar scanner metadata
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sonar-scannerwork
           path: .scannerwork/report-task.txt
@@ -337,14 +337,14 @@ jobs:
       quality-gate-status: ${{ steps.gate.outputs.quality-gate-status }}
     steps:
       - name: Download Sonar scanner metadata
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: sonar-scannerwork
           path: .scannerwork
 
       - name: SonarQube quality gate
         id: gate
-        uses: SonarSource/sonarqube-quality-gate-action@8e9b0ca0a7273d6f16986388d98393efdfcf56fd
+        uses: SonarSource/sonarqube-quality-gate-action@7a5fffe8e523c40e0c740b6bc2712ab503e52efa # v1.2.1
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -362,7 +362,7 @@ jobs:
       publish-url: ${{ steps.publish.outputs.publish_url }}
     steps:
       - name: Download build artifact
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ needs.build-test-lint.outputs.artifact-name }}
           path: ${{ inputs.artifact-path }}
@@ -406,23 +406,23 @@ jobs:
       digest: ${{ steps.push.outputs.digest }}
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download build artifact
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ needs.build-test-lint.outputs.artifact-name }}
           path: ${{ inputs.artifact-path }}
 
       - name: Log in to container registry
-        uses: docker/login-action@c66a8fcb2472d4283042d726b2a061b43b3f49ab
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push image
         id: push
-        uses: docker/build-push-action@cb941d0b895b09c17fa011d41c411b33c752cf28
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ${{ inputs.docker-context }}
           file: ${{ inputs.docker-file }}

@@ -1,0 +1,187 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Tag, buildah bud, and retried buildah push to Nexus.
+# VERSION: 1.4.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: 'Docker Build and Push'
+description: 'Generate image tag, buildah bud, and retried buildah push'
+
+inputs:
+  registry:
+    description: 'Nexus registry host (image registry)'
+    required: true
+  organization:
+    description: 'Organization path segment'
+    required: true
+  application:
+    description: 'Application name from build-preprocess (image path and tag segment)'
+    required: true
+  project_version:
+    description: 'Snapshot/project version from build-preprocess'
+    required: true
+  application_version:
+    description: 'Application version from build-preprocess (parent version, or package.json version)'
+    required: true
+  environment:
+    description: 'Path segment after organization'
+    required: false
+    default: 'production'
+  repo:
+    description: 'owner/repo or repo name; archetype is the last two hyphen parts. Empty uses GITHUB_REPOSITORY'
+    required: false
+    default: ''
+  branch:
+    description: 'Git branch; empty uses GITHUB_HEAD_REF then GITHUB_REF_NAME. Tag uses first 3 sanitized chars'
+    required: false
+    default: ''
+  sha:
+    description: 'Git SHA; empty uses GITHUB_SHA. Tag uses first 5 sanitized chars'
+    required: false
+    default: ''
+  build_number:
+    description: 'CI build number; empty uses GITHUB_RUN_NUMBER. Tag uses 5 characters, zero-padded'
+    required: false
+    default: ''
+  file:
+    description: 'Dockerfile path relative to context'
+    required: false
+    default: 'Dockerfile'
+  context:
+    description: 'Build context directory; empty uses GITHUB_WORKSPACE'
+    required: false
+    default: ''
+  tls_verify:
+    description: 'buildah --tls-verify true or false'
+    required: false
+    default: 'true'
+  max_attempts:
+    description: 'Retry attempts for buildah push'
+    required: false
+    default: '3'
+  retry_wait_seconds:
+    description: 'Seconds to wait between failed pushes'
+    required: false
+    default: '5'
+  timeout_seconds:
+    description: 'Per-attempt push timeout in seconds; 0 means no timeout'
+    required: false
+    default: '300'
+
+outputs:
+  tag:
+    description: 'Generated image tag'
+    value: ${{ steps.tag.outputs.tag }}
+  image:
+    description: 'Full registry/org/env/app:tag reference'
+    value: ${{ steps.tag.outputs.image }}
+  app_archetype:
+    description: 'Last two hyphen parts of the repo name (jsb-ui, ng-ui, dnc-svc)'
+    value: ${{ steps.tag.outputs.app_archetype }}
+  application_name:
+    description: 'Sanitized application name used in the tag'
+    value: ${{ steps.tag.outputs.application_name }}
+  project_version:
+    description: 'Snapshot/project version used in the tag'
+    value: ${{ steps.tag.outputs.project_version }}
+  application_version:
+    description: 'Application version used in the tag'
+    value: ${{ steps.tag.outputs.application_version }}
+  short_branch:
+    description: 'First 3 sanitized chars of the branch'
+    value: ${{ steps.tag.outputs.short_branch }}
+  short_sha:
+    description: 'First 5 sanitized chars of the git SHA'
+    value: ${{ steps.tag.outputs.short_sha }}
+  build_number:
+    description: '5-character build number used in the tag'
+    value: ${{ steps.tag.outputs.build_number }}
+  succeeded:
+    description: 'true when push exited 0'
+    value: ${{ steps.push.outputs.succeeded }}
+
+runs:
+  using: composite
+  steps:
+    - name: Generate image tag
+      id: tag
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        REGISTRY: ${{ inputs.registry }}
+        ORGANIZATION: ${{ inputs.organization }}
+        APPLICATION: ${{ inputs.application }}
+        PROJECT_VERSION: ${{ inputs.project_version }}
+        APPLICATION_VERSION: ${{ inputs.application_version }}
+        ENVIRONMENT: ${{ inputs.environment }}
+        REPO: ${{ inputs.repo }}
+        BRANCH: ${{ inputs.branch }}
+        SHA: ${{ inputs.sha }}
+        BUILD_NUMBER: ${{ inputs.build_number }}
+      run: |
+        set -euo pipefail
+        ARGS=(
+          --registry "${REGISTRY}"
+          --organization "${ORGANIZATION}"
+          --application "${APPLICATION}"
+          --project-version "${PROJECT_VERSION}"
+          --application-version "${APPLICATION_VERSION}"
+          --environment "${ENVIRONMENT}"
+          --output "${GITHUB_OUTPUT}"
+        )
+        if [[ -n "${REPO}" ]]; then
+          ARGS+=(--repo "${REPO}")
+        fi
+        if [[ -n "${BRANCH}" ]]; then
+          ARGS+=(--branch "${BRANCH}")
+        fi
+        if [[ -n "${SHA}" ]]; then
+          ARGS+=(--sha "${SHA}")
+        fi
+        if [[ -n "${BUILD_NUMBER}" ]]; then
+          ARGS+=(--build-number "${BUILD_NUMBER}")
+        fi
+        bash "${ACTION_PATH}/tag.sh" "${ARGS[@]}"
+
+    - name: buildah bud
+      shell: bash
+      env:
+        IMAGE: ${{ steps.tag.outputs.image }}
+        DOCKERFILE_INPUT: ${{ inputs.file }}
+        CONTEXT_INPUT: ${{ inputs.context }}
+        TLS_VERIFY: ${{ inputs.tls_verify }}
+      run: |
+        set -euo pipefail
+        if [[ "${TLS_VERIFY}" != "true" && "${TLS_VERIFY}" != "false" ]]; then
+          echo "ERROR: tls_verify must be true or false" >&2
+          exit 1
+        fi
+        if ! command -v buildah >/dev/null; then
+          echo "ERROR: buildah not found on PATH" >&2
+          exit 1
+        fi
+        CONTEXT="${CONTEXT_INPUT:-${GITHUB_WORKSPACE:-.}}"
+        DOCKERFILE="${DOCKERFILE_INPUT}"
+        if [[ "${DOCKERFILE}" != /* ]]; then
+          DOCKERFILE="${CONTEXT}/${DOCKERFILE}"
+        fi
+        if [[ ! -f "${DOCKERFILE}" ]]; then
+          echo "ERROR: missing Dockerfile ${DOCKERFILE}" >&2
+          exit 1
+        fi
+        buildah bud --tls-verify="${TLS_VERIFY}" --file "${DOCKERFILE}" --tag "${IMAGE}" "${CONTEXT}"
+
+    - name: buildah push
+      id: push
+      uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/retry@retry/v1.2.0
+      env:
+        IMAGE: ${{ steps.tag.outputs.image }}
+        TLS_VERIFY: ${{ inputs.tls_verify }}
+      with:
+        command: buildah push --tls-verify="${TLS_VERIFY}" "${IMAGE}" "docker://${IMAGE}"
+        max_attempts: ${{ inputs.max_attempts }}
+        retry_wait_seconds: ${{ inputs.retry_wait_seconds }}
+        timeout_seconds: ${{ inputs.timeout_seconds }}
+        retry_on: any
+        shell: bash

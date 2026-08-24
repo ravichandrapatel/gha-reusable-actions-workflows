@@ -1,0 +1,79 @@
+# =============================================================================
+# FILE_NAME: owasp-nvd-cache-sync.yml
+# DESCRIPTION: Download OWASP Dependency-Check NVD data via NVD API; publish to GitHub Artifacts and optional Nexus raw repo.
+# VERSION: 1.0.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: OWASP NVD Cache Sync
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      publish_artifacts:
+        description: Upload tar.gz archive to GitHub Actions artifacts
+        type: boolean
+        required: false
+        default: true
+      publish_nexus:
+        description: Upload archive to Nexus when NEXUS_NVD_CACHE_URL is configured
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: owasp-nvd-cache-sync
+  cancel-in-progress: false
+
+env:
+  OUTPUT_DIR: owasp-nvd-cache-out
+
+jobs:
+  sync-nvd-cache:
+    name: download-and-publish-nvd-cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Download and archive NVD cache
+        id: sync
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          PUBLISH_NEXUS: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.publish_nexus }}
+          NEXUS_NVD_CACHE_URL: ${{ vars.NEXUS_NVD_CACHE_URL }}
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+          STAMP: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/owasp-nvd-cache-sync.sh
+          scripts/owasp-nvd-cache-sync.sh | tee /tmp/owasp-nvd-cache-sync.log
+
+      - name: Upload GitHub artifact
+        if: >-
+          always() && steps.sync.outcome == 'success'
+          && (github.event_name != 'workflow_dispatch' || github.event.inputs.publish_artifacts)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: owasp-nvd-cache-${{ github.run_id }}
+          path: |
+            owasp-nvd-cache-out/owasp-nvd-cache-*.tar.gz
+            owasp-nvd-cache-out/manifest.json
+          retention-days: 90
+          if-no-files-found: error

@@ -27,6 +27,6 @@ Inject slim cards — never full SPVS/layout docs.
 
 - System: [gha-reusable-actions-workflows](/vault/systems/gha-reusable-actions-workflows.md)
 - Standards: [GHA component layout](/standards/gha-component-layout.md), [GHA SPVS YAML](/standards/gha-spvs-yaml.md), [OKF Prompt Injection](/standards/okf-prompt-injection.md)
-- Concepts: [SPVS Lifecycle](/vault/concepts/spvs-lifecycle.md), [GHA CI pipeline recipe](/vault/concepts/gha-ci-pipeline-recipe.md), [Release Manager modes](/vault/concepts/release-manager-modes.md), [SemVer from commits](/vault/concepts/semver-from-commits.md), [GHA YAML Anchors](/vault/concepts/gha-yaml-anchors.md)
+- Concepts: [SPVS Lifecycle](/vault/concepts/spvs-lifecycle.md), [GHA CI pipeline recipe](/vault/concepts/gha-ci-pipeline-recipe.md), [Notification Email composite](/vault/concepts/notification-email.md), [Release Manager modes](/vault/concepts/release-manager-modes.md), [SemVer from commits](/vault/concepts/semver-from-commits.md), [GHA YAML Anchors](/vault/concepts/gha-yaml-anchors.md)
 - Reference: [GHA action pin catalog](/vault/references/gha-action-pin-catalog.md)
 - Playbooks: [Author composite action](/vault/playbooks/author-gha-composite-action.md), [Release component](/vault/playbooks/release-gha-component.md)

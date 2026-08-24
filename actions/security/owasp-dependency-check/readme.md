@@ -8,10 +8,10 @@ The container image is built and pushed by this repo’s **OWASP Dependency-Chec
 
 ## Overview & context
 
-- **Purpose**: Run OWASP Dependency-Check scans in CI using a pre-built container image (Podman-only) and produce reports (HTML/SARIF/etc.).
+- **Purpose**: Run OWASP Dependency-Check scans in CI using a pre-built container image (Podman-only) and produce reports (HTML/JSON/SARIF/etc.).
 - **Scope**: Composite action that runs dependency-check CLI inside a container; intended for ARC/self-hosted runners with Podman.
-- **Primary users**: Platform/DevOps engineers and application teams integrating SCA into pipelines.
-- **Success criteria**: Scan completes and reports are written under `out` (and optionally uploaded as artifacts/SARIF).
+- **Primary users**: Platform/DevOps engineers and application teams integrating SCA into pipelines (`ng-ui`, Maven, .NET).
+- **Success criteria**: Scan completes and reports are written under `out` (and optionally uploaded as artifacts or imported by Sonar).
 
 ---
 
@@ -19,11 +19,11 @@ The container image is built and pushed by this repo’s **OWASP Dependency-Chec
 
 | Attribute | Value |
 | --- | --- |
-| **Owner / Lead** | @[Name] |
-| **Service Status** | Alpha / Beta / Production |
-| **Repository / Code** | `devtools-landingzone/actions/owasp-dependency-check` |
+| **Owner / Lead** | DevOps Team |
+| **Service Status** | Production |
+| **Repository / Code** | `actions/security/owasp-dependency-check` |
 | **Dependencies** | Podman, GHCR image, OWASP Dependency-Check CLI |
-| **Slack / Support** | #[Channel-Name] |
+| **Profiles** | `scan-profiles.sh` (ng-ui, maven-ui, maven-svc, dotnet) |
 
 ---
 
@@ -31,6 +31,8 @@ The container image is built and pushed by this repo’s **OWASP Dependency-Chec
 
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
+- [Scan profiles](#scan-profiles)
+- [Performance (NVD cache)](#performance-nvd-cache)
 - [Options reference](#options-reference)
 - [Report formats](#report-formats)
 - [Examples](#examples)
@@ -44,43 +46,111 @@ The container image is built and pushed by this repo’s **OWASP Dependency-Chec
 
 - **Podman** must be available on the runner. The action fails with a clear error if only Docker is present.
 - Use a runner that provides Podman (e.g. self-hosted ARC runner with the owasp-dependency-check or gha-runner-scale-set-runner image).
+- **.NET scans**: the Assembly analyzer requires **.NET 8 runtime** inside the scanner environment when scanning `*.dll` / `*.exe` (see [Assembly analyzer](https://dependency-check.github.io/DependencyCheck/analyzers/assembly-analyzer.html)).
 
 ---
 
 ## Quick start
 
-### From this repo
+### Recommended — use a scan profile
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+- name: Restore OWASP NVD cache
+  uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+  with:
+    path: .owasp-data
+    key: owasp-${{ hashFiles('package-lock.json', 'pom.xml', '**/*.csproj') }}
+    restore-keys: owasp-
 
 - name: OWASP Dependency-Check
-  uses: ./devtools-landingzone/actions/owasp-dependency-check
+  uses: ./actions/security/owasp-dependency-check
   with:
+    scan_profile: ng-ui
     project: my-app
     path: .
-    format: HTML
+    data_dir: ${{ github.workspace }}/.owasp-data
+    nvdApiKey: ${{ secrets.NVD_API_KEY }}
 ```
+
+**Required inputs:** `project`, `path`.  
+**Recommended:** `scan_profile` (sets analyzers, excludes, and `JSON,HTML` format).  
+**Common optional:** `out`, `data_dir`, `exclude`, `suppression`, `nvdApiKey`, `failOnCVSS`.
 
 ### From another repo
 
-Pin to a tag and set the **image** input (default image is from this repo).
+Pin the action ref and set the **image** input when the default GHCR image is not from your org.
 
 ```yaml
-- uses: actions/checkout@v4
-
-- name: OWASP Dependency-Check
-  uses: YOUR_ORG/IDP/devtools-landingzone/actions/owasp-dependency-check@v1.0.0
+- uses: YOUR_ORG/gha-reusable-actions-workflows/actions/security/owasp-dependency-check@<sha>
   with:
-    project: my-app
+    scan_profile: maven-svc
+    project: my-service
     path: .
-    format: HTML
-    image: ghcr.io/YOUR_ORG/IDP/owasp-dependency-check:latest
+    image: ghcr.io/YOUR_ORG/gha-reusable-actions-workflows/owasp-dependency-check:latest
 ```
 
-**Required inputs:** `project`, `path`, `format`.  
-**Common optional:** `out`, `image`, `failOnCVSS`, `suppression`, `exclude`, `noupdate`, `nvdApiKey`, `nvdApiDelay`.  
-Full list: [Options reference](#options-reference).
+---
+
+## Scan profiles
+
+Set `scan_profile` to apply stack-specific analyzer defaults from `scan-profiles.sh`. Profiles follow [official OWASP analyzer guidance](https://dependency-check.github.io/DependencyCheck/analyzers/index.html): enable only what each stack needs, disable RetireJS for npm/Angular (not recommended for Node projects), and disable Central for Maven (matches Maven plugin default).
+
+When `scan_profile` is **not** `full`, the profile owns the `disable*` analyzer matrix. You can still override **`exclude`**, **`format`**, **`suppression`**, and other non-analyzer inputs.
+
+| Profile | Also accepts | Analyzers enabled | Typical use |
+| --- | --- | --- | --- |
+| **`ng-ui`** | — | Node Package, Node Audit | Pure Angular/npm (`app_build_type: ng-ui`) |
+| **`maven-ui`** | `jsb-ui`, `jcr-ui`, `jsts-ui` | Jar, Node Package, Node Audit | Maven repo with Angular frontend |
+| **`maven-svc`** | `jsb-svc`, `jcr-svc`, `jsts-svc`, `maven` | Jar | Spring Boot, Camel, Java services |
+| **`dotnet`** | — | MSBuild, Assembly, Nuspec, Nugetconf | SDK-style `.csproj` / .NET |
+| **`full`** | (default) | All Dependency-Check defaults | Escape hatch; explicit `disable*` inputs apply |
+
+### Default excludes (per profile)
+
+| Profile | Excludes |
+| --- | --- |
+| `ng-ui` | `node_modules/**`, `dist/**`, `coverage/**`, `.angular/**`, `e2e/**`, … |
+| `maven-ui` | above + `target/**` |
+| `maven-svc` | `target/**`, `node_modules/**`, `.git/**`, `.owasp-data/**` |
+| `dotnet` | `bin/**`, `obj/**`, `node_modules/**`, `.owasp-data/**` |
+
+### Analyzers disabled by all profiles
+
+RetireJS, hosted suppressions, KEV feed, version check, and non-target experimental analyzers (Python, Go, Ruby, PHP, …) are disabled for CI speed. RetireJS scans every `*.js` file and is [not recommended for Node/Angular projects](https://github.com/dependency-check/DependencyCheck/issues/2842).
+
+### Maven note
+
+For JVM projects, OWASP recommends the [Maven plugin](https://dependency-check.github.io/DependencyCheck/dependency-check-maven/) (`dependency-check-maven:check`) when possible—it uses Maven’s resolved dependency tree. This action’s CLI + Podman path is for unified pipelines; **`maven-svc`** scans best after `mvn package` when `target/*.jar` exists.
+
+---
+
+## Performance (NVD cache)
+
+Cold NVD data is the main CI time sink. Recommended pattern:
+
+1. **`actions/cache`** on a workspace directory (e.g. `.owasp-data`).
+2. **`data_dir`** — mount that directory into the container at `/usr/share/dependency-check/data`.
+3. **`noupdate: true`** (default via profiles) — skip NVD download when cache is warm.
+4. **`nvdApiKey`** — speeds NVD API when cache is cold ([NVD API key](https://nvd.nist.gov/developers/request-an-api-key)).
+5. **Skip image re-pull** — the action reuses a local Podman image when present; **`cleanup_image`** defaults to `false`.
+
+```yaml
+- uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+  with:
+    path: .owasp-data
+    key: owasp-${{ hashFiles('package-lock.json') }}
+    restore-keys: owasp-
+
+- uses: ./actions/security/owasp-dependency-check
+  with:
+    scan_profile: ng-ui
+    project: ${{ github.event.repository.name }}
+    path: .
+    data_dir: ${{ github.workspace }}/.owasp-data
+    nvdApiKey: ${{ secrets.NVD_API_KEY }}
+```
 
 ---
 
@@ -90,23 +160,28 @@ Every input from `action.yml` is listed below. Paths are relative to the workspa
 
 ### Required inputs
 
-| Input     | Description |
-|-----------|-------------|
+| Input | Description |
+| --- | --- |
 | `project` | Project name (used in reports). |
-| `path`    | Path to scan (relative to workspace). |
-| `format`  | Report format: `HTML`, `XML`, `CSV`, `JSON`, `JUNIT`, `SARIF`, `JENKINS`, `GITLAB`, or `ALL`. |
+| `path` | Path to scan (relative to workspace). |
 
 ### Main optional inputs
 
-| Input   | Default              | Description |
-|---------|----------------------|-------------|
-| `out`   | `reports`            | Output folder for reports (relative to workspace). |
+| Input | Default | Description |
+| --- | --- | --- |
+| `scan_profile` | `full` | Stack preset — `ng-ui`, `maven-ui`, `maven-svc`, `dotnet`, `full`; or archetype alias (`jsb-ui`, `jcr-svc`, …). |
+| `format` | `JSON,HTML` | Comma-separated report types. Profile default applies when set via `scan_profile`. Required when `scan_profile: full`. |
+| `out` | `reports` | Output folder for reports (relative to workspace). |
+| `data_dir` | `""` | Host path for NVD/data cache; mounted at `/usr/share/dependency-check/data`. |
+| `cleanup_image` | `false` | Remove the container image after scan (slower on next run). |
 | `image` | (GHCR from this repo) | OWASP Dependency-Check image. Set when using the action from another repo. |
 
 ### Boolean options (default `false` unless noted)
 
+When `scan_profile` is not `full`, profile presets override these unless you use `scan_profile: full`.
+
 | Input | Default | Description |
-|-------|---------|-------------|
+| --- | --- | --- |
 | `enableRetired` | `false` | Enable retired analyzers. |
 | `enableExperimental` | `false` | Enable experimental analyzers. |
 | `prettyPrint` | `false` | Pretty-print JSON/XML reports. |
@@ -163,12 +238,12 @@ Every input from `action.yml` is listed below. Paths are relative to the workspa
 ### Value options (optional; pass only when non-empty)
 
 | Input | Description |
-|-------|-------------|
+| --- | --- |
 | `failOnCVSS` | Fail if CVSS ≥ this (0–10). |
 | `junitFailOnCVSS` | JUNIT CVSS threshold for failure. |
 | `log` | Log file path (relative to workspace). |
 | `suppression` | Suppression XML path(s), comma-separated, or URL(s). |
-| `exclude` | Path pattern(s) to exclude, comma-separated. |
+| `exclude` | Path pattern(s) to exclude, comma-separated. Merged with profile defaults when using `scan_profile`. |
 | `symLink` | Depth to follow symbolic links (default 0). |
 | `nvdApiKey` | NVD API key. |
 | `nvdApiEndpoint` | NVD API endpoint URL. |
@@ -194,7 +269,7 @@ Every input from `action.yml` is listed below. Paths are relative to the workspa
 | `retirejsUrlBearerToken` | RetireJS bearer token. |
 | `retirejsFilter` | RetireJS content filter regex (comma-separated for multiple). |
 | `zipExtensions` | Comma-separated file extensions treated as ZIP. |
-| `dotnet` | Path to dotnet. |
+| `dotnet` | Path to dotnet executable (required for Assembly analyzer if not on PATH). |
 | `go` | Path to go. |
 | `bundleAudit` | Path to bundle-audit. |
 | `bundleAuditWorkingDirectory` | Working directory for bundle-audit. |
@@ -203,7 +278,7 @@ Every input from `action.yml` is listed below. Paths are relative to the workspa
 | `dbDriverPath` | Database driver path. |
 | `dbPassword` | Database password. |
 | `dbUser` | Database user. |
-| `data` | Data directory. |
+| `data` | Data directory (alternative to `data_dir` mount; passed as CLI `--data`). |
 | `hostedSuppressionsValidForHours` | Hours before hosted suppressions update. |
 | `hostedSuppressionsUrl` | Hosted suppressions URL. |
 | `hostedSuppressionsUser` | Hosted suppressions basic auth user. |
@@ -236,137 +311,167 @@ See also the [Dependency-Check CLI arguments](https://dependency-check.github.io
 ## Report formats
 
 | Format | Use |
-|--------|-----|
-| **HTML** | Human-readable report; good for artifacts and manual review. |
-| **SARIF** | GitHub Code Scanning / Security tab; upload with `github/codeql-action/upload-sarif`. |
-| **JUNIT** | Test-style integration (e.g. JUnit report aggregation). |
-| **JSON / XML** | Parsing or custom tooling. |
-| **ALL** | Generate all formats in the output directory. |
+| --- | --- |
+| **JSON** | Sonar import (`dependency-check-report.json`); custom tooling. |
+| **HTML** | Human-readable report; Sonar import; manual review. |
+| **SARIF** | GitHub Code Scanning / Security tab. |
+| **JUNIT** | Test-style integration. |
+| **XML / CSV** | Legacy tooling. |
+| **ALL** | All formats (slow; avoid in CI when profiles already set `JSON,HTML`). |
 
-Reports are written to the path given by `out` (default `reports`). Use `actions/upload-artifact` to persist them.
+Profiles default to **`JSON,HTML`** — the combination expected by house `sonar-scan` for ng-ui. Reports are written to `out` (default `reports`). Use `actions/upload-artifact` to persist them.
 
 ---
 
 ## Examples
 
-### Basic scan (HTML report)
+### ng-ui pipeline (house pattern)
 
 ```yaml
-- uses: actions/checkout@v4
-- name: Dependency-Check
-  uses: ./devtools-landingzone/actions/owasp-dependency-check
+- uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
   with:
+    path: .owasp-data
+    key: ng-ui-owasp-${{ hashFiles('package-lock.json') }}
+    restore-keys: ng-ui-owasp-
+
+- uses: ./actions/security/owasp-dependency-check
+  with:
+    scan_profile: ng-ui
+    project: ${{ needs.build-preprocess.outputs.application_name }}
+    path: .
+    data_dir: ${{ github.workspace }}/.owasp-data
+    nvdApiKey: ${{ secrets.NVD_API_KEY }}
+
+- uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+  with:
+    name: owasp-report
+    path: reports
+    if-no-files-found: error
+```
+
+### Maven UI (`jsb-ui`, `jcr-ui`, `jsts-ui`)
+
+```yaml
+- uses: ./actions/security/owasp-dependency-check
+  with:
+    scan_profile: jsb-ui
+    project: snapshipadmin-jsb-ui
+    path: .
+    data_dir: ${{ github.workspace }}/.owasp-data
+    nvdApiKey: ${{ secrets.NVD_API_KEY }}
+```
+
+### Maven service (`jsb-svc`, `jcr-svc`, `jsts-svc`)
+
+```yaml
+- uses: ./actions/security/owasp-dependency-check
+  with:
+    scan_profile: maven-svc
     project: my-service
     path: .
-    format: HTML
-- uses: actions/upload-artifact@v4
-  if: always()
+    data_dir: ${{ github.workspace }}/.owasp-data
+    nvdApiKey: ${{ secrets.NVD_API_KEY }}
+```
+
+### .NET
+
+```yaml
+- uses: ./actions/security/owasp-dependency-check
   with:
-    name: dependency-check-report
-    path: reports/
+    scan_profile: dotnet
+    project: ams2-dnc-svc
+    path: .
+    data_dir: ${{ github.workspace }}/.owasp-data
+    nvdApiKey: ${{ secrets.NVD_API_KEY }}
 ```
 
 ### Fail on high/critical (CVSS ≥ 7)
 
 ```yaml
-- uses: ./devtools-landingzone/actions/owasp-dependency-check
+- uses: ./actions/security/owasp-dependency-check
   with:
+    scan_profile: ng-ui
     project: my-app
     path: .
-    format: HTML
     failOnCVSS: '7'
 ```
 
 ### With suppression file
 
 ```yaml
-- uses: ./devtools-landingzone/actions/owasp-dependency-check
+- uses: ./actions/security/owasp-dependency-check
   with:
+    scan_profile: maven-svc
     project: my-app
     path: .
-    format: HTML
     suppression: dependency-check-suppressions.xml
 ```
 
-Multiple files or URLs: comma-separated, e.g. `suppression: suppressions.xml,https://example.com/suppressions.xml`.
-
-### NVD API key (recommended for CI)
-
-Reduces rate limiting when `noupdate: false`. Create an [NVD API key](https://nvd.nist.gov/developers/request-an-api-key) and store it in a repo or org secret.
+### Full control (no profile)
 
 ```yaml
-- uses: ./devtools-landingzone/actions/owasp-dependency-check
+- uses: ./actions/security/owasp-dependency-check
   with:
+    scan_profile: full
     project: my-app
     path: .
-    format: HTML
-    nvdApiKey: ${{ secrets.NVD_API_KEY }}
-    nvdApiDelay: '3500'
-    noupdate: false
+    format: HTML,JSON
+    disableRetireJS: true
+    exclude: '**/node_modules/**,**/target/**'
 ```
 
 ### SARIF for GitHub Security tab
 
 ```yaml
-- uses: actions/checkout@v4
-- name: Dependency-Check
-  id: dc
-  uses: ./devtools-landingzone/actions/owasp-dependency-check
+- uses: ./actions/security/owasp-dependency-check
   with:
+    scan_profile: ng-ui
     project: my-app
     path: .
     format: SARIF
     out: sarif
 - uses: github/codeql-action/upload-sarif@v3
-  if: success() && always()
   with:
     sarif_file: sarif/dependency-check-report.sarif
-```
-
-Adjust `sarif_file` if your image writes a different filename.
-
-### Scan a subdirectory
-
-```yaml
-- uses: ./devtools-landingzone/actions/owasp-dependency-check
-  with:
-    project: backend-api
-    path: backend
-    format: HTML
-```
-
-### Exclude paths
-
-```yaml
-- uses: ./devtools-landingzone/actions/owasp-dependency-check
-  with:
-    project: my-app
-    path: .
-    format: HTML
-    exclude: '**/node_modules/**,**/vendor/**,**/dist/**'
 ```
 
 ---
 
 ## Outputs and artifacts
 
-The action does not define outputs; it writes reports to the directory specified by `out`. To keep reports:
+The action does not define GitHub outputs; it writes reports to the directory specified by `out`.
 
-- Use `actions/upload-artifact` to upload the `out` directory (e.g. `reports/` or `sarif/`).
-- For SARIF, use `github/codeql-action/upload-sarif` to feed the Security tab.
+| Report file | Typical consumer |
+| --- | --- |
+| `reports/dependency-check-report.html` | Sonar (`sonar.dependencyCheck.htmlReportPath`) |
+| `reports/dependency-check-report.json` | Sonar (`sonar.dependencyCheck.jsonReportPath`) |
+
+Upload with `actions/upload-artifact` or import via house `actions/security/sonar-scan`.
 
 ---
 
 ## Image and versioning
 
 - **Default image:** `ghcr.io/<github.repository>/owasp-dependency-check:latest` when the action runs in this repo.
-- **From other repos:** Set the `image` input (e.g. `ghcr.io/YOUR_ORG/IDP/owasp-dependency-check:latest`) and pin the action ref (e.g. `@v1.0.0`).
-- The image is built by the **Dependency-Check UBI9 (nightly)** workflow in this repo and pushed to GHCR. Use the same image reference in `image` that your org publishes.
+- **From other repos:** Set the `image` input and pin the action ref to a commit SHA.
+- **Build workflow:** `.github/workflows/owasp-dependency-check-image.yml` runs **daily** (05:00 UTC). Each build runs `dependency-check --updateonly` against the [Dependency-Check builder NVD cache](https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/) (`nvdcve-{0}.json.gz`), then publishes `:latest` and `:X.Y.Z` to GHCR.
+- **NVD cache sync workflow:** `.github/workflows/owasp-nvd-cache-sync.yml` runs **daily** (04:00 UTC). Downloads NVD data via **`NVD_API_KEY`** (NVD API), publishes `owasp-nvd-cache-*.tar.gz` to **GitHub Actions artifacts** (90-day retention), and optionally uploads to **Nexus raw** when `vars.NEXUS_NVD_CACHE_URL` is set (uses `NEXUS_USERNAME` / `NEXUS_PASSWORD`).
+- **Base image:** `registry.access.redhat.com/ubi9/ubi-minimal` with the official Dependency-Check CLI release zip.
+- **Pinned upstream version:** `container/dc-version.env` (`DC_VERSION=…`) selects the CLI version; a PR opens only when upstream `current.txt` advances.
+- **Empty `data_dir`:** When the host cache directory is empty, the action seeds it from the image’s baked NVD data before the scan.
+- **`cleanup_image`:** leave `false` (default) so Podman reuses the image on warm runners.
 
 ---
 
 ## References
 
 - [OWASP Dependency-Check](https://owasp.org/www-project-dependency-check/)
+- [File type analyzers](https://dependency-check.github.io/DependencyCheck/analyzers/index.html)
+- [Node.js analyzer](https://dependency-check.github.io/DependencyCheck/analyzers/nodejs.html)
+- [Jar analyzer](https://dependency-check.github.io/DependencyCheck/analyzers/jar-analyzer.html)
+- [MSBuild analyzer](https://dependency-check.github.io/DependencyCheck/analyzers/msbuild.html)
+- [Assembly analyzer](https://dependency-check.github.io/DependencyCheck/analyzers/assembly-analyzer.html)
+- [Central analyzer](https://dependency-check.github.io/DependencyCheck/analyzers/central-analyzer.html)
 - [Dependency-Check CLI arguments](https://dependency-check.github.io/DependencyCheck/dependency-check-cli/arguments.html)
+- [Maven plugin configuration](https://dependency-check.github.io/DependencyCheck/dependency-check-maven/configuration.html)
 - [NVD API key](https://nvd.nist.gov/developers/request-an-api-key)

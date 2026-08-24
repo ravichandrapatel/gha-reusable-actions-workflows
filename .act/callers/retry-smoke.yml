@@ -1,0 +1,33 @@
+# Local act caller — tagged house composite (retry/v1.2.0), no reusable-workflow sync needed.
+name: act-tagged-retry-smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: retry tagged smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Retry via @{safe_name}/vX.Y.Z
+        id: retry
+        uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/retry@retry/v1.2.0
+        with:
+          command: 'echo tagged-retry-ok && true'
+          max_attempts: '1'
+          retry_wait_seconds: '1'
+          warning_on_retry: 'false'
+
+      - name: Assert
+        shell: bash
+        env:
+          SUCCEEDED: ${{ steps.retry.outputs.succeeded }}
+        run: |
+          set -euo pipefail
+          test "${SUCCEEDED}" = "true"
+          echo "[OK] tagged retry/v1.2.0 resolved locally"

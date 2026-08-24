@@ -1,0 +1,111 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Retry a shell command with timeout, wait, and exit-code filters.
+# VERSION: 1.2.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: 'Retry'
+description: 'Run a command up to max_attempts times with wait, timeout, and retry filters'
+
+inputs:
+  command:
+    description: 'Command to run on the first attempt'
+    required: true
+  max_attempts:
+    description: 'How many times to try'
+    required: false
+    default: '3'
+  retry_wait_seconds:
+    description: 'Seconds to wait after a failed attempt (not after the last try)'
+    required: false
+    default: '5'
+  timeout_seconds:
+    description: 'Per-attempt timeout in seconds. Do not set together with timeout_minutes'
+    required: false
+    default: '0'
+  timeout_minutes:
+    description: 'Per-attempt timeout in minutes. Do not set together with timeout_seconds'
+    required: false
+    default: '0'
+  polling_interval_seconds:
+    description: 'Seconds between timeout polls while the command is running'
+    required: false
+    default: '1'
+  warning_on_retry:
+    description: 'If true, print a warning before each retry'
+    required: false
+    default: 'true'
+  on_retry_command:
+    description: 'Command to run after a failed attempt, before the wait'
+    required: false
+    default: ''
+  new_command_on_retry:
+    description: 'Command to run on attempts after the first failure'
+    required: false
+    default: ''
+  retry_on_exit_code:
+    description: 'Comma-separated exit codes that trigger a retry; empty retries any failure allowed by retry_on'
+    required: false
+    default: ''
+  retry_on:
+    description: 'When to retry: error, timeout, or any'
+    required: false
+    default: 'error'
+  shell:
+    description: 'bash or sh'
+    required: false
+    default: 'bash'
+
+outputs:
+  attempts:
+    description: 'Number of attempts actually run'
+    value: ${{ steps.retry.outputs.attempts }}
+  exit_code:
+    description: 'Exit code of the last attempt (124 on timeout)'
+    value: ${{ steps.retry.outputs.exit_code }}
+  succeeded:
+    description: 'true when the command exited 0'
+    value: ${{ steps.retry.outputs.succeeded }}
+  timed_out:
+    description: 'true when the last attempt hit the timeout'
+    value: ${{ steps.retry.outputs.timed_out }}
+
+runs:
+  using: composite
+  steps:
+    - name: Retry command
+      id: retry
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        COMMAND: ${{ inputs.command }}
+        MAX_ATTEMPTS: ${{ inputs.max_attempts }}
+        RETRY_WAIT_SECONDS: ${{ inputs.retry_wait_seconds }}
+        TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
+        TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+        POLLING_INTERVAL_SECONDS: ${{ inputs.polling_interval_seconds }}
+        WARNING_ON_RETRY: ${{ inputs.warning_on_retry }}
+        ON_RETRY_COMMAND: ${{ inputs.on_retry_command }}
+        NEW_COMMAND_ON_RETRY: ${{ inputs.new_command_on_retry }}
+        RETRY_ON_EXIT_CODE: ${{ inputs.retry_on_exit_code }}
+        RETRY_ON: ${{ inputs.retry_on }}
+        SHELL_NAME: ${{ inputs.shell }}
+      run: |
+        set -euo pipefail
+        ARGS=(
+          --command "${COMMAND}"
+          --max-attempts "${MAX_ATTEMPTS}"
+          --retry-wait-seconds "${RETRY_WAIT_SECONDS}"
+          --timeout-seconds "${TIMEOUT_SECONDS}"
+          --timeout-minutes "${TIMEOUT_MINUTES}"
+          --polling-interval-seconds "${POLLING_INTERVAL_SECONDS}"
+          --warning-on-retry "${WARNING_ON_RETRY}"
+          --on-retry-command "${ON_RETRY_COMMAND}"
+          --new-command-on-retry "${NEW_COMMAND_ON_RETRY}"
+          --retry-on-exit-code "${RETRY_ON_EXIT_CODE}"
+          --retry-on "${RETRY_ON}"
+          --shell "${SHELL_NAME}"
+          --output "${GITHUB_OUTPUT}"
+        )
+        bash "${ACTION_PATH}/retry.sh" "${ARGS[@]}"

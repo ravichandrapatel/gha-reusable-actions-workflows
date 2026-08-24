@@ -1,0 +1,192 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Match inventory, then allowlisted branch + CI stages.
+# VERSION: 2.0.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: 'Build Preprocess'
+description: 'Match inventory.json and allowlisted branch; emit CI stages'
+
+inputs:
+  inventory_file:
+    description: 'Inventory JSON basename inside this action directory'
+    required: false
+    default: 'inventory.json'
+  repo:
+    description: 'Caller owner/repo or repo name to match; empty uses GITHUB_REPOSITORY'
+    required: false
+    default: ''
+  branch:
+    description: 'Branch to check; empty uses GITHUB_HEAD_REF then GITHUB_REF_NAME'
+    required: false
+    default: ''
+  app_build_type:
+    description: 'App build type: maven, ng-ui, or dotnet'
+    required: true
+  bot_name:
+    description: 'Actor treated as auto-commit bot; other stages skip when github.actor matches'
+    required: false
+    default: ''
+  soft:
+    description: 'If true, inventory or branch miss writes false and the step succeeds'
+    required: false
+    default: 'false'
+
+outputs:
+  repos:
+    description: 'JSON array of repo names'
+    value: ${{ steps.read.outputs.repos }}
+  matched:
+    description: 'true when the caller repo is listed; false on --soft miss'
+    value: ${{ steps.read.outputs.matched }}
+  repo:
+    description: 'Resolved caller repo used for the inventory match'
+    value: ${{ steps.read.outputs.repo }}
+  branch:
+    description: 'Resolved branch used for the allowlist check'
+    value: ${{ steps.branch.outputs.branch }}
+  approved:
+    description: 'true when the branch matches an approved glob; false on --soft miss'
+    value: ${{ steps.branch.outputs.approved }}
+  stages:
+    description: 'Comma-separated stages to run'
+    value: ${{ steps.branch.outputs.stages }}
+  snapshot_artifact:
+    description: 'true when not auto-commit, branch is develop, and the event is not a pull request'
+    value: ${{ steps.branch.outputs.snapshot_artifact }}
+  release_artifact:
+    description: 'true when not auto-commit and workflow_dispatch on release/* or hotfix/*'
+    value: ${{ steps.branch.outputs.release_artifact }}
+  docker:
+    description: 'true when not auto-commit, not a library, workflow_dispatch, and not a pull request'
+    value: ${{ steps.branch.outputs.docker }}
+  auto_commit:
+    description: 'true when github.actor matches bot_name'
+    value: ${{ steps.branch.outputs.auto_commit }}
+  bot_name:
+    description: 'Configured auto-commit bot name'
+    value: ${{ steps.branch.outputs.bot_name }}
+  app_build_type:
+    description: 'Validated app build type: maven, ng-ui, or dotnet'
+    value: ${{ steps.branch.outputs.app_build_type }}
+  template:
+    description: 'From project.values TEMPLATE'
+    value: ${{ steps.branch.outputs.template }}
+  application_name:
+    description: 'From project.values APPLICATION_NAME'
+    value: ${{ steps.branch.outputs.application_name }}
+  organization:
+    description: 'From project.values ORGANIZATION'
+    value: ${{ steps.branch.outputs.organization }}
+  product:
+    description: 'From project.values PRODUCT'
+    value: ${{ steps.branch.outputs.product }}
+  project_description:
+    description: 'From project.values PROJECT_DESCRIPTION'
+    value: ${{ steps.branch.outputs.project_description }}
+  cmdbidnpd:
+    description: 'From project.values CMDBIDNPD'
+    value: ${{ steps.branch.outputs.cmdbidnpd }}
+  cmdbidprd:
+    description: 'From project.values CMDBIDPRD'
+    value: ${{ steps.branch.outputs.cmdbidprd }}
+  teamaadgroupnpg:
+    description: 'From project.values TEAMAADGROUPNPG'
+    value: ${{ steps.branch.outputs.teamaadgroupnpg }}
+  teaaadgroupprd:
+    description: 'From project.values TEAAADGROUPPRD'
+    value: ${{ steps.branch.outputs.teaaadgroupprd }}
+  builder_base_image:
+    description: 'From build.values BUILDER_BASE_IMAGE'
+    value: ${{ steps.branch.outputs.builder_base_image }}
+  cpgbuild_app_origin:
+    description: 'From build.values CPGBUILD_APP_ORIGIN'
+    value: ${{ steps.branch.outputs.cpgbuild_app_origin }}
+  checks_type_skip:
+    description: 'false when cpgbuild_app_origin is empty; true otherwise'
+    value: ${{ steps.branch.outputs.checks_type_skip }}
+  is_library:
+    description: 'maven only: n when project.values has TEMPLATE; y when TEMPLATE is missing'
+    value: ${{ steps.branch.outputs.is_library }}
+  sonar_inclusions:
+    description: '-Dsonar.inclusions=<list> when CPGBUILD_SONAR_INCLUSION_LIST is set in build.values'
+    value: ${{ steps.branch.outputs.sonar_inclusions }}
+  sonar_exclusions:
+    description: '-Dsonar.exclusions=<list> when CPGBUILD_SONAR_EXCLUSION_LIST is set in build.values'
+    value: ${{ steps.branch.outputs.sonar_exclusions }}
+  sonar_cli_args:
+    description: 'Joined sonar inclusion and exclusion -D arguments'
+    value: ${{ steps.branch.outputs.sonar_cli_args }}
+  application_version:
+    description: 'package.json version (ng-ui) or pom parent/version if present else project version (maven)'
+    value: ${{ steps.branch.outputs.application_version }}
+  parent_version:
+    description: 'From pom.xml parent/version when app_build_type is maven'
+    value: ${{ steps.branch.outputs.parent_version }}
+  project_version:
+    description: 'From pom.xml project version when app_build_type is maven (SNAPSHOT left as-is)'
+    value: ${{ steps.branch.outputs.project_version }}
+  artifact_id:
+    description: 'From pom.xml artifactId when app_build_type is maven'
+    value: ${{ steps.branch.outputs.artifact_id }}
+  name:
+    description: 'From pom.xml name when app_build_type is maven'
+    value: ${{ steps.branch.outputs.name }}
+  java_version:
+    description: 'From pom.xml properties/java.version when app_build_type is maven'
+    value: ${{ steps.branch.outputs.java_version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Match caller against inventory
+      id: read
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        INVENTORY_FILE: ${{ inputs.inventory_file }}
+        REPO: ${{ inputs.repo }}
+        SOFT: ${{ inputs.soft }}
+        PYTHONUNBUFFERED: "1"
+      run: |
+        set -euo pipefail
+        ARGS=(
+          --action-path "${ACTION_PATH}"
+          --inventory-file "${INVENTORY_FILE}"
+          --output "${GITHUB_OUTPUT}"
+        )
+        if [[ -n "${REPO}" ]]; then
+          ARGS+=(--repo "${REPO}")
+        fi
+        if [[ "${SOFT}" == "true" ]]; then
+          ARGS+=(--soft)
+        fi
+        python3 -u "${ACTION_PATH}/checkInventory.py" "${ARGS[@]}"
+
+    - name: Check branch and emit stages
+      id: branch
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        BRANCH: ${{ inputs.branch }}
+        APP_BUILD_TYPE: ${{ inputs.app_build_type }}
+        EVENT_NAME: ${{ github.event_name }}
+        ACTOR: ${{ github.actor }}
+        BOT_NAME: ${{ inputs.bot_name }}
+        PYTHONUNBUFFERED: "1"
+      run: |
+        set -euo pipefail
+        ARGS=(
+          --app-build-type "${APP_BUILD_TYPE}"
+          --event "${EVENT_NAME}"
+          --actor "${ACTOR}"
+          --output "${GITHUB_OUTPUT}"
+        )
+        if [[ -n "${BRANCH}" ]]; then
+          ARGS+=(--branch "${BRANCH}")
+        fi
+        if [[ -n "${BOT_NAME}" ]]; then
+          ARGS+=(--bot-name "${BOT_NAME}")
+        fi
+        python3 -u "${ACTION_PATH}/preprocess.py" "${ARGS[@]}"

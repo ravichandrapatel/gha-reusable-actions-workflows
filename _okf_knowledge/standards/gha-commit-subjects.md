@@ -17,7 +17,7 @@ House rules for subjects in `gha-reusable-actions-workflows`. Enforced by `polic
 2. Subject **MUST** use a keyword: `feat`, `fix`, `chore`, `docs`, `refactor`, `perf`, `test`, `style`.
 3. Subject **MUST** match one of the four supported ticket+keyword formats documented in the repo README.
 4. Empty subjects **MUST** fail validation.
-5. A `release` **MUST** include at least one `feat`, `fix`, or `chore` since the last component tag (or release fails).
+5. A `release` **MUST** include at least one `feat`, `fix`, or `chore` since the last component tag (or release fails). Scope is optional (`feat:`, `feat({safe_name}):`, `feat(prbot):`, etc.) and does not change whether the keyword bumps.
 
 ## SHOULD
 
@@ -35,6 +35,8 @@ House rules for subjects in `gha-reusable-actions-workflows`. Enforced by `polic
 | `fix`, `chore` | Patch |
 | `docs`, `refactor`, `perf`, `test`, `style` | None |
 
+**Scope:** optional. `feat:`, `feat():`, `feat({safe_name}):`, and `feat(other):` (e.g. `feat(prbot):`) all bump when the keyword is `feat`/`fix`/`chore`.
+
 ## Prompt Card
 
 ```text
@@ -44,6 +46,7 @@ Commit subject MUST:
 - empty subject fails; Merge commits exempt
 - Dependabot SHOULD: DCDT-0000 chore
 SemVer: feat=minor; fix|chore=patch; docs|refactor|perf|test|style=none
+Scope optional (feat(prbot) etc. still bumps); keyword drives bump
 Release needs ≥1 feat|fix|chore since last tag
 ```
 

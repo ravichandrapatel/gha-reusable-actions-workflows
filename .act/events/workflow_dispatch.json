@@ -1,0 +1,11 @@
+{
+  "inputs": {},
+  "ref": "refs/heads/main",
+  "repository": {
+    "full_name": "ravichandrapatel/gha-reusable-actions-workflows",
+    "name": "gha-reusable-actions-workflows",
+    "owner": {
+      "login": "ravichandrapatel"
+    }
+  }
+}

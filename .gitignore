@@ -22,3 +22,9 @@ _okf_knowledge/.okf-snapshots/
 .vars
 .act/.secrets
 .act/.vars
+
+temp
+
+# GitHub App private keys (do not commit)
+*.pem
+thecaptainhub-platform*

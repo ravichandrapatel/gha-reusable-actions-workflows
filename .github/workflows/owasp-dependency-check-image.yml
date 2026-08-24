@@ -1,0 +1,169 @@
+# =============================================================================
+# FILE_NAME: owasp-dependency-check-image.yml
+# DESCRIPTION: Build and publish house OWASP Dependency-Check image (daily NVD refresh + version bump PR).
+# VERSION: 1.1.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: OWASP Dependency-Check Image
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: Force image rebuild even when DC_VERSION is already current
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: owasp-dependency-check-image
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: owasp-dependency-check
+  DC_CURRENT_URL: https://dependency-check.github.io/DependencyCheck/current.txt
+  CONTAINER_DIR: actions/security/owasp-dependency-check/container
+
+jobs:
+  evaluate:
+    name: evaluate-upstream-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      latest_version: ${{ steps.compare.outputs.latest_version }}
+      pinned_version: ${{ steps.compare.outputs.pinned_version }}
+      needs_build: ${{ steps.compare.outputs.needs_build }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Compare upstream and pinned versions
+        id: compare
+        env:
+          FORCE_BUILD: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force_build || 'false' }}
+        run: |
+          set -euo pipefail
+          LATEST="$(curl -fsSL "${DC_CURRENT_URL}" | tr -d '[:space:]')"
+          PINNED="$(grep -E '^DC_VERSION=' "${CONTAINER_DIR}/dc-version.env" | cut -d= -f2- | tr -d '[:space:]')"
+          if [[ -z "${LATEST}" || ! "${LATEST}" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+            echo "ERROR: invalid upstream version '${LATEST}' from ${DC_CURRENT_URL}" >&2
+            exit 1
+          fi
+          if [[ -z "${PINNED}" ]]; then
+            echo "ERROR: missing DC_VERSION in ${CONTAINER_DIR}/dc-version.env" >&2
+            exit 1
+          fi
+          NEEDS="false"
+          if [[ "${FORCE_BUILD}" == "true" || "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            NEEDS="true"
+          elif [[ "${LATEST}" != "${PINNED}" ]]; then
+            NEEDS="true"
+          fi
+          {
+            echo "latest_version=${LATEST}"
+            echo "pinned_version=${PINNED}"
+            echo "needs_build=${NEEDS}"
+          } >> "${GITHUB_OUTPUT}"
+          echo "Upstream=${LATEST} pinned=${PINNED} needs_build=${NEEDS}"
+
+  build-and-push:
+    name: build-and-push
+    needs: evaluate
+    if: needs.evaluate.outputs.needs_build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ${{ env.CONTAINER_DIR }}
+          push: true
+          build-args: |
+            DC_VERSION=${{ needs.evaluate.outputs.latest_version }}
+            NVD_REFRESH_DATE=${{ github.run_id }}
+          tags: |
+            ghcr.io/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ needs.evaluate.outputs.latest_version }}
+            ghcr.io/${{ github.repository }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  bump-version:
+    name: bump-pinned-version
+    needs: [evaluate, build-and-push]
+    if: >-
+      needs.evaluate.outputs.needs_build == 'true'
+      && needs.evaluate.outputs.latest_version != needs.evaluate.outputs.pinned_version
+    runs-on: ubuntu-latest
+    environment: ci-publish
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Update pinned DC version
+        env:
+          LATEST: ${{ needs.evaluate.outputs.latest_version }}
+        run: |
+          set -euo pipefail
+          printf 'DC_VERSION=%s\n' "${LATEST}" > "${CONTAINER_DIR}/dc-version.env"
+
+      - name: Create pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST: ${{ needs.evaluate.outputs.latest_version }}
+          PINNED: ${{ needs.evaluate.outputs.pinned_version }}
+          DC_CURRENT_URL: ${{ env.DC_CURRENT_URL }}
+          CONTAINER_DIR: ${{ env.CONTAINER_DIR }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          BRANCH="owasp-dc-image/${LATEST}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${BRANCH}"
+          git add "${CONTAINER_DIR}/dc-version.env"
+          git commit -m "$(cat <<EOF
+          chore(owasp): pin dependency-check image to ${LATEST}
+
+          Upstream OWASP Dependency-Check advanced from ${PINNED} to ${LATEST}.
+          GHCR image tags ${LATEST} and latest were published by owasp-dependency-check-image workflow.
+          EOF
+          )"
+          git push -u origin "${BRANCH}"
+          gh pr create --title "chore(owasp): pin dependency-check image to ${LATEST}" --body "$(cat <<EOF
+          ## Summary
+          - Bumps \`${CONTAINER_DIR}/dc-version.env\` from **${PINNED}** to **${LATEST}**
+          - Matches [upstream current.txt](${DC_CURRENT_URL})
+          - Image published: \`ghcr.io/${GH_REPOSITORY}/${IMAGE_NAME}:${LATEST}\`
+
+          ## Test plan
+          - [ ] Merge after \`owasp-dependency-check-image\` workflow succeeded
+          - [ ] Run an OWASP scan job against the new GHCR tag
+          EOF
+          )"

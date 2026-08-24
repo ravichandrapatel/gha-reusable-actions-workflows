@@ -1,46 +1,48 @@
 ---
 type: Playbook
 title: Release GHA Component
-description: Run Release Manager mode release/promote/rollback for a monorepo component.
+description: Run Release Manager mode release/release-promote/promote/rollback for a monorepo component.
 tags: [github-actions, playbook, release]
-timestamp: 2026-07-14T17:40:00Z
+timestamp: 2026-08-17T02:18:00Z
 status: active
 ---
 
 # Trigger
 
-You need to release, promote, or roll back a composite action or reusable workflow.
+You need to release, promote, release-and-promote, or roll back a composite action or reusable workflow.
 
 # Preconditions
 
 - Component path valid under `actions/` or `workflows/`.
 - Secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` configured.
-- Understand [Release Manager modes](/vault/concepts/release-manager-modes.md).
+- Understand [Release Manager modes](/vault/concepts/release-manager-modes.md). Workflow deploys queue globally; action deploys run in parallel.
 
 # Steps
 
-1. Ensure commits since last tag include `feat`/`fix`/`chore` if auto-bumping ([SemVer from commits](/vault/concepts/semver-from-commits.md)).
+1. Ensure commits since last tag include `feat`/`fix`/`chore` if auto-bumping ([SemVer from commits](/vault/concepts/semver-from-commits.md)); scope is optional (`feat(prbot):` counts).
 2. Open Actions -> **Release Manager** (`workflow_dispatch`).
 3. Set `component_path` (e.g. `actions/common/janitor-bot`).
 4. Set `mode`:
    - `release` — sandbox versioned tag + security stage
-   - `promote` — move `{safe_name}-v1` to chosen version
+   - `release-promote` — security + versioned tag + stable `{safe_name}/v1` in one run (production)
+   - `promote` — move `{safe_name}/v1` to chosen version
    - `rollback` — previous versioned tag (+ restore workflow file if needed)
 5. Optionally set `version` to pin SemVer / target.
-6. Wait for Validate -> Security (release only) -> Execute.
+6. Wait for Validate -> Security (release / release-promote) -> Execute.
 
 # Verification
 
 - [ ] Versioned or stable tag exists remotely as expected ([Component tagging](/vault/concepts/component-tagging.md))
 - [ ] For workflow releases, `.github/workflows/{name}.yml` matches source
-- [ ] Consumers can reference `@v1` after promote
+- [ ] Consumers can reference `@{safe_name}/v1` after promote
 
 ## Prompt Card
 
 ```text
 Release: Actions -> Release Manager (workflow_dispatch); set component_path + mode
-(release|promote|rollback), optional version. Auto-bump needs feat/fix/chore commits
-since last tag. Verify remote tag ({safe_name}-{X.Y.Z} or -v1) and synced workflow file.
+(release|release-promote|promote|rollback), optional version. Auto-bump needs feat/fix/chore
+commits since last tag (any scope, e.g. feat(prbot)). Verify remote tag ({safe_name}/v{X.Y.Z}
+or /v1) and synced workflow file.
 ```
 
 # Related
