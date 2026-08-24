@@ -1,35 +1,27 @@
 # =============================================================================
 # FILE_NAME: action.yml
 # DESCRIPTION: Run Maven with caller-supplied goals and CLI arguments.
-# VERSION: 1.1.0
+# VERSION: 2.4.0
 # AUTHORS: DevOps Team
 # =============================================================================
 
 name: 'Maven'
-description: 'Run mvn with caller-supplied goals and options; select Java on self-hosted runners'
+description: 'Run mvn with caller-supplied goals and options; pair with actions/setup-java for Java'
 
 inputs:
   args:
-    description: 'Maven goals and options (e.g. clean package -DskipTests)'
+    description: 'Maven goals and options (e.g. clean package -DskipTests or deploy -s settings.xml)'
     required: true
-  java-version:
-    description: 'Major Java version from pom.xml (e.g. 21). Used to select JAVA_HOME on self-hosted runners'
-    required: false
-    default: ''
-  java-setup:
-    description: 'Java selection — auto (select when java-version set), skip (use existing JAVA_HOME), require (fail if JAVA_HOME unset)'
+  maven-setup:
+    description: 'Maven CLI — auto (install Apache Maven when mvn/mvnw missing), skip (fail if missing), require (fail if missing after install attempt)'
     required: false
     default: 'auto'
-  working-directory:
-    description: 'Directory containing pom.xml; empty uses GITHUB_WORKSPACE'
+  maven-version:
+    description: 'Apache Maven version to install when mvn is missing; empty auto-detects from pom.xml, then 3.9.9'
     required: false
     default: ''
-  maven-executable:
-    description: 'Maven executable on PATH'
-    required: false
-    default: 'mvn'
-  settings-file:
-    description: 'Path to settings.xml passed as mvn -s'
+  working-directory:
+    description: 'Directory containing pom.xml; empty uses GITHUB_WORKSPACE'
     required: false
     default: ''
   maven-opts:
@@ -45,27 +37,141 @@ outputs:
     description: 'project.version from pom.xml when readable after a successful run'
     value: ${{ steps.maven.outputs.project_version }}
   java_home:
-    description: 'JAVA_HOME used for the Maven run'
+    description: 'JAVA_HOME from the runner (typically set by actions/setup-java)'
     value: ${{ steps.maven.outputs.java_home }}
+  maven_version:
+    description: 'Resolved Apache Maven distribution version when installed or on PATH'
+    value: ${{ steps.install.outputs.maven_version }}
 
 runs:
   using: composite
   steps:
+    - name: Install Maven
+      id: install
+      shell: bash
+      env:
+        MAVEN_SETUP: ${{ inputs.maven-setup }}
+        MAVEN_VERSION: ${{ inputs.maven-version }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory != '' && inputs.working-directory || github.workspace }}
+      run: |
+        set -euo pipefail
+        cd "${WORKING_DIRECTORY}"
+
+        resolve_maven_version() {
+          if [[ -n "${MAVEN_VERSION:-}" ]]; then
+            echo "${MAVEN_VERSION}"
+            return
+          fi
+
+          if [[ -f pom.xml ]]; then
+            local from_pom=""
+            from_pom="$(
+              grep -E '<maven\.version>' pom.xml \
+                | sed -E 's#.*<maven\.version>[[:space:]]*([^<[:space:]]+)[[:space:]]*</maven\.version>.*#\1#' \
+                | head -1 \
+                | tr -d '[:space:]'
+            )"
+            if [[ -n "${from_pom}" ]]; then
+              echo "${from_pom}"
+              return
+            fi
+          fi
+
+          echo "3.9.9"
+        }
+
+        if [[ -x ./mvnw ]]; then
+          echo "Using Maven Wrapper ${PWD}/mvnw"
+          echo "MAVEN_EXECUTABLE=${PWD}/mvnw" >> "${GITHUB_ENV}"
+          echo "maven_version=$(resolve_maven_version)" >> "${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        if command -v mvn >/dev/null 2>&1; then
+          echo "Using Maven on PATH"
+          echo "MAVEN_EXECUTABLE=mvn" >> "${GITHUB_ENV}"
+          detected="$(mvn -version 2>/dev/null | awk '/Apache Maven/ { print $3; exit }')"
+          echo "maven_version=${detected:-unknown}" >> "${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        setup_mode="${MAVEN_SETUP,,}"
+        if [[ "${setup_mode}" == "skip" || "${setup_mode}" == "require" ]]; then
+          echo "::error::Maven not found and maven-setup=${MAVEN_SETUP}" >&2
+          exit 1
+        fi
+
+        version="$(resolve_maven_version)"
+        echo "Resolved Maven version: ${version}"
+        echo "maven_version=${version}" >> "${GITHUB_OUTPUT}"
+        cache_root="${RUNNER_TOOL_CACHE:-${HOME}/.cache/gha-tools}"
+        install_dir="${cache_root}/Maven/${version}/x64"
+        mvn_bin="${install_dir}/bin/mvn"
+
+        if [[ ! -x "${mvn_bin}" ]]; then
+          url="https://archive.apache.org/dist/maven/maven-3/${version}/binaries/apache-maven-${version}-bin.tar.gz"
+          echo "Downloading Maven ${version} from ${url}"
+          tmp="$(mktemp -d)"
+          curl -fsSL "${url}" -o "${tmp}/maven.tgz"
+          mkdir -p "${install_dir}"
+          tar -xzf "${tmp}/maven.tgz" -C "${tmp}"
+          cp -a "${tmp}/apache-maven-${version}/." "${install_dir}/"
+          rm -rf "${tmp}"
+        fi
+
+        echo "MAVEN_HOME=${install_dir}" >> "${GITHUB_ENV}"
+        echo "PATH=${install_dir}/bin:${PATH}" >> "${GITHUB_ENV}"
+        echo "MAVEN_EXECUTABLE=${mvn_bin}" >> "${GITHUB_ENV}"
+        "${mvn_bin}" -version
+
     - name: Run Maven
       id: maven
       shell: bash
       env:
-        ACTION_PATH: ${{ github.action_path }}
         MAVEN_ARGS: ${{ inputs.args }}
-        MAVEN_EXECUTABLE: ${{ inputs.maven-executable }}
         MAVEN_OPTS: ${{ inputs.maven-opts }}
-        SETTINGS_FILE: ${{ inputs.settings-file }}
-        JAVA_VERSION: ${{ inputs.java-version }}
-        JAVA_SETUP: ${{ inputs.java-setup }}
         WORKING_DIRECTORY: ${{ inputs.working-directory != '' && inputs.working-directory || github.workspace }}
       run: |
         set -euo pipefail
-        bash "${ACTION_PATH}/maven.sh"
+        cd "${WORKING_DIRECTORY}"
+
+        executable="${MAVEN_EXECUTABLE:-mvn}"
+        if [[ "${executable}" != /* ]] && ! command -v "${executable}" >/dev/null 2>&1; then
+          echo "::error::Maven executable not found: ${executable}" >&2
+          exit 1
+        fi
+
+        cmd=("${executable}")
+        # shellcheck disable=SC2206
+        extra=(${MAVEN_ARGS})
+        cmd+=("${extra[@]}")
+
+        if [[ -n "${MAVEN_OPTS:-}" ]]; then
+          export MAVEN_OPTS
+        fi
+
         if [[ -n "${JAVA_HOME:-}" ]]; then
           echo "java_home=${JAVA_HOME}" >> "${GITHUB_OUTPUT}"
+        fi
+
+        echo "Running Maven in ${WORKING_DIRECTORY}"
+        printf '+'
+        printf ' %q' "${cmd[@]}"
+        printf '\n'
+        set +e
+        "${cmd[@]}"
+        exit_code=$?
+        set -e
+        echo "exit_code=${exit_code}" >> "${GITHUB_OUTPUT}"
+
+        if [[ ${exit_code} -ne 0 ]]; then
+          echo "::error::Maven exited with code ${exit_code}" >&2
+          exit "${exit_code}"
+        fi
+
+        if [[ -f pom.xml ]]; then
+          project_version="$("${executable}" -q -DforceStdout help:evaluate -Dexpression=project.version 2>/dev/null || true)"
+          if [[ -n "${project_version}" ]]; then
+            echo "project_version=${project_version}" >> "${GITHUB_OUTPUT}"
+          fi
         fi

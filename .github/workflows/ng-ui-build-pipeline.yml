@@ -1,7 +1,7 @@
 # =============================================================================
 # FILE_NAME: workflow.yml
 # DESCRIPTION: Reusable ng-ui CI — preprocess, build/test/lint, OWASP, Sonar, publish, docker.
-# VERSION: 1.2.0
+# VERSION: 1.4.0
 # AUTHORS: DevOps Team
 # =============================================================================
 
@@ -101,13 +101,14 @@ jobs:
       product: ${{ steps.preprocess.outputs.product }}
       sonar_cli_args: ${{ steps.preprocess.outputs.sonar_cli_args }}
       branch: ${{ steps.preprocess.outputs.branch }}
+      node_version: ${{ steps.preprocess.outputs.node_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build preprocess
         id: preprocess
-        uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/build-preprocess@build-preprocess/v2.0.0
+        uses: ./actions/common/build-preprocess
         with:
           app_build_type: ng-ui
           bot_name: ${{ inputs.bot_name }}
@@ -123,10 +124,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup Node.js
+      - &resolve_node_version_step
+        name: Resolve Node.js version
+        id: node
+        uses: ./actions/common/resolve-node-version
+        with:
+          node-version: ${{ needs.build-preprocess.outputs.node_version }}
+
+      - &setup_node_step
+        name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: package.json
+          node-version: ${{ steps.node.outputs.node_version }}
           cache: npm
 
       - name: Install
@@ -291,11 +300,8 @@ jobs:
           persist-credentials: true
           token: ${{ secrets.GH_TOKEN != '' && secrets.GH_TOKEN || github.token }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: package.json
-          cache: npm
+      - *resolve_node_version_step
+      - *setup_node_step
 
       - name: Install
         run: |

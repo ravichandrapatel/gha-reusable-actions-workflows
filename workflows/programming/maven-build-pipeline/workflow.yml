@@ -1,7 +1,7 @@
 # =============================================================================
 # FILE_NAME: workflow.yml
 # DESCRIPTION: Reusable Maven CI — preprocess, build/test, OWASP, Sonar, Nexus deploy, S2I docker.
-# VERSION: 1.1.0
+# VERSION: 1.3.0
 # AUTHORS: DevOps Team
 # =============================================================================
 
@@ -20,11 +20,16 @@ on:
         type: string
         required: false
         default: ""
-      java_setup:
-        description: Maven action Java selection — auto on self-hosted, skip on GitHub-hosted
+      maven_setup:
+        description: Maven action CLI setup — auto installs Apache Maven on self-hosted when mvn is missing
         type: string
         required: false
         default: auto
+      maven_version:
+        description: Optional Maven version override for self-hosted install; empty auto-detects from pom.xml
+        type: string
+        required: false
+        default: ""
       scan_profile:
         description: OWASP scan profile — auto, maven-ui, or maven-svc
         type: string
@@ -40,11 +45,6 @@ on:
         type: string
         required: false
         default: deploy -DskipTests
-      settings_file:
-        description: Maven settings.xml path passed as mvn -s
-        type: string
-        required: false
-        default: ""
       sonar_host_url:
         description: SonarQube server URL
         type: string
@@ -141,8 +141,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Java (GitHub-hosted)
-        if: runner.environment == 'github-hosted'
+      - name: Set up Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
@@ -153,9 +152,8 @@ jobs:
         uses: ./actions/common/maven
         with:
           args: ${{ inputs.maven_build_args }}
-          java-version: ${{ needs.build-preprocess.outputs.java_version }}
-          java-setup: ${{ runner.environment == 'self-hosted' && inputs.java_setup || 'skip' }}
-          settings-file: ${{ inputs.settings_file }}
+          maven-setup: ${{ runner.environment == 'self-hosted' && inputs.maven_setup || 'skip' }}
+          maven-version: ${{ inputs.maven_version }}
 
       - name: Upload Maven target
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -317,24 +315,39 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Java (GitHub-hosted)
-        if: runner.environment == 'github-hosted'
+      - name: Set up Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: ${{ needs.build-preprocess.outputs.java_version }}
           cache: maven
 
-      - name: Maven publish to Nexus
-        uses: ./actions/common/maven
+      - name: Write Maven settings
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cat <<EOF | sed 's/^          //' > "${{ runner.temp }}/settings.xml"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
+            <servers>
+              <server>
+                <id>nexus</id>
+                <username>${NEXUS_USERNAME}</username>
+                <password>${NEXUS_PASSWORD}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+          chmod 600 "${{ runner.temp }}/settings.xml"
+
+      - name: Maven publish to Nexus
+        uses: ./actions/common/maven
         with:
-          args: ${{ inputs.maven_publish_args }}
-          java-version: ${{ needs.build-preprocess.outputs.java_version }}
-          java-setup: ${{ runner.environment == 'self-hosted' && inputs.java_setup || 'skip' }}
-          settings-file: ${{ inputs.settings_file }}
+          args: ${{ inputs.maven_publish_args }} -s ${{ runner.temp }}/settings.xml
+          maven-setup: ${{ runner.environment == 'self-hosted' && inputs.maven_setup || 'skip' }}
+          maven-version: ${{ inputs.maven_version }}
 
   docker-build:
     name: docker-build

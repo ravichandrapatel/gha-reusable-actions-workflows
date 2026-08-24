@@ -1,7 +1,7 @@
 # =============================================================================
 # FILE_NAME: action.yml
 # DESCRIPTION: Match inventory, then allowlisted branch + CI stages.
-# VERSION: 2.0.0
+# VERSION: 2.5.0
 # AUTHORS: DevOps Team
 # =============================================================================
 
@@ -122,10 +122,10 @@ outputs:
     description: 'package.json version (ng-ui) or pom parent/version if present else project version (maven)'
     value: ${{ steps.branch.outputs.application_version }}
   parent_version:
-    description: 'From pom.xml parent/version when app_build_type is maven'
+    description: 'ng-ui @test/components version when declared; maven parent/version'
     value: ${{ steps.branch.outputs.parent_version }}
   project_version:
-    description: 'From pom.xml project version when app_build_type is maven (SNAPSHOT left as-is)'
+    description: 'ng-ui package.json version; maven project version (SNAPSHOT left as-is)'
     value: ${{ steps.branch.outputs.project_version }}
   artifact_id:
     description: 'From pom.xml artifactId when app_build_type is maven'
@@ -136,6 +136,12 @@ outputs:
   java_version:
     description: 'From pom.xml properties/java.version when app_build_type is maven'
     value: ${{ steps.branch.outputs.java_version }}
+  node_version:
+    description: 'From package.json engines.node or .nvmrc/.node-version when app_build_type is ng-ui'
+    value: ${{ steps.branch.outputs.node_version }}
+  dotnet_version:
+    description: 'From global.json sdk.version or csproj TargetFramework when app_build_type is dotnet'
+    value: ${{ steps.branch.outputs.dotnet_version }}
 
 runs:
   using: composite

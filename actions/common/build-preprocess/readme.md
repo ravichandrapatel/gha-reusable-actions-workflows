@@ -72,12 +72,14 @@ If the caller is not listed and `soft` is false, the action **exits 1**. With `s
 | `sonar_inclusions` | `-Dsonar.inclusions=<list>` when `CPGBUILD_SONAR_INCLUSION_LIST` is set; empty otherwise. |
 | `sonar_exclusions` | `-Dsonar.exclusions=<list>` when `CPGBUILD_SONAR_EXCLUSION_LIST` is set; empty otherwise. |
 | `sonar_cli_args` | Joined inclusion and exclusion `-D` arguments. |
-| `application_version` | `package.json` `version` (`ng-ui`). Maven: `parent/version` if that element exists, else project `<version>`. No SNAPSHOT stripping. |
-| `parent_version` | Maven `parent/version` (empty if absent). |
-| `project_version` | Maven project `<version>` as written, including `-SNAPSHOT`. |
+| `application_version` | ng-ui: `dependencies.@test/components` when declared, else `package.json` `version` (same rule as Maven parent vs project). Maven: parent `<version>` when parent exists, else project `<version>`. |
+| `parent_version` | ng-ui: `@test/components` version when declared. Maven: `parent/version`. |
+| `project_version` | ng-ui: `package.json` `version`. Maven: project `<version>`. |
 | `artifact_id` | From `pom.xml` `artifactId` when `app_build_type` is `maven`. |
 | `name` | From `pom.xml` `name` when `app_build_type` is `maven`. |
 | `java_version` | From `pom.xml` `properties/java.version` when `app_build_type` is `maven`. |
+| `node_version` | From `package.json` `engines.node`, or `.nvmrc` / `.node-version`, when `app_build_type` is `ng-ui`. |
+| `dotnet_version` | From `global.json` `sdk.version`, else `TargetFramework` / first `TargetFrameworks` in the csproj, when `app_build_type` is `dotnet`. |
 
 ## Usage
 

@@ -109,13 +109,13 @@ House composites are referenced by full repo path and release ref (never a secon
 
 | Component | `uses` |
 | --- | --- |
-| build-preprocess | `ravichandrapatel/gha-reusable-actions-workflows/actions/common/build-preprocess@build-preprocess/v2.0.0` |
+| build-preprocess | `./actions/common/build-preprocess` |
 | owasp-dependency-check | `.../actions/security/owasp-dependency-check@491b152c7dee57a80990de413f445c1fdeac1890` |
 | sonar-scan | `.../actions/security/sonar-scan@sonar-scan/v1.2.0` |
 | docker-login | `.../actions/common/docker-login@docker-login/v1.2.0` |
 | docker-build-and-push | `.../actions/common/docker-build-and-push@docker-build-and-push/v1.4.0` |
 
-Node is installed with `actions/setup-node` `node-version-file: package.json`. Preprocess does not parse `engines.node`.
+Node.js setup uses `./actions/common/resolve-node-version` (YAML anchor `&resolve_node_version_step`) plus `actions/setup-node` (`&setup_node_step`). Preprocess emits the raw range; the action resolves it (for example `>=18.20.0 <22.0.0` → `21`), then `setup-node` installs it.
 
 ## Usage
 

@@ -1,0 +1,34 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Resolve npm-style Node version ranges to a concrete setup-node version.
+# VERSION: 1.0.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: 'Resolve Node.js version'
+description: 'Convert engines.node / .nvmrc ranges to a concrete version for actions/setup-node'
+
+inputs:
+  node-version:
+    description: 'Raw Node version or range (e.g. >=18.20.0 <22.0.0, 20.11.1)'
+    required: true
+
+outputs:
+  node_version:
+    description: 'Resolved concrete Node.js version for setup-node'
+    value: ${{ steps.resolve.outputs.node_version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Node.js version
+      id: resolve
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        RAW_NODE_VERSION: ${{ inputs.node-version }}
+      run: |
+        set -euo pipefail
+        resolved="$(python3 "${ACTION_PATH}/resolve_node_version.py" --node-version "${RAW_NODE_VERSION}")"
+        echo "Resolved Node.js version: ${resolved} (from '${RAW_NODE_VERSION}')"
+        echo "node_version=${resolved}" >> "${GITHUB_OUTPUT}"

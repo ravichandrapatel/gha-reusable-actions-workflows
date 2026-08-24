@@ -1,7 +1,7 @@
 """
 FILE_NAME: preprocess.py
 DESCRIPTION: Branch allowlist, stages, values files, and maven/ng-ui/dotnet metadata.
-VERSION: 2.0.0
+VERSION: 2.5.0
 AUTHORS: DevOps Team
 """
 
@@ -16,7 +16,7 @@ from pathlib import Path
 
 PROJECT_KEY = "BUILD-PREPROCESS"
 
-APPROVED_BRANCHES = (
+ALLOWED_BRANCHES = (
     "main",
     "master",
     "develop",
@@ -33,52 +33,105 @@ BUILD_STAGES = [
     "docker",
 ]
 
-APP_BUILD_TYPES = [
-    "maven",
-    "ng-ui",
-    "dotnet",
-]
+APP_BUILD_TYPES = ["maven", "ng-ui", "dotnet"]
+
+OUTPUT_LABELS = {
+    "branch": "What is the branch name?",
+    "approved": "Is the branch approved?",
+    "event": "What is the GitHub event?",
+    "actor": "Who triggered the workflow?",
+    "bot_name": "What is the auto-commit bot name?",
+    "auto_commit": "Is this an auto-commit run?",
+    "snapshot_artifact": "Should a snapshot artifact be published?",
+    "release_artifact": "Should a release artifact be published?",
+    "docker": "Should the Docker stage run?",
+    "stages": "Which build stages should run?",
+    "app_build_type": "What is the app build type?",
+    "application_version": "What is the application version?",
+    "parent_version": "What is the parent version?",
+    "project_version": "What is the project version?",
+    "artifact_id": "What is the artifact ID?",
+    "name": "What is the project name?",
+    "java_version": "What is the Java version?",
+    "node_version": "What is the Node.js version?",
+    "dotnet_version": "What is the .NET version?",
+    "cpgbuild_app_origin": "What is the CPGBUILD app origin?",
+    "checks_type_skip": "Should checks type be skipped?",
+    "is_library": "Is this a library project?",
+    "sonar_inclusions": "What are the Sonar inclusion arguments?",
+    "sonar_exclusions": "What are the Sonar exclusion arguments?",
+    "sonar_cli_args": "What are the Sonar CLI arguments?",
+}
 
 
 def _log_error(message: str) -> None:
-    """Write a prefixed error message to stderr."""
     print(f"[{PROJECT_KEY}] {message}", file=sys.stderr)
 
 
 def _bool_str(value: bool) -> str:
-    """Return GitHub Actions-compatible true/false strings."""
     return "true" if value else "false"
 
 
+def _tag_name(element: ET.Element) -> str:
+    return element.tag.rsplit("}", 1)[-1]
+
+
 def xml_child(el: ET.Element | None, name: str) -> ET.Element | None:
-    """Return the first direct child element matching a local tag name."""
     if el is None:
         return None
     for child in el:
-        if child.tag.rsplit("}", 1)[-1] == name:
-            return child
-    return None
-
-
-def xml_find(el: ET.Element | None, name: str) -> ET.Element | None:
-    """Return the first descendant element matching a local tag name."""
-    if el is None:
-        return None
-    for child in el.iter():
-        if child.tag.rsplit("}", 1)[-1] == name:
+        if _tag_name(child) == name:
             return child
     return None
 
 
 def xml_text(el: ET.Element | None) -> str:
-    """Return stripped text from an XML element, or an empty string."""
     if el is None or el.text is None:
         return ""
     return el.text.strip()
 
 
+def xml_property(root: ET.Element, name: str) -> str:
+    """Prefer MSBuild PropertyGroup values over nested matches elsewhere in the tree."""
+    for el in root.iter():
+        if _tag_name(el) != "PropertyGroup":
+            continue
+        value = xml_text(xml_child(el, name))
+        if value:
+            return value
+    for el in root.iter():
+        if _tag_name(el) == name and el.text:
+            return el.text.strip()
+    return ""
+
+
+def _parse_xml(path: Path) -> ET.Element:
+    try:
+        return ET.parse(path).getroot()
+    except OSError as exc:
+        _log_error(str(exc))
+        raise
+    except ET.ParseError as exc:
+        _log_error(f"could not parse {path}: {exc}")
+        raise
+
+
+def _parse_json_object(path: Path, label: str) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        _log_error(str(exc))
+        raise
+    except json.JSONDecodeError as exc:
+        _log_error(f"could not parse {path}: {exc}")
+        raise
+    if not isinstance(data, dict):
+        _log_error(f"{label} must be a JSON object")
+        raise ValueError(f"invalid {label}")
+    return data
+
+
 def load_values(path: Path) -> dict[str, str]:
-    """Parse a key=value values file into a dictionary."""
     data: dict[str, str] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
@@ -92,9 +145,8 @@ def load_values(path: Path) -> dict[str, str]:
 
 
 def branch_approved(branch: str, pattern: str | None = None) -> bool:
-    """Return True when the branch matches an approved glob or pattern."""
     ref = branch.removeprefix("refs/heads/").strip()
-    patterns = (pattern,) if pattern is not None else APPROVED_BRANCHES
+    patterns = (pattern,) if pattern is not None else ALLOWED_BRANCHES
     for pat in patterns:
         if pat.endswith("/**"):
             prefix = pat[:-3]
@@ -106,7 +158,6 @@ def branch_approved(branch: str, pattern: str | None = None) -> bool:
 
 
 def resolve_branch(raw_branch: str) -> str:
-    """Resolve and normalize the branch from CLI args or GitHub env vars."""
     return (
         raw_branch.strip()
         or os.environ.get("GITHUB_HEAD_REF", "").strip()
@@ -115,7 +166,6 @@ def resolve_branch(raw_branch: str) -> str:
 
 
 def load_project_files(repo_root: Path) -> tuple[dict[str, str], dict[str, str]]:
-    """Load project.values and build.values from the caller repo root."""
     project_file = repo_root / "project.values"
     build_file = repo_root / "build.values"
     if not project_file.is_file():
@@ -128,36 +178,26 @@ def load_project_files(repo_root: Path) -> tuple[dict[str, str], dict[str, str]]
 
 
 def is_library_from_template(project_values: dict[str, str]) -> str:
-    """Return n for template apps and y for libraries."""
+    # TEMPLATE set => generated deployable app (not a shared library).
     return "n" if project_values.get("TEMPLATE", "").strip() else "y"
 
 
-def load_maven_metadata(
-    repo_root: Path,
-    project_values: dict[str, str],
-) -> dict[str, str]:
-    """Read Maven metadata and library flag from pom.xml."""
+def load_maven_metadata(repo_root: Path, project_values: dict[str, str]) -> dict[str, str]:
     pom_path = repo_root / "pom.xml"
     if not pom_path.is_file():
         _log_error(f"missing {pom_path}")
         raise FileNotFoundError(str(pom_path))
 
-    try:
-        root = ET.parse(pom_path).getroot()
-    except (OSError, ET.ParseError) as exc:
-        _log_error(str(exc))
-        raise
-
-    parent_version_el = xml_child(xml_child(root, "parent"), "version")
+    root = _parse_xml(pom_path)
+    parent_el = xml_child(root, "parent")
+    parent_version_el = xml_child(parent_el, "version") if parent_el is not None else None
     parent_version = xml_text(parent_version_el)
     project_version = xml_text(xml_child(root, "version"))
+    # Parent POM owns the release version when a parent block is declared.
     application_version = parent_version if parent_version_el is not None else project_version
-    artifact_id = xml_text(xml_child(root, "artifactId"))
-    pom_name = xml_text(xml_child(root, "name"))
     properties_el = xml_child(root, "properties")
     java_version = xml_text(xml_child(properties_el, "java.version"))
-    sonar_inclusions = xml_text(xml_child(properties_el, "sonar.inclusions"))
-    sonar_exclusions = xml_text(xml_child(properties_el, "sonar.exclusions"))
+    artifact_id = xml_text(xml_child(root, "artifactId"))
 
     if not application_version or not artifact_id or not java_version:
         _log_error("pom.xml must have version, artifactId, and properties/java.version")
@@ -168,19 +208,17 @@ def load_maven_metadata(
         "parent_version": parent_version,
         "project_version": project_version,
         "artifact_id": artifact_id,
-        "name": pom_name,
+        "name": xml_text(xml_child(root, "name")),
         "java_version": java_version,
-        "sonar_inclusions": sonar_inclusions,
-        "sonar_exclusions": sonar_exclusions,
+        "sonar_inclusions": xml_text(xml_child(properties_el, "sonar.inclusions")),
+        "sonar_exclusions": xml_text(xml_child(properties_el, "sonar.exclusions")),
         "is_library": is_library_from_template(project_values),
     }
 
 
 def find_csproj(repo_root: Path, application_name: str) -> Path:
-    """Return the best-matching csproj for the caller repo."""
-    candidates = sorted(repo_root.glob("*.csproj"))
-    if not candidates:
-        candidates = sorted(repo_root.rglob("*.csproj"))
+    # Root *.csproj first keeps monorepos with a single top-level project fast and unambiguous.
+    candidates = sorted(repo_root.glob("*.csproj")) or sorted(repo_root.rglob("*.csproj"))
     if not candidates:
         _log_error(f"missing *.csproj under {repo_root}")
         raise FileNotFoundError(str(repo_root / "*.csproj"))
@@ -199,47 +237,47 @@ def find_csproj(repo_root: Path, application_name: str) -> Path:
     raise ValueError("ambiguous csproj")
 
 
-def load_dotnet_metadata(
-    repo_root: Path,
-    project_values: dict[str, str],
-) -> dict[str, str]:
-    """Read dotnet metadata from Directory.Build.props and a csproj file."""
-    application_name = project_values.get("APPLICATION_NAME", "").strip()
-    csproj_path = find_csproj(repo_root, application_name)
+def load_dotnet_metadata(repo_root: Path, project_values: dict[str, str]) -> dict[str, str]:
+    csproj_path = find_csproj(repo_root, project_values.get("APPLICATION_NAME", "").strip())
+    root = _parse_xml(csproj_path)
 
-    props_path = repo_root / "Directory.Build.props"
-    props_root = None
     parent_version = ""
-    if props_path.is_file():
-        try:
-            props_root = ET.parse(props_path).getroot()
-        except (OSError, ET.ParseError) as exc:
-            _log_error(str(exc))
-            raise
-        parent_version = xml_text(xml_find(props_root, "Version"))
+    props_path = repo_root / "Directory.Build.props"
+    props_root = _parse_xml(props_path) if props_path.is_file() else None
+    if props_root is not None:
+        parent_version = xml_property(props_root, "Version")
 
-    try:
-        root = ET.parse(csproj_path).getroot()
-    except (OSError, ET.ParseError) as exc:
-        _log_error(str(exc))
-        raise
+    target_framework = xml_property(root, "TargetFramework")
+    if not target_framework:
+        target_frameworks = xml_property(root, "TargetFrameworks")
+        if target_frameworks:
+            target_framework = target_frameworks.split(";")[0].strip()
 
-    project_version = xml_text(xml_find(root, "Version"))
+    dotnet_version = ""
+    global_json = repo_root / "global.json"
+    if global_json.is_file():
+        data = _parse_json_object(global_json, "global.json")
+        sdk = data.get("sdk")
+        if isinstance(sdk, dict):
+            dotnet_version = str(sdk.get("version", "")).strip()
+    if not dotnet_version:
+        dotnet_version = target_framework
+
+    project_version = xml_property(root, "Version")
     application_version = project_version or parent_version
-    artifact_id = xml_text(xml_find(root, "AssemblyName")) or csproj_path.stem
-    product_name = xml_text(xml_find(root, "Product"))
-    target_framework = xml_text(xml_find(root, "TargetFramework"))
-    sonar_inclusions = xml_text(xml_find(root, "sonar.inclusions"))
-    sonar_exclusions = xml_text(xml_find(root, "sonar.exclusions"))
+    artifact_id = xml_property(root, "AssemblyName") or csproj_path.stem
+    sonar_inclusions = xml_property(root, "sonar.inclusions")
+    sonar_exclusions = xml_property(root, "sonar.exclusions")
     if props_root is not None:
         if not sonar_inclusions:
-            sonar_inclusions = xml_text(xml_find(props_root, "sonar.inclusions"))
+            sonar_inclusions = xml_property(props_root, "sonar.inclusions")
         if not sonar_exclusions:
-            sonar_exclusions = xml_text(xml_find(props_root, "sonar.exclusions"))
+            sonar_exclusions = xml_property(props_root, "sonar.exclusions")
 
-    if not application_version or not artifact_id or not target_framework:
+    if not application_version or not artifact_id or not dotnet_version:
         _log_error(
-            f"{csproj_path.name} must have Version, AssemblyName or filename, and TargetFramework"
+            f"{csproj_path.name} must have Version, AssemblyName or filename, and "
+            "TargetFramework/TargetFrameworks or global.json sdk.version"
         )
         raise ValueError("invalid csproj")
 
@@ -248,45 +286,83 @@ def load_dotnet_metadata(
         "parent_version": parent_version,
         "project_version": project_version,
         "artifact_id": artifact_id,
-        "name": product_name,
-        "java_version": target_framework,
+        "name": xml_property(root, "Product"),
+        "dotnet_version": dotnet_version,
         "sonar_inclusions": sonar_inclusions,
         "sonar_exclusions": sonar_exclusions,
         "is_library": is_library_from_template(project_values),
     }
 
 
-def load_ng_ui_version(repo_root: Path) -> str:
-    """Read the application version from package.json @test/components."""
+def _read_node_version_file(repo_root: Path) -> str:
+    # Pin file wins over package.json engines.node when both exist.
+    for filename in (".nvmrc", ".node-version"):
+        version_file = repo_root / filename
+        if not version_file.is_file():
+            continue
+        for line in version_file.read_text(encoding="utf-8").splitlines():
+            candidate = line.strip()
+            if candidate and not candidate.startswith("#"):
+                return candidate.removeprefix("v")
+    return ""
+
+
+def load_ng_ui_metadata(repo_root: Path) -> dict[str, str]:
+    node_version = _read_node_version_file(repo_root)
     pkg_path = repo_root / "package.json"
     if not pkg_path.is_file():
         _log_error(f"missing {pkg_path}")
         raise FileNotFoundError(str(pkg_path))
 
-    try:
-        pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        _log_error(str(exc))
-        raise
+    pkg = _parse_json_object(pkg_path, "package.json")
 
-    if not isinstance(pkg, dict):
-        _log_error("package.json must be a JSON object")
-        raise ValueError("invalid package.json")
+    if not node_version:
+        engines = pkg.get("engines")
+        if isinstance(engines, dict):
+            node_version = str(engines.get("node", "")).strip().removeprefix("v")
+    if not node_version:
+        _log_error(
+            "package.json must define engines.node or the repo must provide .nvmrc / .node-version"
+        )
+        raise ValueError("missing node version")
 
     dependencies = pkg.get("dependencies")
-    if not isinstance(dependencies, dict):
-        _log_error("package.json must have a dependencies object")
-        raise ValueError("missing package.json dependencies")
+    deps = dependencies if isinstance(dependencies, dict) else {}
+    has_components = "@test/components" in deps
+    components_version = str(deps.get("@test/components", "")).strip() if has_components else ""
+    project_version = str(pkg.get("version", "")).strip()
+    # Same rule as Maven: shared @test/components line owns the version when declared.
+    application_version = components_version if has_components else project_version
 
-    application_version = str(dependencies.get("@test/components", "")).strip()
     if not application_version:
-        _log_error("package.json dependencies must include @test/components version")
-        raise ValueError("missing @test/components version")
-    return application_version
+        _log_error(
+            "package.json must define version, or dependencies.@test/components when that dependency is declared"
+        )
+        raise ValueError("missing application version")
+
+    return {
+        "application_version": application_version,
+        "parent_version": components_version,
+        "project_version": project_version,
+        "node_version": node_version,
+    }
+
+
+def load_project_metadata(
+    app_build_type: str,
+    repo_root: Path,
+    project_values: dict[str, str],
+) -> dict[str, str]:
+    if app_build_type == "maven":
+        return load_maven_metadata(repo_root, project_values)
+    if app_build_type == "dotnet":
+        return load_dotnet_metadata(repo_root, project_values)
+    if app_build_type == "ng-ui":
+        return load_ng_ui_metadata(repo_root)
+    raise ValueError(f"unsupported app build type: {app_build_type}")
 
 
 def resolve_auto_commit(actor: str, bot_name: str) -> tuple[str, bool]:
-    """Resolve bot identity and auto-commit skip when actor is an automation bot."""
     actor = actor.strip()
     explicit = bot_name.strip()
     if explicit:
@@ -304,13 +380,12 @@ def build_stages(
     is_manual: bool,
     is_library: str,
 ) -> list[str]:
-    """Compute the ordered stage list for this run."""
     if auto_commit:
         return []
 
     stages = [stage for stage in BUILD_STAGES if stage != "docker"]
     if branch == "develop" and not is_pr:
-        stages.append("snapshot_artifact")
+        stages.append("snapshot_artifact")  # publish token; not a BUILD_STAGES job name
     if is_manual and (
         branch_approved(branch, "release/**") or branch_approved(branch, "hotfix/**")
     ):
@@ -320,11 +395,7 @@ def build_stages(
     return stages
 
 
-def sonar_cli_from_sources(
-    build_values: dict[str, str],
-    project_meta: dict[str, str],
-) -> tuple[str, str, str]:
-    """Build Sonar CLI args from build.values, falling back to project metadata."""
+def sonar_cli_args(build_values: dict[str, str], project_meta: dict[str, str]) -> tuple[str, str, str]:
     inclusion = build_values.get("CPGBUILD_SONAR_INCLUSION_LIST", "").strip()
     exclusion = build_values.get("CPGBUILD_SONAR_EXCLUSION_LIST", "").strip()
     if not inclusion:
@@ -340,7 +411,6 @@ def sonar_cli_from_sources(
 def build_outputs(
     *,
     branch: str,
-    approved: bool,
     event: str,
     actor: str,
     bot_name: str,
@@ -348,20 +418,16 @@ def build_outputs(
     stages: list[str],
     app_build_type: str,
     project_meta: dict[str, str],
-    application_version: str,
     build_values: dict[str, str],
     project_values: dict[str, str],
 ) -> dict[str, str]:
-    """Assemble GitHub Actions outputs and merge project/build values files."""
     cpg_origin = build_values.get("CPGBUILD_APP_ORIGIN", "").strip()
-    sonar_inclusions, sonar_exclusions, sonar_cli_args = sonar_cli_from_sources(
-        build_values,
-        project_meta,
-    )
+    sonar_inclusions, sonar_exclusions, sonar_cli = sonar_cli_args(build_values, project_meta)
 
     outputs = {
         "branch": branch,
-        "approved": _bool_str(approved),
+        # Branch gate already passed in main(); downstream workflows expect this flag.
+        "approved": "true",
         "event": event,
         "actor": actor,
         "bot_name": bot_name,
@@ -371,18 +437,20 @@ def build_outputs(
         "docker": _bool_str("docker" in stages),
         "stages": ",".join(stages),
         "app_build_type": app_build_type,
-        "application_version": application_version or project_meta.get("application_version", ""),
+        "application_version": project_meta.get("application_version", ""),
         "parent_version": project_meta.get("parent_version", ""),
         "project_version": project_meta.get("project_version", ""),
         "artifact_id": project_meta.get("artifact_id", ""),
         "name": project_meta.get("name", ""),
         "java_version": project_meta.get("java_version", ""),
+        "node_version": project_meta.get("node_version", ""),
+        "dotnet_version": project_meta.get("dotnet_version", ""),
         "cpgbuild_app_origin": cpg_origin,
         "checks_type_skip": _bool_str(bool(cpg_origin)),
         "is_library": project_meta.get("is_library", ""),
         "sonar_inclusions": sonar_inclusions,
         "sonar_exclusions": sonar_exclusions,
-        "sonar_cli_args": sonar_cli_args,
+        "sonar_cli_args": sonar_cli,
     }
 
     reserved = set(outputs)
@@ -395,67 +463,17 @@ def build_outputs(
 
 
 def emit_outputs(outputs: dict[str, str]) -> None:
-    """Print preprocess outputs as question-and-answer lines."""
     for key, value in outputs.items():
-        match key:
-            case "branch":
-                print(f"What is the branch name? : {value}", file=sys.stdout)
-            case "approved":
-                print(f"Is the branch approved? : {value}", file=sys.stdout)
-            case "event":
-                print(f"What is the GitHub event? : {value}", file=sys.stdout)
-            case "actor":
-                print(f"Who triggered the workflow? : {value}", file=sys.stdout)
-            case "bot_name":
-                print(f"What is the auto-commit bot name? : {value}", file=sys.stdout)
-            case "auto_commit":
-                print(f"Is this an auto-commit run? : {value}", file=sys.stdout)
-            case "snapshot_artifact":
-                print(f"Should a snapshot artifact be published? : {value}", file=sys.stdout)
-            case "release_artifact":
-                print(f"Should a release artifact be published? : {value}", file=sys.stdout)
-            case "docker":
-                print(f"Should the Docker stage run? : {value}", file=sys.stdout)
-            case "stages":
-                print(f"Which build stages should run? : {value}", file=sys.stdout)
-            case "app_build_type":
-                print(f"What is the app build type? : {value}", file=sys.stdout)
-            case "application_version":
-                print(f"What is the application version? : {value}", file=sys.stdout)
-            case "parent_version":
-                print(f"What is the Maven parent version? : {value}", file=sys.stdout)
-            case "project_version":
-                print(f"What is the Maven project version? : {value}", file=sys.stdout)
-            case "artifact_id":
-                print(f"What is the Maven artifact ID? : {value}", file=sys.stdout)
-            case "name":
-                print(f"What is the Maven project name? : {value}", file=sys.stdout)
-            case "java_version":
-                print(f"What is the Java version? : {value}", file=sys.stdout)
-            case "cpgbuild_app_origin":
-                print(f"What is the CPGBUILD app origin? : {value}", file=sys.stdout)
-            case "checks_type_skip":
-                print(f"Should checks type be skipped? : {value}", file=sys.stdout)
-            case "is_library":
-                print(f"Is this a library project? : {value}", file=sys.stdout)
-            case "sonar_inclusions":
-                print(f"What are the Sonar inclusion arguments? : {value}", file=sys.stdout)
-            case "sonar_exclusions":
-                print(f"What are the Sonar exclusion arguments? : {value}", file=sys.stdout)
-            case "sonar_cli_args":
-                print(f"What are the Sonar CLI arguments? : {value}", file=sys.stdout)
-            case _:
-                print(f"What is the {key.replace('_', ' ')}? : {value}", file=sys.stdout)
+        label = OUTPUT_LABELS.get(key, f"What is the {key.replace('_', ' ')}?")
+        print(f"{label} : {value}", file=sys.stdout)
 
 
 def write_github_output(output_path: str, outputs: dict[str, str]) -> None:
-    """Append key=value lines for GitHub Actions output."""
     with open(output_path, "a", encoding="utf-8") as fh:
         fh.writelines(f"{key}={value}\n" for key, value in outputs.items())
 
 
 def main() -> int:
-    """Parse inputs, validate the branch, and emit preprocess outputs."""
     parser = argparse.ArgumentParser(description="Check branch against approved globs; emit stages")
     parser.add_argument("--branch", default="")
     parser.add_argument("--app-build-type", required=True, choices=APP_BUILD_TYPES)
@@ -478,46 +496,29 @@ def main() -> int:
 
     try:
         project_values, build_values = load_project_files(repo_root)
-    except (OSError, FileNotFoundError):
-        return 1
-
-    project_meta: dict[str, str] = {}
-    application_version = ""
-    try:
-        if args.app_build_type == "maven":
-            project_meta = load_maven_metadata(repo_root, project_values)
-        elif args.app_build_type == "dotnet":
-            project_meta = load_dotnet_metadata(repo_root, project_values)
-        elif args.app_build_type == "ng-ui":
-            application_version = load_ng_ui_version(repo_root)
+        project_meta = load_project_metadata(args.app_build_type, repo_root, project_values)
     except (OSError, ValueError, FileNotFoundError, ET.ParseError):
         return 1
 
     event = args.event.strip() or os.environ.get("GITHUB_EVENT_NAME", "").strip()
     actor = args.actor.strip() or os.environ.get("GITHUB_ACTOR", "").strip()
     bot_name, auto_commit = resolve_auto_commit(actor, args.bot_name.strip())
-    is_pr = event.startswith("pull_request")
-    is_manual = event == "workflow_dispatch"
-
-    stages = build_stages(
-        auto_commit=auto_commit,
-        branch=branch,
-        is_pr=is_pr,
-        is_manual=is_manual,
-        is_library=project_meta.get("is_library", ""),
-    )
 
     outputs = build_outputs(
         branch=branch,
-        approved=True,
         event=event,
         actor=actor,
         bot_name=bot_name,
         auto_commit=auto_commit,
-        stages=stages,
+        stages=build_stages(
+            auto_commit=auto_commit,
+            branch=branch,
+            is_pr=event.startswith("pull_request"),
+            is_manual=event == "workflow_dispatch",
+            is_library=project_meta.get("is_library", ""),
+        ),
         app_build_type=args.app_build_type,
         project_meta=project_meta,
-        application_version=application_version,
         build_values=build_values,
         project_values=project_values,
     )

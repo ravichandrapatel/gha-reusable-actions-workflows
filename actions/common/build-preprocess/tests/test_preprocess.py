@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -60,8 +61,28 @@ class PreprocessTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("application version? : 2.1.0", result.stdout)
-        self.assertIn("java version? : net8.0", result.stdout.lower())
+        self.assertIn(".net version? : net8.0", result.stdout.lower())
         self.assertIn("-Dsonar.inclusions=**/*.cs", result.stdout)
+
+    def test_ng_ui_version_from_package_json_when_no_components(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "project.values").write_text("APPLICATION_NAME=ng-ui\n", encoding="utf-8")
+            (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
+            (root / "package.json").write_text(
+                json.dumps(
+                    {
+                        "version": "2.4.1",
+                        "engines": {"node": "20"},
+                        "dependencies": {"@angular/core": "^12.0.0"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = run_preprocess(root, app_build_type="ng-ui")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("application version? : 2.4.1", result.stdout)
+        self.assertIn("project version? : 2.4.1", result.stdout.lower())
 
     def test_temp_ng_ui_version_from_components(self) -> None:
         result = run_preprocess(
@@ -70,6 +91,72 @@ class PreprocessTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("application version? : 18.0.0", result.stdout)
+        self.assertIn("parent version? : 18.0.0", result.stdout.lower())
+        self.assertIn("project version? : 1.0.0", result.stdout.lower())
+        self.assertIn("node.js version? : >=18.20.0 <22.0.0", result.stdout.lower())
+
+    def test_ng_ui_node_version_from_nvmrc(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "project.values").write_text("APPLICATION_NAME=ng-ui\n", encoding="utf-8")
+            (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
+            (root / ".nvmrc").write_text("20.11.1\n", encoding="utf-8")
+            (root / "package.json").write_text(
+                json.dumps(
+                    {
+                        "dependencies": {"@test/components": "1.0.0"},
+                        "engines": {"node": ">=18.0.0"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = run_preprocess(root, app_build_type="ng-ui")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("node.js version? : 20.11.1", result.stdout.lower())
+
+    def test_dotnet_version_from_global_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "project.values").write_text("APPLICATION_NAME=svc\n", encoding="utf-8")
+            (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
+            (root / "global.json").write_text(
+                '{"sdk": {"version": "8.0.401"}}\n',
+                encoding="utf-8",
+            )
+            (root / "svc.csproj").write_text(
+                """<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>svc</AssemblyName>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+</Project>
+""",
+                encoding="utf-8",
+            )
+            result = run_preprocess(root, app_build_type="dotnet")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(".net version? : 8.0.401", result.stdout.lower())
+
+    def test_dotnet_version_from_target_frameworks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "project.values").write_text("APPLICATION_NAME=svc\n", encoding="utf-8")
+            (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
+            (root / "svc.csproj").write_text(
+                """<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net9.0;net8.0</TargetFrameworks>
+    <AssemblyName>svc</AssemblyName>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+</Project>
+""",
+                encoding="utf-8",
+            )
+            result = run_preprocess(root, app_build_type="dotnet")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(".net version? : net9.0", result.stdout.lower())
 
     def test_unapproved_branch_fails(self) -> None:
         result = run_preprocess(TEMP / "coo-ams-aim2-dnc-svc", branch="not-allowed")

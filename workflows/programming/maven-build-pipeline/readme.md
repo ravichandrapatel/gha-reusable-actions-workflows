@@ -62,11 +62,12 @@ Set `scan_profile: auto` (default) to derive from `application_name`, or pass `m
 | --- | --- | --- | --- |
 | `runner` | no | `ubuntu-latest` | Runner label (Podman for OWASP) |
 | `bot_name` | no | `""` | Optional auto-commit bot override; `[bot]` actors auto-detected when empty |
-| `java_setup` | no | `auto` | Maven Java selection on self-hosted runners |
+| `maven_setup` | no | `auto` | Installs Apache Maven on self-hosted when `mvn` is missing |
+| `maven_version` | no | `""` | Optional override; empty auto-detects from `pom.xml` `<maven.version>` |
 | `scan_profile` | no | `auto` | OWASP profile |
 | `maven_build_args` | no | `clean verify -DskipTests` | Build/test Maven goals |
 | `maven_publish_args` | no | `deploy -DskipTests` | Nexus publish goals |
-| `settings_file` | no | `""` | Maven `settings.xml` path (`mvn -s`) |
+- **Publish:** workflow writes `${{ runner.temp }}/settings.xml` via heredoc with `NEXUS_USERNAME` / `NEXUS_PASSWORD` org secrets; Maven step passes `-s` in `args`.
 | `sonar_host_url` | **yes** | — | SonarQube URL |
 | `sonar_project_key` | no | `""` → `application_name` | Sonar project key |
 | `sonar_platform` | no | `cap` | Sonar tag |
@@ -88,9 +89,10 @@ Callers pass **`secrets: inherit`**.
 
 - `project.values`, `build.values`, root `pom.xml` with `artifactId`, `version`, `properties/java.version`
 - `BUILDER_BASE_IMAGE` in `build.values` when docker stage runs
-- Maven `distributionManagement` or `settings.xml` for Nexus publish
+- Maven `distributionManagement` / repository `<id>` values in `pom.xml` (used when generating settings for publish)
+- Publish writes `settings.xml` in the workflow job (heredoc + org secrets); adjust server `<id>` values to match your `pom.xml`.
 - **`bot_name`:** optional override. When empty, preprocess auto-detects actors ending in `[bot]` and skips publish/docker on those runs.
-- **`java_setup`:** on self-hosted runners the Maven action selects `JAVA_HOME` from `pom.xml` `java.version`. GitHub-hosted runners use `actions/setup-java` automatically.
+- **`maven_setup`:** on self-hosted runners the Maven action installs Apache Maven when `mvn` is not on PATH. Java is always configured with `actions/setup-java` using `java_version` from preprocess.
 - Branch policy: `develop` → snapshot deploy; `workflow_dispatch` on `release/*` / `hotfix/*` → release deploy + docker
 
 ## Usage
@@ -109,7 +111,6 @@ jobs:
     with:
       sonar_host_url: https://sonar.example.com
       docker_registry: nexus.example.com
-      settings_file: .mvn/settings.xml
       scan_profile: auto
       runner: arc-podman
     secrets: inherit
@@ -127,5 +128,4 @@ jobs:
 
 - [ ] PR Sonar job (mirror ng-ui `sonarqube-pr` when PR analysis is needed)
 - [ ] Conftest / SPVS policy bundle for this workflow
-- [ ] Caller `.mvn/settings.xml` example for Nexus server credentials
 - [ ] Release Manager tag `maven-build-pipeline/v1.0.0`
