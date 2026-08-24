@@ -22,10 +22,10 @@ Orchestrator: `.github/workflows/release-manager.yml` (`workflow_dispatch`).
 ## Stages
 
 1. **Validate** — path/type, SemVer derivation (release / release-promote), tag checks
-2. **Security** — Conftest, Actionlint, Bandit, Shellcheck (**release and release-promote**)
+2. **Security** — Conftest, Actionlint, Bandit, Shellcheck (**all modes**; scans the target commit)
 3. **Execute** — tag, sync workflow file, promote/rollback stable tag
 
-Environments: `sandbox` (release), `production` (release-promote / promote / rollback).
+Environments: `sandbox` (release only — versioned tag + optional main sync), `production` (release-promote / promote / rollback — mutates `{safe_name}/v1`).
 
 ## Concurrency
 
@@ -38,19 +38,21 @@ Environments: `sandbox` (release), `production` (release-promote / promote / rol
 
 | Mode | Security | Env | Result |
 | :--- | :--- | :--- | :--- |
-| `release` | Full | sandbox | Create `{safe_name}/v{X.Y.Z}`; sync workflow to `.github/workflows/{name}.yml` when applicable |
-| `release-promote` | Full | production | Same as release, then point `{safe_name}/v1` at the new versioned tag |
-| `promote` | Skipped | production | Point `{safe_name}/v1` at chosen versioned tag (delete+recreate, no force-push) |
-| `rollback` | Skipped | production | Move `{safe_name}/v1` to previous versioned tag; restore prior workflow file if needed |
+| `release` | Full (scan `main` at dispatch) | sandbox | Create `{safe_name}/v{X.Y.Z}`; sync workflow to `.github/workflows/{name}.yml` when applicable |
+| `release-promote` | Full (scan `main` at dispatch) | production | Same as release, then point `{safe_name}/v1` at the new versioned tag |
+| `promote` | Full (scan target versioned tag commit) | production | Point `{safe_name}/v1` at chosen versioned tag (delete+recreate, no force-push) |
+| `rollback` | Full (scan **previous** versioned tag commit — deploy target) | production | Move `{safe_name}/v1` to previous versioned tag; restore prior workflow file if needed |
 
 ## Prompt Card
 
 ```text
 Release Manager (workflow_dispatch): inputs component_path, mode, version(optional).
-release = versioned tag + FULL security (env sandbox).
+release = versioned tag + FULL security (env sandbox; scans dispatch SHA).
 release-promote = security + versioned tag + move {safe_name}/v1 (env production).
-promote = move {safe_name}/v1 (security skipped, env production).
-rollback = /v1 to previous versioned tag; restore synced workflow file if needed.
+promote = move {safe_name}/v1 after security scan of target tag commit (env production).
+rollback = scan PREV versioned tag commit, then move /v1 there; restore synced workflow if needed.
+Release tags refuse unrelated main commits (actions: HEAD==scan; workflows: sync file only).
+Validate emits scan_commit; security checks it out; execute verifies before promote/rollback.
 Concurrency: all workflows serialize (one at a time); actions parallel per component_path.
 ```
 

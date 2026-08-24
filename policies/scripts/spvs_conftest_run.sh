@@ -39,18 +39,21 @@ spvs_conftest_test() {
     return 2
   fi
 
+  stderr_file="$(mktemp)"
   set +e
   "${CONFTEST_BIN}" test --parser yaml -n "${namespace}" \
-    -p "${policy_dir}" -p "${policy_lib}" -o json "$@" >"${json_file}" 2>/dev/null
+    -p "${policy_dir}" -p "${policy_lib}" -o json "$@" >"${json_file}" 2>"${stderr_file}"
   conftest_rc=$?
   set -e
 
   if [[ "${conftest_rc}" -ne 0 && "${conftest_rc}" -ne 1 ]]; then
+    cat "${stderr_file}" >&2 || true
     cat "${json_file}" >&2 || true
-    rm -f "${json_file}"
+    rm -f "${json_file}" "${stderr_file}"
     printf '%s ERROR: conftest exited with status %s\n' "${CONFTEST_RUN_PREFIX}" "${conftest_rc}" >&2
     return 2
   fi
+  rm -f "${stderr_file}"
 
   python3 "${report_py}" "${json_file}"
   report_rc=$?

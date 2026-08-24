@@ -2,7 +2,7 @@
 # FILE_NAME: release-manager.yml
 # DESCRIPTION: Release, Promote, Rollback, and combined release-promote manager for actions and workflows.
 # ALIGNMENT: OWASP SPVS (Secure Pipeline Verification Standard) 1.0
-# VERSION: 1.11.0
+# VERSION: 1.13.0
 # EXIT_CODES/SIGNALS: 0 on success, 1 on failure.
 # AUTHORS: DevOps Team
 # =============================================================================
@@ -22,8 +22,8 @@ on:
         type: choice
         options:
           - release           # Create versioned tag (name/vX.Y.Z) on main
-          - release-promote   # Release then update stable tag (name/v1) in one run
           - promote           # Update stable tag (name/v1) to version
+          - release-promote   # Release then update stable tag (name/v1) in one run
           - rollback          # Revert stable tag (name/v1) to previous version
       version:
         description: 'Optional. Release / release-promote: auto-derived if empty. Promote/rollback: defaults to latest versioned tag if empty (pass explicitly to target a specific X.Y.Z).'
@@ -54,6 +54,8 @@ jobs:
       safe_name: ${{ steps.validate_init.outputs.safe_name }}
       current_version: ${{ steps.validate_init.outputs.current_version }}
       workflow_file: ${{ steps.validate_init.outputs.workflow_file }}
+      resolved_sha: ${{ steps.validate_init.outputs.resolved_sha }}
+      scan_commit: ${{ steps.validate.outputs.scan_commit }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -72,6 +74,11 @@ jobs:
           
           if [[ ! -d "$COMPONENT_PATH" ]]; then
             echo "[ERR-T-01] Component path $COMPONENT_PATH does not exist." >&2
+            exit 1
+          fi
+
+          if [[ "$COMPONENT_PATH" == *".."* ]]; then
+            echo "[ERR-T-01b] Component path must not contain '..'." >&2
             exit 1
           fi
 
@@ -143,6 +150,7 @@ jobs:
             echo "safe_name=$SAFE_NAME"
             echo "workflow_file=$WORKFLOW_FILE_OUTPUT"
             echo "current_version=$CURRENT_VER"
+            echo "resolved_sha=$(git rev-parse HEAD)"
           } >> "$GITHUB_OUTPUT"
 
       - name: Calculate Next Version
@@ -163,15 +171,21 @@ jobs:
           NEXT_VERSION: ${{ steps.semver.outputs.next_version }}
           COMPONENT_TYPE: ${{ steps.validate_init.outputs.component_type }}
           COMPONENT_NAME: ${{ steps.validate_init.outputs.component_name }}
+          RESOLVED_SHA: ${{ steps.validate_init.outputs.resolved_sha }}
         run: |
           set -euo pipefail
+          # shellcheck source=scripts/release-manager-lib.sh
+          source scripts/release-manager-lib.sh
           echo "[DBG-005] Finalizing validation for mode: $MODE"
           VERSIONED_TAG_GLOB="${SAFE_NAME}/v*.*.*"
           TAG_PREFIX="${SAFE_NAME}/v"
+
+          if [[ -n "$VERSION_INPUT" ]]; then
+            VERSION="${VERSION_INPUT#v}"
+          fi
           
           if [[ "$MODE" == "release" || "$MODE" == "release-promote" ]]; then
             if [[ -n "$VERSION_INPUT" ]]; then
-              VERSION="$VERSION_INPUT"
               echo "[DBG-006] Using provided version: $VERSION"
             else
               VERSION="$NEXT_VERSION"
@@ -188,7 +202,6 @@ jobs:
           else
             # For promote/rollback, we need a version
             if [[ -n "$VERSION_INPUT" ]]; then
-              VERSION="$VERSION_INPUT"
               echo "[DBG-008] Using provided version for $MODE: $VERSION"
             else
               # Default to latest versioned tag
@@ -210,9 +223,32 @@ jobs:
               exit 1
             fi
           fi
+
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "[ERR-T-06] Invalid semver (expected X.Y.Z): $VERSION" >&2
+            exit 1
+          fi
+
+          TAG_NAME="${TAG_PREFIX}${VERSION}"
+          if [[ "$MODE" == "release" || "$MODE" == "release-promote" ]]; then
+            SCAN_COMMIT="$RESOLVED_SHA"
+          elif [[ "$MODE" == "rollback" ]]; then
+            PREV_TAG="$(release_manager_find_prev_versioned_tag "${TAG_NAME}" "${VERSIONED_TAG_GLOB}")"
+            if [[ -z "${PREV_TAG}" ]]; then
+              echo "[ERR-T-07] No previous version found for rollback from ${TAG_NAME}." >&2
+              exit 1
+            fi
+            SCAN_COMMIT="$(git rev-parse "refs/tags/${PREV_TAG}^{commit}")"
+            echo "[DBG-011a] Rollback scan target: ${PREV_TAG} (${SCAN_COMMIT})"
+          else
+            SCAN_COMMIT="$(git rev-parse "refs/tags/${TAG_NAME}^{commit}")"
+          fi
           
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "[DBG-012] Validation successful. Version to use: $VERSION"
+          {
+            echo "version=$VERSION"
+            echo "scan_commit=$SCAN_COMMIT"
+          } >> "$GITHUB_OUTPUT"
+          echo "[DBG-012] Validation successful. Version to use: $VERSION (scan_commit=$SCAN_COMMIT)"
           echo "::notice::Validated $COMPONENT_TYPE $COMPONENT_NAME for $MODE at version $VERSION"
 
   # =============================================================================
@@ -221,13 +257,25 @@ jobs:
   security:
     name: Security Scans
     needs: validate
-    if: github.event.inputs.mode == 'release' || github.event.inputs.mode == 'release-promote'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - name: Checkout
+      - name: Checkout release tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Stage Release Manager scripts
+        run: |
+          set -euo pipefail
+          # Tooling from dispatch ref; component scans use scan_commit checked out next.
+          cp scripts/release-manager-lib.sh /tmp/release-manager-lib.sh
+          cp scripts/release-manager-execute.sh /tmp/release-manager-execute.sh
+
+      - name: Checkout scanned commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.scan_commit }}
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -241,8 +289,16 @@ jobs:
           echo "[DBG-013] Installing Bandit and Shellcheck"
           pip install --no-cache-dir bandit==1.9.4
           
-          echo "[DBG-014] Updating apt and installing Shellcheck"
-          sudo apt-get install -y shellcheck
+          echo "[DBG-014] Downloading and installing Shellcheck (pinned release + checksum)"
+          SHELLCHECK_VERSION="0.10.0"
+          SHELLCHECK_SHA256="6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87"
+          SHELLCHECK_ARCHIVE="shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl -fsSL -o "${SHELLCHECK_ARCHIVE}" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/${SHELLCHECK_ARCHIVE}"
+          echo "${SHELLCHECK_SHA256}  ${SHELLCHECK_ARCHIVE}" | sha256sum -c -
+          tar xJf "${SHELLCHECK_ARCHIVE}" "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
+          sudo install -m 755 "shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          rm -rf "${SHELLCHECK_ARCHIVE}" "shellcheck-v${SHELLCHECK_VERSION}"
           
           echo "[DBG-015] Downloading and installing Actionlint (pinned release + checksum)"
           ACTIONLINT_VERSION="1.7.7"
@@ -344,10 +400,10 @@ jobs:
           set -euo pipefail
           # [T-07] Running bandit on Python files (recursive under component)
           echo "[DBG-021] Checking for Python files in $COMPONENT_PATH"
-          mapfile -t PY_FILES < <(find "$COMPONENT_PATH" -type f -name '*.py' -print | sort || true)
+          mapfile -t PY_FILES < <(find "$COMPONENT_PATH" -type f -name '*.py' ! -path '*/tests/*' -print | sort || true)
           if [[ ${#PY_FILES[@]} -gt 0 ]]; then
             echo "[DBG-022] Starting Bandit scan (${#PY_FILES[@]} file(s))"
-            bandit -r "$COMPONENT_PATH"
+            bandit "${PY_FILES[@]}"
             echo "[DBG-023] Bandit scan completed successfully"
           else
             echo "[DBG-024] No Python files found, skipping Bandit."
@@ -358,15 +414,16 @@ jobs:
           COMPONENT_PATH: ${{ github.event.inputs.component_path }}
         run: |
           set -euo pipefail
-          # [T-08] Running shellcheck on shell scripts (recursive under component)
-          echo "[DBG-025] Checking for Shell scripts in $COMPONENT_PATH"
+          echo "[DBG-025] Shellcheck on Release Manager scripts"
+          shellcheck /tmp/release-manager-lib.sh /tmp/release-manager-execute.sh
+          echo "[DBG-025a] Checking for shell scripts in $COMPONENT_PATH"
           mapfile -t SH_FILES < <(find "$COMPONENT_PATH" -type f -name '*.sh' -print | sort || true)
           if [[ ${#SH_FILES[@]} -gt 0 ]]; then
             echo "[DBG-026] Starting Shellcheck scan (${#SH_FILES[@]} file(s))"
             shellcheck "${SH_FILES[@]}"
             echo "[DBG-027] Shellcheck scan completed successfully"
           else
-            echo "[DBG-028] No shell scripts found, skipping Shellcheck."
+            echo "[DBG-028] No shell scripts found under component, skipping component Shellcheck."
           fi
 
   # =============================================================================
@@ -378,7 +435,7 @@ jobs:
   execute:
     name: Execute Release
     needs: [validate, security]
-    if: always() && needs.validate.result == 'success' && (needs.security.result == 'success' || needs.security.result == 'skipped')
+    if: always() && needs.validate.result == 'success' && needs.security.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event.inputs.mode == 'release' && 'sandbox' || 'production' }} # release-promote uses production (mutates stable /v1)
@@ -417,128 +474,10 @@ jobs:
           VERSION: ${{ needs.validate.outputs.version }}
           SAFE_NAME: ${{ needs.validate.outputs.safe_name }}
           WF_FILE: ${{ needs.validate.outputs.workflow_file }}
-          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+          SCANNED_SHA: ${{ needs.validate.outputs.scan_commit }}
         run: |
           set -euo pipefail
-          echo "[DBG-030] Starting execution for mode: $MODE"
-          
-          # Stable tag is always /v1; versioned tags are /vX.Y.Z
-          STABLE_TAG="${SAFE_NAME}/v1"
-          VERSION_TAG="${SAFE_NAME}/v${VERSION}"
-          VERSIONED_TAG_GLOB="${SAFE_NAME}/v*.*.*"
-
-          sync_main_with_retry() {
-            # Reduce race with concurrent merges on main before push
-            git pull --rebase origin main
-          }
-
-          # Annotated /v1 MUST point at a commit. Pointing at /vX.Y.Z (nested tag)
-          # works on GitHub Actions but act fails: "unsupported object type".
-          assert_stable_tag_is_commit() {
-            local tag="$1"
-            local inner
-            inner="$(git cat-file -p "refs/tags/${tag}" | awk '/^type / { print $2; exit }')"
-            if [[ "${inner}" != "commit" ]]; then
-              echo "[ERR-T-11] ${tag} points at '${inner:-unknown}', not commit. Nested tags break act (@v1 fails, @vX.Y.Z works)." >&2
-              exit 1
-            fi
-            echo "[DBG-033c] ${tag} -> commit $(git rev-parse "${tag}^{commit}")"
-          }
-
-          if [[ "$MODE" == "release" || "$MODE" == "release-promote" ]]; then
-            if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
-              # [T-12] Syncing workflow to .github/workflows/ (Do this in release so tag includes it)
-              SRC_WF="$COMPONENT_PATH/$WF_FILE"
-              DEST_WF=".github/workflows/${COMPONENT_NAME}.yml"
-              echo "[DBG-035] Syncing workflow file from $SRC_WF to $DEST_WF"
-              mkdir -p .github/workflows
-              cp "$SRC_WF" "$DEST_WF"
-              git add "$DEST_WF"
-              if git diff --cached --quiet; then
-                echo "[DBG-036] No changes to commit for workflow sync"
-              else
-                git commit -m "DCDT-0000 chore(release): sync workflow ${COMPONENT_NAME} to ${VERSION}"
-                sync_main_with_retry
-                git push origin main
-              fi
-              echo "[DBG-037] Successfully synced workflow to main"
-            fi
-
-            # [T-10] Creating versioned tag: "$VERSION_TAG"
-            echo "[DBG-031] Creating versioned tag: $VERSION_TAG"
-            git tag -a "$VERSION_TAG" -m "Release $VERSION_TAG"
-            git push origin "$VERSION_TAG"
-            echo "[DBG-032] Successfully pushed versioned tag"
-          fi
-
-          if [[ "$MODE" == "promote" || "$MODE" == "release-promote" ]]; then
-            echo "[DBG-033] Starting promotion of $VERSION_TAG to $STABLE_TAG"
-            
-            # [T-11] Promoting to stable tag: "$STABLE_TAG"
-            # MUST peel annotated versioned tags to a commit. Tagging $VERSION_TAG
-            # nests v1 → vX.Y.Z (tag object); GitHub peels it, act does not
-            # ("unsupported object type").
-            echo "[DBG-033a] Updating stable tag $STABLE_TAG to commit of $VERSION_TAG"
-            git tag -d "$STABLE_TAG" || true
-            TARGET_COMMIT="$(git rev-parse "${VERSION_TAG}^{commit}")"
-            git tag -a "$STABLE_TAG" "$TARGET_COMMIT" -m "Promote to $VERSION_TAG"
-            assert_stable_tag_is_commit "$STABLE_TAG"
-            
-            # [T-11b] Push tag without --force by deleting remote first
-            echo "[DBG-033b] Pushing stable tag to remote"
-            git push origin :refs/tags/"$STABLE_TAG" || true
-            git push origin "$STABLE_TAG"
-            echo "[DBG-034] Successfully updated stable tag"
-
-          elif [[ "$MODE" == "rollback" ]]; then
-            echo "[DBG-038] Starting rollback for $STABLE_TAG"
-            # Previous versioned tag via sorted list index (not grep -B1)
-            mapfile -t VERSION_TAGS < <(git tag -l "${VERSIONED_TAG_GLOB}" | sort -V)
-            PREV_TAG=""
-            for i in "${!VERSION_TAGS[@]}"; do
-              if [[ "${VERSION_TAGS[$i]}" == "$VERSION_TAG" ]]; then
-                if [[ "$i" -gt 0 ]]; then
-                  PREV_TAG="${VERSION_TAGS[$((i - 1))]}"
-                fi
-                break
-              fi
-            done
-            if [[ -z "$PREV_TAG" || "$PREV_TAG" == "$VERSION_TAG" ]]; then
-              echo "[ERR-T-07] No previous version found for rollback from $VERSION_TAG." >&2
-              exit 1
-            fi
-            echo "[DBG-039] Identified previous version: $PREV_TAG"
-            
-            if [[ "$COMPONENT_TYPE" == "workflow" ]]; then
-              # [T-14] Syncing previous workflow version to main
-              DEST_WF=".github/workflows/${COMPONENT_NAME}.yml"
-              echo "[DBG-041] Restoring workflow file from tag $PREV_TAG"
-              git checkout "$PREV_TAG" -- "$COMPONENT_PATH/$WF_FILE"
-              cp "$COMPONENT_PATH/$WF_FILE" "$DEST_WF"
-              git checkout HEAD -- "$COMPONENT_PATH/$WF_FILE" # Restore current state of source
-              git add "$DEST_WF"
-              if git diff --cached --quiet; then
-                echo "[DBG-042] No changes to commit for workflow rollback"
-              else
-                git commit -m "DCDT-0000 chore(release): rollback workflow ${COMPONENT_NAME} to ${PREV_TAG}"
-                sync_main_with_retry
-                git push origin main
-              fi
-              echo "[DBG-043] Successfully restored workflow file to main"
-            fi
-
-            # [T-13] Rolling back stable tag: "$STABLE_TAG" (commit of previous versioned tag)
-            echo "[DBG-040] Updating stable tag $STABLE_TAG to commit of $PREV_TAG"
-            git tag -d "$STABLE_TAG" || true
-            TARGET_COMMIT="$(git rev-parse "${PREV_TAG}^{commit}")"
-            git tag -a "$STABLE_TAG" "$TARGET_COMMIT" -m "Rollback to $PREV_TAG"
-            assert_stable_tag_is_commit "$STABLE_TAG"
-            
-            # Push tag without --force
-            git push origin :refs/tags/"$STABLE_TAG" || true
-            git push origin "$STABLE_TAG"
-            echo "[DBG-040a] Successfully rolled back stable tag to $PREV_TAG"
-          fi
+          bash scripts/release-manager-execute.sh
 
       - name: Generate Release Summary
         if: always()

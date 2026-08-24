@@ -74,4 +74,8 @@ if [[ -f "${ROOT}/policies/tests/test_commit_message_lib.sh" && -f "${ROOT}/poli
     bash "${ROOT}/policies/tests/test_commit_message_lib.sh"
 fi
 
+if [[ -f "${ROOT}/policies/tests/test_release_manager_execute.sh" && -f "${ROOT}/scripts/release-manager-lib.sh" ]]; then
+    bash "${ROOT}/policies/tests/test_release_manager_execute.sh"
+fi
+
 echo "${PROJECT_PREFIX} All SPVS policy tests passed"
