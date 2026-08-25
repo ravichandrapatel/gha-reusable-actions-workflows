@@ -29,6 +29,6 @@ runs:
         RAW_NODE_VERSION: ${{ inputs.node-version }}
       run: |
         set -euo pipefail
-        resolved="$(python3 "${ACTION_PATH}/resolve_node_version.py" --node-version "${RAW_NODE_VERSION}")"
+        resolved="$(python3 -u "${ACTION_PATH}/resolve_node_version.py" --node-version "${RAW_NODE_VERSION}")"
         echo "Resolved Node.js version: ${resolved} (from '${RAW_NODE_VERSION}')"
         echo "node_version=${resolved}" >> "${GITHUB_OUTPUT}"

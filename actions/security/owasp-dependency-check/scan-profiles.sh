@@ -3,6 +3,7 @@
 # DESCRIPTION: OWASP Dependency-Check scan presets aligned with app stacks.
 # VERSION: 1.4.0
 # AUTHORS: DevOps Team
+# shellcheck disable=SC2034 # disable* / flag vars are consumed by run-dependency-check.sh after source
 
 # Canonical profiles (exactly three): maven | ng-ui | dotnet
 # Legacy maven-ui / maven-svc / jsb|jcr|jsts -ui|-svc still normalize to maven.

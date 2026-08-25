@@ -8,6 +8,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scan-profiles.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/scan-profiles.sh"
 
 # Required env (mapped from action inputs in action.yml).

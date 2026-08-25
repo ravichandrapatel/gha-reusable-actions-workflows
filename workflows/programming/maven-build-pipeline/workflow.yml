@@ -60,6 +60,11 @@ on:
         required: false
         type: string
         default: production
+      deploy_environment:
+        description: 'GitHub Environment for contents:write release jobs'
+        required: false
+        type: string
+        default: ci-publish
 
 permissions:
   contents: read
@@ -123,7 +128,7 @@ jobs:
       - *checkout
       - &setup-java
         name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           java-version: ${{ needs.build-preprocess.outputs.java_version }}
           distribution: 'temurin'
@@ -210,9 +215,11 @@ jobs:
             echo "Using cached Maven at ${install_dir}"
           fi
 
-          echo "MAVEN_HOME=${install_dir}" >> "${GITHUB_ENV}"
-          echo "PATH=${install_dir}/bin:${PATH}" >> "${GITHUB_ENV}"
-          echo "MAVEN_EXECUTABLE=${mvn_bin}" >> "${GITHUB_ENV}"
+          {
+            echo "MAVEN_HOME=${install_dir}"
+            echo "PATH=${install_dir}/bin:${PATH}"
+            echo "MAVEN_EXECUTABLE=${mvn_bin}"
+          } >> "${GITHUB_ENV}"
           "${mvn_bin}" -version
 
       - name: Maven clean verify with unit tests
@@ -266,7 +273,7 @@ jobs:
 
       - name: Generate Token
         id: generate-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.DEVSECOPS_CLIENT_ID }}
           private-key: ${{ secrets.DEVSECOPS_APP_PRIVATE_KEY }}
@@ -377,7 +384,7 @@ jobs:
       - *setup-maven
       - &maven-artifact
         name: Download Maven artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ github.event.repository.name }}-build-artifact-${{ github.run_number }}
           path: .
@@ -385,7 +392,7 @@ jobs:
       - &owasp-artifact
         name: Download OWASP Dependency Check artifact
         if: needs.owasp.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ github.event.repository.name }}-owasp-reports-${{ github.run_number }}
           path: target/
@@ -573,7 +580,7 @@ jobs:
       - &create-github-packages-token
         name: Create GitHub Packages token
         id: github-packages-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.DEVSECOPS_CLIENT_ID }}
           private-key: ${{ secrets.DEVSECOPS_APP_PRIVATE_KEY }}
@@ -596,6 +603,7 @@ jobs:
   release-nexus-artifacts:
     name: Release Nexus artifacts
     runs-on: ${{ fromJSON(inputs.runs-on) }}
+    environment: ${{ inputs.deploy_environment }}
     permissions:
       contents: write
     needs: [build-preprocess, sonar, sonar-pr]
@@ -628,6 +636,7 @@ jobs:
   release-github-packages:
     name: Release GitHub Packages
     runs-on: ${{ fromJSON(inputs.runs-on) }}
+    environment: ${{ inputs.deploy_environment }}
     permissions:
       contents: write
       packages: write

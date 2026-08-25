@@ -208,9 +208,11 @@ jobs:
             rm -rf "${tmp}"
           fi
 
-          echo "MAVEN_HOME=${install_dir}" >> "${GITHUB_ENV}"
-          echo "PATH=${install_dir}/bin:${PATH}" >> "${GITHUB_ENV}"
-          echo "MAVEN_EXECUTABLE=${mvn_bin}" >> "${GITHUB_ENV}"
+          {
+            echo "MAVEN_HOME=${install_dir}"
+            echo "PATH=${install_dir}/bin:${PATH}"
+            echo "MAVEN_EXECUTABLE=${mvn_bin}"
+          } >> "${GITHUB_ENV}"
           "${mvn_bin}" -version
 
       - name: Maven build and test
@@ -420,9 +422,11 @@ jobs:
             rm -rf "${tmp}"
           fi
 
-          echo "MAVEN_HOME=${install_dir}" >> "${GITHUB_ENV}"
-          echo "PATH=${install_dir}/bin:${PATH}" >> "${GITHUB_ENV}"
-          echo "MAVEN_EXECUTABLE=${mvn_bin}" >> "${GITHUB_ENV}"
+          {
+            echo "MAVEN_HOME=${install_dir}"
+            echo "PATH=${install_dir}/bin:${PATH}"
+            echo "MAVEN_EXECUTABLE=${mvn_bin}"
+          } >> "${GITHUB_ENV}"
           "${mvn_bin}" -version
 
       - name: Maven publish to Nexus
