@@ -1,7 +1,7 @@
 """
 FILE_NAME: preprocess.py
 DESCRIPTION: Branch allowlist, stages, values files, and maven/ng-ui/dotnet metadata.
-VERSION: 2.6.0
+VERSION: 2.6.1
 AUTHORS: DevOps Team
 """
 
@@ -15,6 +15,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 PROJECT_KEY = "BUILD-PREPROCESS"
+_SKIP_CSPROJ_PARTS = frozenset({"bin", "obj", ".git", "node_modules"})
 
 ALLOWED_BRANCHES = (
     "main",
@@ -84,6 +85,13 @@ def _parse_json(path: Path, label: str) -> dict:
     return data
 
 
+def _strip_value(raw: str) -> str:
+    value = raw.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1].strip()
+    return value
+
+
 def load_values(path: Path) -> dict[str, str]:
     data: dict[str, str] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -93,8 +101,58 @@ def load_values(path: Path) -> dict[str, str]:
         key, value = line.split("=", 1)
         key = key.strip()
         if key:
-            data[key] = value.strip()
+            data[key] = _strip_value(value)
     return data
+
+
+def _dotnet_csproj_candidates(repo_root: Path) -> list[Path]:
+    return sorted(
+        p
+        for p in repo_root.rglob("*.csproj")
+        if not _SKIP_CSPROJ_PARTS.intersection(p.parts)
+    )
+
+
+def _resolve_dotnet_csproj(repo_root: Path, application_name: str) -> Path:
+    """Pick *.csproj: APPLICATION_NAME must match the filename stem when several exist."""
+    candidates = _dotnet_csproj_candidates(repo_root)
+    if not candidates:
+        _err(f"missing *.csproj under {repo_root}")
+        raise FileNotFoundError(str(repo_root / "*.csproj"))
+
+    stems = ", ".join(sorted({p.stem for p in candidates}))
+    if application_name:
+        name = application_name.casefold()
+        matches = [p for p in candidates if p.stem.casefold() == name]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            preferred = [p for p in matches if p.parent.name.casefold() == name]
+            if len(preferred) == 1:
+                return preferred[0]
+            _err(
+                f"APPLICATION_NAME={application_name} matches multiple *.csproj "
+                f"({', '.join(str(p.relative_to(repo_root)) for p in matches)})"
+            )
+            raise ValueError("ambiguous csproj")
+        _err(
+            f"APPLICATION_NAME={application_name} does not match any *.csproj filename "
+            f"(found: {stems}); set APPLICATION_NAME to match the project filename"
+        )
+        raise ValueError("csproj name mismatch")
+
+    if len(candidates) == 1:
+        return candidates[0]
+
+    build_proj = repo_root / "build" / "build.csproj"
+    if build_proj.is_file() and build_proj in candidates:
+        return build_proj
+
+    _err(
+        "multiple csproj files found; set APPLICATION_NAME in project.values "
+        f"to match the project filename (found: {stems})"
+    )
+    raise ValueError("ambiguous csproj")
 
 
 def branch_approved(branch: str, pattern: str | None = None) -> bool:
@@ -144,20 +202,7 @@ def load_maven_metadata(repo_root: Path, project_values: dict[str, str]) -> dict
 
 def load_dotnet_metadata(repo_root: Path, project_values: dict[str, str]) -> dict[str, str]:
     application_name = project_values.get("APPLICATION_NAME", "").strip()
-    candidates = sorted(repo_root.glob("*.csproj")) or sorted(repo_root.rglob("*.csproj"))
-    if not candidates:
-        _err(f"missing *.csproj under {repo_root}")
-        raise FileNotFoundError(str(repo_root / "*.csproj"))
-
-    csproj_path = next((p for p in candidates if p.stem == application_name), None) if application_name else None
-    if csproj_path is None:
-        if len(candidates) != 1:
-            _err(
-                "multiple csproj files found; set APPLICATION_NAME in project.values "
-                "to match the project filename"
-            )
-            raise ValueError("ambiguous csproj")
-        csproj_path = candidates[0]
+    csproj_path = _resolve_dotnet_csproj(repo_root, application_name)
 
     root = _parse_xml(csproj_path)
     props_path = repo_root / "Directory.Build.props"
