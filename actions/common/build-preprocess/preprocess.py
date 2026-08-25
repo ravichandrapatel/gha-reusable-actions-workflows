@@ -1,7 +1,7 @@
 """
 FILE_NAME: preprocess.py
 DESCRIPTION: Branch allowlist, stages, values files, and maven/ng-ui/dotnet metadata.
-VERSION: 2.7.0
+VERSION: 2.7.1
 AUTHORS: DevOps Team
 """
 
@@ -11,8 +11,9 @@ import argparse
 import json
 import os
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
+
+import defusedxml.ElementTree as ET
 
 PROJECT_KEY = "BUILD-PREPROCESS"
 DOTNET_CSPROJ = Path("build") / "Build.csproj"

@@ -1,0 +1,2 @@
+# Runtime deps for preprocess.py (installed by the composite action).
+defusedxml==0.7.1

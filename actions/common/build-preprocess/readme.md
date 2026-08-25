@@ -15,7 +15,7 @@ Composite action that ships `inventory.json` (repo names derived from `*.tfvars`
 | **Owner / Lead** | DevOps Team |
 | **Service Status** | Draft (pre-release) |
 | **Repository / Code** | `actions/common/build-preprocess` |
-| **Dependencies** | Python 3 (preinstalled on GitHub-hosted runners) |
+| **Dependencies** | Python 3; composite step installs `requirements.txt` (`defusedxml`) |
 
 ## JSON shape
 

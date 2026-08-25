@@ -183,6 +183,7 @@ runs:
         PYTHONUNBUFFERED: "1"
       run: |
         set -euo pipefail
+        python3 -m pip install --user --quiet -r "${ACTION_PATH}/requirements.txt"
         ARGS=(
           --app-build-type "${APP_BUILD_TYPE}"
           --event "${EVENT_NAME}"
