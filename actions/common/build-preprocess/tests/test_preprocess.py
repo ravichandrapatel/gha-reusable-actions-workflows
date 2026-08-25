@@ -299,6 +299,7 @@ class PreprocessTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("What is the release artifact? : true", result.stdout)
         self.assertIn("What is the docker? : true", result.stdout)
+        self.assertIn("What is the build and unit test? : true", result.stdout)
         self.assertIn("release_artifact,docker", result.stdout)
 
     def test_pull_request_skips_snapshot(self) -> None:
@@ -317,6 +318,9 @@ class PreprocessTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("What is the auto commit? : true", result.stdout)
+        self.assertIn("What is the build and unit test? : false", result.stdout)
+        self.assertIn("What is the owasp? : false", result.stdout)
+        self.assertIn("What is the sonar? : false", result.stdout)
         self.assertIn("What is the stages? : \n", result.stdout)
 
     def test_auto_detect_github_actions_bot_without_bot_name(self) -> None:

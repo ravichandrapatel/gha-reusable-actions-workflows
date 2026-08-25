@@ -7,7 +7,7 @@ Reusable workflow (`on: workflow_call`) for Maven applications — **maven-ui** 
 - **Purpose**: Shared Maven CI — preprocess → build/test → OWASP → Sonar → Nexus deploy and/or S2I docker.
 - **Scope**: `app_build_type` is always `maven`. Uses house [`maven`](../../actions/common/maven/readme.md) action and [`s2i-build-and-push`](../../actions/common/s2i-build-and-push/readme.md) for container images.
 - **Primary users**: JVM apps with `pom.xml`, `project.values`, and `build.values`.
-- **Success criteria**: Jobs honor preprocess `stages` / `snapshot_artifact` / `release_artifact` / `docker`.
+- **Success criteria**: Jobs honor preprocess booleans (`build_and_unit_test` / `owasp` / `sonar` / `snapshot_artifact` / `release_artifact` / `docker`).
 
 ## Metadata dashboard
 

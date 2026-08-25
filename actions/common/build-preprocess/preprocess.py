@@ -1,7 +1,7 @@
 """
 FILE_NAME: preprocess.py
 DESCRIPTION: Branch allowlist, stages, values files, and maven/ng-ui/dotnet metadata.
-VERSION: 2.7.1
+VERSION: 2.8.0
 AUTHORS: DevOps Team
 """
 
@@ -366,6 +366,9 @@ def build_outputs(
         "actor": actor,
         "bot_name": bot_name,
         "auto_commit": "true" if auto_commit else "false",
+        "build_and_unit_test": flag("build_and_unit_test"),
+        "owasp": flag("owasp"),
+        "sonar": flag("sonar"),
         "snapshot_artifact": flag("snapshot_artifact"),
         "release_artifact": flag("release_artifact"),
         "docker": flag("docker"),

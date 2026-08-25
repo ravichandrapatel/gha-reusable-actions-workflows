@@ -65,9 +65,15 @@ on:
         required: false
         default: ci-publish
     outputs:
-      stages:
-        description: Comma-separated preprocess stages
-        value: ${{ jobs.build-preprocess.outputs.stages }}
+      build_and_unit_test:
+        description: true when build-and-unit-test-lint should run
+        value: ${{ jobs.build-preprocess.outputs.build_and_unit_test }}
+      owasp:
+        description: true when owasp should run
+        value: ${{ jobs.build-preprocess.outputs.owasp }}
+      sonar:
+        description: true when sonar should run
+        value: ${{ jobs.build-preprocess.outputs.sonar }}
       application_name:
         description: From project.values
         value: ${{ jobs.build-preprocess.outputs.application_name }}
@@ -91,7 +97,9 @@ jobs:
     permissions:
       contents: read
     outputs:
-      stages: ${{ steps.preprocess.outputs.stages }}
+      build_and_unit_test: ${{ steps.preprocess.outputs.build_and_unit_test }}
+      owasp: ${{ steps.preprocess.outputs.owasp }}
+      sonar: ${{ steps.preprocess.outputs.sonar }}
       snapshot_artifact: ${{ steps.preprocess.outputs.snapshot_artifact }}
       release_artifact: ${{ steps.preprocess.outputs.release_artifact }}
       docker: ${{ steps.preprocess.outputs.docker }}
@@ -116,7 +124,7 @@ jobs:
   build-and-unit-test-lint:
     name: build-and-unit-test-lint
     needs: [build-preprocess]
-    if: contains(format(',{0},', needs.build-preprocess.outputs.stages), ',build_and_unit_test,')
+    if: needs.build-preprocess.outputs.build_and_unit_test == 'true'
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
@@ -180,7 +188,7 @@ jobs:
   owasp:
     name: owasp
     needs: [build-preprocess]
-    if: contains(format(',{0},', needs.build-preprocess.outputs.stages), ',owasp,')
+    if: needs.build-preprocess.outputs.owasp == 'true'
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
@@ -220,7 +228,7 @@ jobs:
     if: >-
       needs.build-and-unit-test-lint.result == 'success'
       && (needs.owasp.result == 'success' || needs.owasp.result == 'skipped')
-      && contains(format(',{0},', needs.build-preprocess.outputs.stages), ',sonar,')
+      && needs.build-preprocess.outputs.sonar == 'true'
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read

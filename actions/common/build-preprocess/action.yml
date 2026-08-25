@@ -50,8 +50,17 @@ outputs:
     description: 'true when the branch matches an approved glob; false on --soft miss'
     value: ${{ steps.branch.outputs.approved }}
   stages:
-    description: 'Comma-separated stages to run'
+    description: 'Comma-separated stages to run (summary; prefer per-stage booleans)'
     value: ${{ steps.branch.outputs.stages }}
+  build_and_unit_test:
+    description: 'true when the build_and_unit_test stage should run'
+    value: ${{ steps.branch.outputs.build_and_unit_test }}
+  owasp:
+    description: 'true when the owasp stage should run'
+    value: ${{ steps.branch.outputs.owasp }}
+  sonar:
+    description: 'true when the sonar stage should run'
+    value: ${{ steps.branch.outputs.sonar }}
   snapshot_artifact:
     description: 'true when not auto-commit, branch is develop, and the event is not a pull request'
     value: ${{ steps.branch.outputs.snapshot_artifact }}
@@ -181,9 +190,10 @@ runs:
         ACTOR: ${{ github.actor }}
         BOT_NAME: ${{ inputs.bot_name }}
         PYTHONUNBUFFERED: "1"
+        PIP_BREAK_SYSTEM_PACKAGES: "1"
       run: |
         set -euo pipefail
-        python3 -m pip install --user --quiet -r "${ACTION_PATH}/requirements.txt"
+        python3 -m pip install --user --quiet --disable-pip-version-check -r "${ACTION_PATH}/requirements.txt"
         ARGS=(
           --app-build-type "${APP_BUILD_TYPE}"
           --event "${EVENT_NAME}"

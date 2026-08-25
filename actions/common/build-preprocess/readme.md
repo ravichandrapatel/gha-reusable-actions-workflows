@@ -49,7 +49,10 @@ If the caller is not listed and `soft` is false, the action **exits 1**. With `s
 | `repo` | Resolved caller repo used for the match. |
 | `branch` | Resolved branch used for the allowlist check. |
 | `approved` | `true` when the branch matches an approved glob. |
-| `stages` | Comma-separated stages to run. |
+| `stages` | Comma-separated summary of stages to run (prefer the boolean outputs below). |
+| `build_and_unit_test` | `true` when the build/unit-test stage should run. |
+| `owasp` | `true` when the OWASP stage should run. |
+| `sonar` | `true` when the Sonar stage should run. |
 | `snapshot_artifact` | `true` when not auto-commit, branch is `develop`, and not a pull request. |
 | `release_artifact` | `true` when not auto-commit, `push` or `workflow_dispatch` on `release/*` or `hotfix/*`, and not a pull request. |
 | `docker` | `true` when not auto-commit, not a library, `push` or `workflow_dispatch`, and not a pull request. |
@@ -128,12 +131,12 @@ python3 -u actions/common/build-preprocess/preprocess.py --branch feature/foo --
 
 Every build type reads `project.values` and `build.values` from the caller repo root (`GITHUB_WORKSPACE` after checkout, else the current directory). Missing files fail the step.
 
-- Auto-commit (`github.actor` equals `bot_name`, or actor ends with `[bot]` when `bot_name` is empty): `stages` is empty and snapshot/release/docker are `false`.
+- Auto-commit (`github.actor` equals `bot_name`, or actor ends with `[bot]` when `bot_name` is empty): stage booleans are `false`, `stages` is empty, and snapshot/release/docker are `false`.
+- `build_and_unit_test` / `owasp` / `sonar`: `true` when not auto-commit.
 - `snapshot_artifact`: not auto-commit, branch is `develop`, and the event is not a pull request.
 - `release_artifact`: not auto-commit, `push` or `workflow_dispatch` on `release/*` or `hotfix/*`, and not a pull request.
 - `docker`: not auto-commit, not a library (`is_library` is not `y`), `push` or `workflow_dispatch`, and not a pull request.
-- `build_and_unit_test`, `owasp`, `sonar`: included when not auto-commit.
-- `stages` is the comma-separated subset of `BUILD_STAGES` that should run.
+- `stages` is a comma-separated summary of the same tokens; use the boolean outputs in job `if:` conditions.
 
 Approved branches: `main`, `master`, `develop`, `feature/**`, `release/**`, `hotfix/**`, `bugfix/**`.
 
