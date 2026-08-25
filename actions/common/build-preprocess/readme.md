@@ -20,10 +20,13 @@ Composite action that ships `inventory.json` (repo names derived from `*.tfvars`
 ## JSON shape
 
 ```json
-{
-  "repos": ["dev", "prod", "staging"]
-}
+[
+  "reponame",
+  "repo"
+]
 ```
+
+Top-level JSON array of repo names (no `repos` wrapper).
 
 ## Inputs
 

@@ -40,8 +40,8 @@ def main() -> int:
     except (OSError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
-    if not isinstance(payload, dict) or not isinstance(payload.get("repos"), list):
-        print("ERROR: inventory must be a JSON object with a repos array", file=sys.stderr)
+    if not isinstance(payload, list):
+        print("ERROR: inventory must be a JSON array of repo names", file=sys.stderr)
         return 1
 
     caller = args.repo.strip() or os.environ.get("GITHUB_REPOSITORY", "").strip()
@@ -49,12 +49,12 @@ def main() -> int:
         print("ERROR: pass --repo or set GITHUB_REPOSITORY", file=sys.stderr)
         return 1
 
-    names = {str(item) for item in payload["repos"]}
+    names = {str(item) for item in payload}
     names |= {item.rsplit("/", 1)[-1] for item in names}
     matched = caller in names or caller.rsplit("/", 1)[-1] in names
 
     outputs = {
-        "repos": json.dumps(payload["repos"], separators=(",", ":"), ensure_ascii=False),
+        "repos": json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
         "matched": "true" if matched else "false",
         "repo": caller
     }

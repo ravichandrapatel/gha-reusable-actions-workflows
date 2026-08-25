@@ -314,16 +314,7 @@ jobs:
           esac
 
           app="${APPLICATION_NAME:-}"
-          case "${app}" in
-            *-jsb-ui|*-JSB-UI) archetype="archetype-jsb-ui" ;;
-            *-jcr-ui|*-JCR-UI) archetype="archetype-jcr-ui" ;;
-            *-jsts-ui|*-JSTS-UI) archetype="archetype-jsts-ui" ;;
-            *-jsb-svc|*-JSB-SVC) archetype="archetype-jsb-svc" ;;
-            *-jcr-svc|*-JCR-SVC) archetype="archetype-jcr-svc" ;;
-            *-jsts-svc|*-JSTS-SVC) archetype="archetype-jsts-svc" ;;
-            *-ui|*-UI) archetype="archetype-jsb-ui" ;;
-            *) archetype="archetype-jsb-svc" ;;
-          esac
+          archetype="archetype-jsb-svc"
 
           path="owasp-dependency-check-suppressions/owasp-dependency-check/${archetype}/${file}"
           if [[ ! -f "${path}" ]]; then

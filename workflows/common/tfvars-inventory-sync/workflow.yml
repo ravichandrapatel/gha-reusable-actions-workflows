@@ -98,8 +98,8 @@ jobs:
             NAMES+=("${BASE}")
           done
 
-          printf '%s\n' "${NAMES[@]}" | jq -R . | jq -s 'sort | unique | {repos: .}' > "${INVENTORY_JSON}"
-          COUNT="$(jq '.repos | length' "${INVENTORY_JSON}")"
+          printf '%s\n' "${NAMES[@]}" | jq -R . | jq -s 'sort | unique' > "${INVENTORY_JSON}"
+          COUNT="$(jq 'length' "${INVENTORY_JSON}")"
           if [[ "${COUNT}" -eq 0 ]]; then
             echo "ERROR: failed to derive repo names from *.tfvars" >&2
             exit 1
@@ -183,8 +183,8 @@ jobs:
           mkdir -p "$(dirname "${TARGET_FILE}")"
           # Compare repo lists, not raw bytes — whitespace-only JSON must not release.
           if [[ -f "${TARGET_FILE}" ]]; then
-            DEST_REPOS="$(jq -c '.repos | unique | sort' "${TARGET_FILE}")"
-            GEN_REPOS="$(jq -c '.repos | unique | sort' "${INVENTORY_JSON}")"
+            DEST_REPOS="$(jq -c 'unique | sort' "${TARGET_FILE}")"
+            GEN_REPOS="$(jq -c 'unique | sort' "${INVENTORY_JSON}")"
             if [[ "${DEST_REPOS}" == "${GEN_REPOS}" ]]; then
               echo "No inventory changes; skipping commit and release"
               exit 0
