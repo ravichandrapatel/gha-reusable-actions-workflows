@@ -50,9 +50,9 @@ class PreprocessTests(unittest.TestCase):
             app_build_type="maven",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("application version? : 2.7.18", result.stdout)
-        self.assertIn("Should a snapshot artifact be published? : true", result.stdout)
-        self.assertIn("Should the Docker stage run? : true", result.stdout)
+        self.assertIn("What is the application version? : 2.7.18", result.stdout)
+        self.assertIn("What is the snapshot artifact? : true", result.stdout)
+        self.assertIn("What is the docker? : true", result.stdout)
         self.assertIn("sonar.exclusions=***/target/**", result.stdout)
 
     def test_develop_push_includes_docker(self) -> None:
@@ -61,7 +61,7 @@ class PreprocessTests(unittest.TestCase):
             event="push",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Should the Docker stage run? : true", result.stdout)
+        self.assertIn("What is the docker? : true", result.stdout)
 
     def test_develop_defaults_event_to_push_when_unset(self) -> None:
         """Local CLI without --event should behave like push (docker on)."""
@@ -70,8 +70,8 @@ class PreprocessTests(unittest.TestCase):
             event="",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("What is the GitHub event? : push", result.stdout)
-        self.assertIn("Should the Docker stage run? : true", result.stdout)
+        self.assertIn("What is the event? : push", result.stdout)
+        self.assertIn("What is the docker? : true", result.stdout)
 
     def test_pull_request_skips_docker(self) -> None:
         result = run_preprocess(
@@ -79,7 +79,7 @@ class PreprocessTests(unittest.TestCase):
             event="pull_request",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Should the Docker stage run? : false", result.stdout)
+        self.assertIn("What is the docker? : false", result.stdout)
 
     def test_temp_dotnet_develop_snapshot(self) -> None:
         result = run_preprocess(
@@ -87,8 +87,8 @@ class PreprocessTests(unittest.TestCase):
             app_build_type="dotnet",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("application version? : 2.1.0", result.stdout)
-        self.assertIn(".net version? : net8.0", result.stdout.lower())
+        self.assertIn("What is the application version? : 2.1.0", result.stdout)
+        self.assertIn("What is the dotnet version? : net8.0", result.stdout)
         self.assertIn("-Dsonar.inclusions=**/*.cs", result.stdout)
 
     def test_ng_ui_version_from_package_json_when_no_components(self) -> None:
@@ -108,8 +108,8 @@ class PreprocessTests(unittest.TestCase):
             )
             result = run_preprocess(root, app_build_type="ng-ui")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("application version? : 2.4.1", result.stdout)
-        self.assertIn("project version? : 2.4.1", result.stdout.lower())
+        self.assertIn("What is the application version? : 2.4.1", result.stdout)
+        self.assertIn("What is the project version? : 2.4.1", result.stdout)
 
     def test_temp_ng_ui_version_from_components(self) -> None:
         result = run_preprocess(
@@ -117,10 +117,10 @@ class PreprocessTests(unittest.TestCase):
             app_build_type="ng-ui",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("application version? : 18.0.0", result.stdout)
-        self.assertIn("parent version? : 18.0.0", result.stdout.lower())
-        self.assertIn("project version? : 1.0.0", result.stdout.lower())
-        self.assertIn("node.js version? : >=18.20.0 <22.0.0", result.stdout.lower())
+        self.assertIn("What is the application version? : 18.0.0", result.stdout)
+        self.assertIn("What is the parent version? : 18.0.0", result.stdout)
+        self.assertIn("What is the project version? : 1.0.0", result.stdout)
+        self.assertIn("What is the node version? : >=18.20.0 <22.0.0", result.stdout)
 
     def test_ng_ui_node_version_from_nvmrc(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -139,7 +139,7 @@ class PreprocessTests(unittest.TestCase):
             )
             result = run_preprocess(root, app_build_type="ng-ui")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("node.js version? : 20.11.1", result.stdout.lower())
+        self.assertIn("What is the node version? : 20.11.1", result.stdout)
 
     def test_dotnet_version_from_global_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -163,7 +163,7 @@ class PreprocessTests(unittest.TestCase):
             )
             result = run_preprocess(root, app_build_type="dotnet")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(".net version? : 8.0.401", result.stdout.lower())
+        self.assertIn("What is the dotnet version? : 8.0.401", result.stdout)
 
     def test_dotnet_version_from_target_frameworks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -183,7 +183,7 @@ class PreprocessTests(unittest.TestCase):
             )
             result = run_preprocess(root, app_build_type="dotnet")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(".net version? : net9.0", result.stdout.lower())
+        self.assertIn("What is the dotnet version? : net9.0", result.stdout)
 
     def test_unapproved_branch_fails(self) -> None:
         result = run_preprocess(TEMP / "coo-ams-aim2-dnc-svc", branch="not-allowed")
@@ -198,7 +198,7 @@ class PreprocessTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("release_artifact,docker", result.stdout)
-        self.assertIn("Should the Docker stage run? : true", result.stdout)
+        self.assertIn("What is the docker? : true", result.stdout)
 
     def test_release_push_includes_release_artifact_and_docker(self) -> None:
         result = run_preprocess(
@@ -207,8 +207,8 @@ class PreprocessTests(unittest.TestCase):
             event="push",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Should a release artifact be published? : true", result.stdout)
-        self.assertIn("Should the Docker stage run? : true", result.stdout)
+        self.assertIn("What is the release artifact? : true", result.stdout)
+        self.assertIn("What is the docker? : true", result.stdout)
         self.assertIn("release_artifact,docker", result.stdout)
 
     def test_pull_request_skips_snapshot(self) -> None:
@@ -217,7 +217,7 @@ class PreprocessTests(unittest.TestCase):
             event="pull_request",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Should a snapshot artifact be published? : false", result.stdout)
+        self.assertIn("What is the snapshot artifact? : false", result.stdout)
 
     def test_auto_commit_skips_stages(self) -> None:
         result = run_preprocess(
@@ -226,8 +226,8 @@ class PreprocessTests(unittest.TestCase):
             bot_name="bot",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Is this an auto-commit run? : true", result.stdout)
-        self.assertIn("Which build stages should run? : \n", result.stdout)
+        self.assertIn("What is the auto commit? : true", result.stdout)
+        self.assertIn("What is the stages? : \n", result.stdout)
 
     def test_auto_detect_github_actions_bot_without_bot_name(self) -> None:
         result = run_preprocess(
@@ -235,7 +235,7 @@ class PreprocessTests(unittest.TestCase):
             actor="github-actions[bot]",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Is this an auto-commit run? : true", result.stdout)
+        self.assertIn("What is the auto commit? : true", result.stdout)
 
     def test_library_skips_docker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -262,9 +262,9 @@ class PreprocessTests(unittest.TestCase):
                 event="workflow_dispatch",
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Is this a library project? : y", result.stdout)
-            self.assertIn("Should the Docker stage run? : false", result.stdout)
-            self.assertIn("Should a release artifact be published? : true", result.stdout)
+            self.assertIn("What is the is library? : y", result.stdout)
+            self.assertIn("What is the docker? : false", result.stdout)
+            self.assertIn("What is the release artifact? : true", result.stdout)
 
     def test_build_values_overrides_sonar(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

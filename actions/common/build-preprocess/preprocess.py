@@ -1,7 +1,7 @@
 """
 FILE_NAME: preprocess.py
 DESCRIPTION: Branch allowlist, stages, values files, and maven/ng-ui/dotnet metadata.
-VERSION: 2.5.1
+VERSION: 2.5.2
 AUTHORS: DevOps Team
 """
 
@@ -34,34 +34,6 @@ BUILD_STAGES = [
 ]
 
 APP_BUILD_TYPES = ["maven", "ng-ui", "dotnet"]
-
-OUTPUT_LABELS = {
-    "branch": "What is the branch name?",
-    "approved": "Is the branch approved?",
-    "event": "What is the GitHub event?",
-    "actor": "Who triggered the workflow?",
-    "bot_name": "What is the auto-commit bot name?",
-    "auto_commit": "Is this an auto-commit run?",
-    "snapshot_artifact": "Should a snapshot artifact be published?",
-    "release_artifact": "Should a release artifact be published?",
-    "docker": "Should the Docker stage run?",
-    "stages": "Which build stages should run?",
-    "app_build_type": "What is the app build type?",
-    "application_version": "What is the application version?",
-    "parent_version": "What is the parent version?",
-    "project_version": "What is the project version?",
-    "artifact_id": "What is the artifact ID?",
-    "name": "What is the project name?",
-    "java_version": "What is the Java version?",
-    "node_version": "What is the Node.js version?",
-    "dotnet_version": "What is the .NET version?",
-    "cpgbuild_app_origin": "What is the CPGBUILD app origin?",
-    "checks_type_skip": "Should checks type be skipped?",
-    "is_library": "Is this a library project?",
-    "sonar_inclusions": "What are the Sonar inclusion arguments?",
-    "sonar_exclusions": "What are the Sonar exclusion arguments?",
-    "sonar_cli_args": "What are the Sonar CLI arguments?",
-}
 
 
 def _log_error(message: str) -> None:
@@ -581,8 +553,7 @@ def emit_outputs(outputs: dict[str, str]) -> None:
     OUTPUT: lines on stdout.
     """
     for key, value in outputs.items():
-        label = OUTPUT_LABELS.get(key, f"What is the {key.replace('_', ' ')}?")
-        print(f"{label} : {value}", file=sys.stdout)
+        print(f"What is the {key.replace('_', ' ')}? : {value}", file=sys.stdout)
 
 
 def write_github_output(output_path: str, outputs: dict[str, str]) -> None:
