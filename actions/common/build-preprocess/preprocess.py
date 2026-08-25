@@ -381,6 +381,17 @@ def build_stages(
     is_library: str,
     event: str = "",
 ) -> list[str]:
+    """Decide which pipeline stages/tokens to emit.
+
+    ``is_manual`` is true only for ``workflow_dispatch`` (not push).
+
+    Publish tokens:
+    - snapshot_artifact: develop, not PR
+    - release_artifact: release/* or hotfix/*, on push or workflow_dispatch, not PR
+    - docker: push or workflow_dispatch, not PR, not library
+
+    Auto-commit bot runs emit no stages.
+    """
     if auto_commit:
         return []
 
