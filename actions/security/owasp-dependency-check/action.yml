@@ -538,7 +538,6 @@ runs:
         out: ${{ inputs.out }}
         data_dir: ${{ inputs.data_dir }}
         cleanup_image: ${{ inputs.cleanup_image }}
-        image: ${{ inputs.image }}
         enableRetired: ${{ inputs.enableRetired }}
         enableExperimental: ${{ inputs.enableExperimental }}
         prettyPrint: ${{ inputs.prettyPrint }}
