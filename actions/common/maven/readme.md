@@ -1,21 +1,19 @@
 # Maven
 
-Composite action that runs `mvn` with caller-supplied goals and CLI arguments.
+Composite action that installs the Apache Maven CLI and runs `mvn` with caller-supplied goals.
 
 ## Overview
 
 - Use **`actions/setup-java`** in the workflow for Java.
-- Write **`settings.xml`** in the workflow (heredoc + org secrets) when Nexus publish needs credentials; pass `-s <path>` in `args`.
-- On self-hosted runners, set `maven-setup: auto` to install Apache Maven when `mvn` / `mvnw` are missing.
+- Always installs Apache Maven CLI, copies settings, configures git, runs `mvn -s …` in **`GITHUB_WORKSPACE` only**, then cleans up settings (`always()`).
+- Use `${env.NAME}` in the template; pass secrets on the step `env:` (`NEXUS_USERNAME`, `NEXUS_PASSWORD`, `GIT_TOKEN`).
 
 ## Inputs
 
 | Input | Required | Default | Description |
 | --- | --- | --- | --- |
-| `args` | Yes | — | Maven goals and options, e.g. `clean verify -DskipTests` or `deploy -s settings.xml` |
-| `maven-setup` | No | `auto` | `auto` installs Apache Maven when missing, `skip` or `require` |
-| `maven-version` | No | auto | Override install version; empty reads `pom.xml` `<maven.version>`, else `3.9.9` |
-| `working-directory` | No | workspace root | Directory containing `pom.xml` |
+| `args` | Yes | — | Maven goals and options, e.g. `clean verify -DskipTests` or `deploy` |
+| `maven-version` | No | auto | Apache Maven CLI version; empty reads `pom.xml` `<maven.version>`, else `3.9.9` |
 | `maven-opts` | No | `""` | Sets `MAVEN_OPTS` for the run |
 
 ## Outputs
@@ -23,58 +21,30 @@ Composite action that runs `mvn` with caller-supplied goals and CLI arguments.
 | Output | Description |
 | --- | --- |
 | `exit_code` | Maven process exit code |
-| `project_version` | `project.version` from `pom.xml` after a successful run |
 | `java_home` | `JAVA_HOME` from the runner |
-| `maven_version` | Resolved Maven version (PATH or install) |
+| `maven_version` | Installed Maven CLI version |
+| `settings_path` | `$GITHUB_WORKSPACE/maven/settings.xml` |
 
-## Maven version resolution
+## settings.xml template (edit yourself)
 
-When a download is needed (`maven-setup: auto`, no `mvnw`, no `mvn` on PATH):
+File: [`settings.xml.tmpl`](settings.xml.tmpl) → written to `$GITHUB_WORKSPACE/maven/settings.xml`.
 
-1. `maven-version` input (if set)
-2. `pom.xml` → `<maven.version>`
-3. House default **`3.9.9`**
+| Placeholder | Step env |
+| --- | --- |
+| `${env.NEXUS_USERNAME}` | `NEXUS_USERNAME` |
+| `${env.NEXUS_PASSWORD}` | `NEXUS_PASSWORD` |
+| `${env.GIT_TOKEN}` | `GIT_TOKEN` (jgit / scm tag push) |
 
-If `./mvnw` exists, it is used directly. If `mvn` is on PATH, that binary is used.
+## Example
 
 ```yaml
-- uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
-  with:
-    distribution: temurin
-    java-version: "21"
-    cache: maven
-
 - uses: ./actions/common/maven
-  with:
-    args: clean verify -DskipTests
-    maven-setup: skip
-```
-
-### Nexus publish (settings in workflow)
-
-```yaml
-- name: Write Maven settings
   env:
     NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
     NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-  run: |
-    cat > "${{ runner.temp }}/settings.xml" <<EOF
-    <?xml version="1.0" encoding="UTF-8"?>
-    <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
-      <servers>
-        <server>
-          <id>nexus</id>
-          <username>${NEXUS_USERNAME}</username>
-          <password>${NEXUS_PASSWORD}</password>
-        </server>
-      </servers>
-    </settings>
-    EOF
-    chmod 600 "${{ runner.temp }}/settings.xml"
-
-- uses: ./actions/common/maven
+    GIT_TOKEN: ${{ secrets.GIT_TOKEN || github.token }}
   with:
-    args: deploy -DskipTests -s ${{ runner.temp }}/settings.xml
+    args: deploy -DskipTests
 ```
 
 ## Related

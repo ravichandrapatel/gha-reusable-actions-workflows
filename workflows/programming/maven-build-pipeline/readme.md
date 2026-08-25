@@ -7,7 +7,7 @@ Reusable workflow (`on: workflow_call`) for Maven applications — **maven-ui** 
 - **Purpose**: Shared Maven CI — preprocess → build/test → OWASP → Sonar → Nexus deploy and/or S2I docker.
 - **Scope**: `app_build_type` is always `maven`. Uses house [`maven`](../../actions/common/maven/readme.md) action and [`s2i-build-and-push`](../../actions/common/s2i-build-and-push/readme.md) for container images.
 - **Primary users**: JVM apps with `pom.xml`, `project.values`, and `build.values`.
-- **Success criteria**: Jobs honor preprocess booleans (`build_and_unit_test` / `owasp` / `sonar` / `snapshot_artifact` / `release_artifact` / `docker`).
+- **Success criteria**: Jobs honor preprocess booleans (`build_and_unit_test` / `owasp` / `sonar` / `snapshot_artifact` / `release_artifact` / `docker`). Preprocess uses local `./actions/common/build-preprocess`. `checkstyle_skip` appends `-Dcheckstyle.skip=true` when `CPGBUILD_APP_ORIGIN` is set. Optional `lib_01`/`lib_02`/`lib_03` are workflow outputs.
 
 ## Metadata dashboard
 
@@ -62,12 +62,11 @@ Set `scan_profile: auto` (default) to derive from `application_name`, or pass `m
 | --- | --- | --- | --- |
 | `runner` | no | `ubuntu-latest` | Runner label (Podman for OWASP) |
 | `bot_name` | no | `""` | Optional auto-commit bot override; `[bot]` actors auto-detected when empty |
-| `maven_setup` | no | `auto` | Installs Apache Maven on self-hosted when `mvn` is missing |
-| `maven_version` | no | `""` | Optional override; empty auto-detects from `pom.xml` `<maven.version>` |
+| `maven_version` | no | `""` | Optional Apache Maven CLI version; empty auto-detects from `pom.xml` `<maven.version>` |
 | `scan_profile` | no | `auto` | OWASP profile |
 | `maven_build_args` | no | `clean verify -DskipTests` | Build/test Maven goals |
 | `maven_publish_args` | no | `deploy -DskipTests` | Nexus publish goals |
-- **Publish:** workflow writes `${{ runner.temp }}/settings.xml` via heredoc with `NEXUS_USERNAME` / `NEXUS_PASSWORD` org secrets; Maven step passes `-s` in `args`.
+- **Publish:** maven action always writes `$GITHUB_WORKSPACE/maven/settings.xml` from [`settings.xml.tmpl`](../../../actions/common/maven/settings.xml.tmpl) (edit that file for Nexus/jgit `<id>`s). Secrets: `NEXUS_*` + `GIT_TOKEN` (falls back to `github.token`).
 | `sonar_host_url` | **yes** | — | SonarQube URL |
 | `sonar_project_key` | no | `""` → `application_name` | Sonar project key |
 | `sonar_platform` | no | `cap` | Sonar tag |
@@ -84,15 +83,16 @@ Callers pass **`secrets: inherit`**.
 | `SONAR_TOKEN` | **yes** | sonarqube |
 | `NVD_API_KEY` | no | owasp (recommended) |
 | `NEXUS_USERNAME` / `NEXUS_PASSWORD` | no | publish, docker-build |
+| `GIT_TOKEN` | no | publish settings.xml jgit/scm (defaults to `github.token`) |
 
 ## Caller requirements
 
 - `project.values`, `build.values`, root `pom.xml` with `artifactId`, `version`, `properties/java.version`
 - `BUILDER_BASE_IMAGE` in `build.values` when docker stage runs
 - Maven `distributionManagement` / repository `<id>` values in `pom.xml` (used when generating settings for publish)
-- Publish writes `settings.xml` in the workflow job (heredoc + org secrets); adjust server `<id>` values to match your `pom.xml`.
+- Publish generates `settings.xml` from `actions/common/maven/settings.xml.tmpl` (edit server `<id>`s to match your `pom.xml` / jgit config). Job needs `contents: write` for tag push.
 - **`bot_name`:** optional override. When empty, preprocess auto-detects actors ending in `[bot]` and skips publish/docker on those runs.
-- **`maven_setup`:** on self-hosted runners the Maven action installs Apache Maven when `mvn` is not on PATH. Java is always configured with `actions/setup-java` using `java_version` from preprocess.
+- **`maven_version`:** optional Apache Maven CLI pin. Empty → `pom.xml` `<maven.version>`, else `3.9.9`. Java is always configured with `actions/setup-java` using `java_version` from preprocess.
 - Branch policy: `develop` push → snapshot + docker; `release/*` / `hotfix/*` push or dispatch → release artifact + docker
 
 ## Usage

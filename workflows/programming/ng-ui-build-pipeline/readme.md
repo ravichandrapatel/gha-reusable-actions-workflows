@@ -7,7 +7,7 @@ Reusable workflow (`on: workflow_call`) for Angular/ng-ui apps. Preprocess emits
 - **Purpose**: Shared ng-ui CI — preprocess → lint/test/build → OWASP → Sonar (branch or PR) → semantic-release and/or docker.
 - **Scope**: `app_build_type` is always `ng-ui`. No email notification.
 - **Primary users**: ng-ui application repositories in the org.
-- **Success criteria**: Jobs honor preprocess booleans (`build_and_unit_test` / `owasp` / `sonar` / `snapshot_artifact` / `release_artifact` / `docker`); SPVS Conftest passes.
+- **Success criteria**: Jobs honor preprocess booleans (`build_and_unit_test` / `owasp` / `sonar` / `snapshot_artifact` / `release_artifact` / `docker`); SPVS Conftest passes. Preprocess uses local `./actions/common/build-preprocess`; optional `lib_01`/`lib_02`/`lib_03` and `checkstyle_skip` are workflow outputs.
 
 ## Metadata dashboard
 

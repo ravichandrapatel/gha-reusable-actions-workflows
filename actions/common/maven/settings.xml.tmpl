@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Edit this template for your Nexus + jgit/scm server ids (must match pom.xml).
+  Maven resolves ${env.NAME} from the process environment at runtime.
+  Pass NEXUS_USERNAME / NEXUS_PASSWORD / GIT_TOKEN on the workflow uses: env block.
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <servers>
+    <!-- Nexus deploy / resolve — change <id> to match distributionManagement / repositories -->
+    <server>
+      <id>nexus</id>
+      <username>${env.NEXUS_USERNAME}</username>
+      <password>${env.NEXUS_PASSWORD}</password>
+    </server>
+
+    <!--
+      jgit / maven-scm / release plugin git auth for creating tags.
+      Change <id> to match your pom scm provider / jgit server id.
+      Username is typically x-access-token (GitHub) or git; password is the token.
+    -->
+    <server>
+      <id>github</id>
+      <username>x-access-token</username>
+      <password>${env.GIT_TOKEN}</password>
+    </server>
+  </servers>
+</settings>

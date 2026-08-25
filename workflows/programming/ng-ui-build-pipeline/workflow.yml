@@ -74,6 +74,21 @@ on:
       sonar:
         description: true when sonar should run
         value: ${{ jobs.build-preprocess.outputs.sonar }}
+      checkstyle_skip:
+        description: true when CPGBUILD_APP_ORIGIN is set
+        value: ${{ jobs.build-preprocess.outputs.checkstyle_skip }}
+      cpgbuild_app_origin:
+        description: From build.values CPGBUILD_APP_ORIGIN
+        value: ${{ jobs.build-preprocess.outputs.cpgbuild_app_origin }}
+      lib_01:
+        description: Optional LIB_01 from build.values
+        value: ${{ jobs.build-preprocess.outputs.lib_01 }}
+      lib_02:
+        description: Optional LIB_02 from build.values
+        value: ${{ jobs.build-preprocess.outputs.lib_02 }}
+      lib_03:
+        description: Optional LIB_03 from build.values
+        value: ${{ jobs.build-preprocess.outputs.lib_03 }}
       application_name:
         description: From project.values
         value: ${{ jobs.build-preprocess.outputs.application_name }}
@@ -103,6 +118,11 @@ jobs:
       snapshot_artifact: ${{ steps.preprocess.outputs.snapshot_artifact }}
       release_artifact: ${{ steps.preprocess.outputs.release_artifact }}
       docker: ${{ steps.preprocess.outputs.docker }}
+      checkstyle_skip: ${{ steps.preprocess.outputs.checkstyle_skip }}
+      cpgbuild_app_origin: ${{ steps.preprocess.outputs.cpgbuild_app_origin }}
+      lib_01: ${{ steps.preprocess.outputs.lib_01 }}
+      lib_02: ${{ steps.preprocess.outputs.lib_02 }}
+      lib_03: ${{ steps.preprocess.outputs.lib_03 }}
       application_name: ${{ steps.preprocess.outputs.application_name }}
       application_version: ${{ steps.preprocess.outputs.application_version }}
       organization: ${{ steps.preprocess.outputs.organization }}
