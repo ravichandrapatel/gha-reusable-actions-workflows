@@ -434,6 +434,18 @@ def load_project_metadata(
     raise ValueError(f"unsupported app build type: {app_build_type}")
 
 
+def resolve_event(raw_event: str) -> str:
+    """INTENT: Resolve GitHub event name from CLI or env; default to push for local runs.
+    INPUT: optional ``--event`` string.
+    OUTPUT: event name (``push`` when unset so local CLI matches develop CI).
+    """
+    return (
+        raw_event.strip()
+        or os.environ.get("GITHUB_EVENT_NAME", "").strip()
+        or "push"
+    )
+
+
 def resolve_auto_commit(actor: str, bot_name: str) -> tuple[str, bool]:
     """INTENT: Detect auto-commit / bot runs that should skip publish stages.
     INPUT: GitHub actor; optional explicit bot_name input.
@@ -590,7 +602,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Check branch against approved globs; emit stages")
     parser.add_argument("--branch", default="")
     parser.add_argument("--app-build-type", required=True, choices=APP_BUILD_TYPES)
-    parser.add_argument("--event", default="")
+    parser.add_argument(
+        "--event",
+        default="",
+        help="GitHub event name (default: GITHUB_EVENT_NAME, else push for local runs)",
+    )
     parser.add_argument("--actor", default="")
     parser.add_argument("--bot-name", default="")
     parser.add_argument("--output", default="")
@@ -613,7 +629,7 @@ def main() -> int:
     except (OSError, ValueError, FileNotFoundError, ET.ParseError):
         return 1
 
-    event = args.event.strip() or os.environ.get("GITHUB_EVENT_NAME", "").strip()
+    event = resolve_event(args.event)
     actor = args.actor.strip() or os.environ.get("GITHUB_ACTOR", "").strip()
     bot_name, auto_commit = resolve_auto_commit(actor, args.bot_name.strip())
 

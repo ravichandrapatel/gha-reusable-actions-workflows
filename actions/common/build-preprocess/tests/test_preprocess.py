@@ -63,6 +63,16 @@ class PreprocessTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Should the Docker stage run? : true", result.stdout)
 
+    def test_develop_defaults_event_to_push_when_unset(self) -> None:
+        """Local CLI without --event should behave like push (docker on)."""
+        result = run_preprocess(
+            TEMP / "coo-ams-aim2-dnc-svc",
+            event="",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("What is the GitHub event? : push", result.stdout)
+        self.assertIn("Should the Docker stage run? : true", result.stdout)
+
     def test_pull_request_skips_docker(self) -> None:
         result = run_preprocess(
             TEMP / "coo-ams-aim2-dnc-svc",
