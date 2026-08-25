@@ -208,6 +208,20 @@ def load_dotnet_metadata(repo_root: Path, project_values: dict[str, str]) -> dic
     }
 
 
+def _npm_semver(raw: str) -> str:
+    """Strip leading npm range markers (^ ~ >= <= > < =) and optional v prefix."""
+    ver = raw.strip()
+    while ver:
+        if ver.startswith((">=", "<=")):
+            ver = ver[2:].lstrip()
+            continue
+        if ver[0] in "^~=<>":
+            ver = ver[1:].lstrip()
+            continue
+        break
+    return ver.removeprefix("v")
+
+
 def load_ng_ui_metadata(repo_root: Path) -> dict[str, str]:
     node_version = ""
     for filename in (".nvmrc", ".node-version"):
@@ -240,7 +254,9 @@ def load_ng_ui_metadata(repo_root: Path) -> dict[str, str]:
 
     deps = pkg.get("dependencies") if isinstance(pkg.get("dependencies"), dict) else {}
     has_components = "@test/components" in deps
-    components_version = str(deps.get("@test/components", "")).strip() if has_components else ""
+    components_version = (
+        _npm_semver(str(deps.get("@test/components", ""))) if has_components else ""
+    )
     project_version = str(pkg.get("version", "")).strip()
     application_version = components_version if has_components else project_version
 

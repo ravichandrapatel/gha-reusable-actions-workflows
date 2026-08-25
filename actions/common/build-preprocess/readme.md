@@ -72,8 +72,8 @@ If the caller is not listed and `soft` is false, the action **exits 1**. With `s
 | `sonar_inclusions` | `-Dsonar.inclusions=<list>` when `CPGBUILD_SONAR_INCLUSION_LIST` is set; empty otherwise. |
 | `sonar_exclusions` | `-Dsonar.exclusions=<list>` when `CPGBUILD_SONAR_EXCLUSION_LIST` is set; empty otherwise. |
 | `sonar_cli_args` | Joined inclusion and exclusion `-D` arguments. |
-| `application_version` | ng-ui: `dependencies.@test/components` when declared, else `package.json` `version` (same rule as Maven parent vs project). Maven: parent `<version>` when parent exists, else project `<version>`. |
-| `parent_version` | ng-ui: `@test/components` version when declared. Maven: `parent/version`. |
+| `application_version` | ng-ui: `dependencies.@test/components` when declared (strips npm range markers like `^`/`~`), else `package.json` `version`. Maven: parent `<version>` when parent exists, else project `<version>`. |
+| `parent_version` | ng-ui: `@test/components` version when declared (range markers stripped). Maven: `parent/version`. |
 | `project_version` | ng-ui: `package.json` `version`. Maven: project `<version>`. |
 | `artifact_id` | From `pom.xml` `artifactId` when `app_build_type` is `maven`. |
 | `name` | From `pom.xml` `name` when `app_build_type` is `maven`. |

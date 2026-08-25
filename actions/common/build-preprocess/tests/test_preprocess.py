@@ -111,6 +111,27 @@ class PreprocessTests(unittest.TestCase):
         self.assertIn("What is the application version? : 2.4.1", result.stdout)
         self.assertIn("What is the project version? : 2.4.1", result.stdout)
 
+    def test_ng_ui_strips_caret_from_components_version(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "project.values").write_text("APPLICATION_NAME=ng-ui\n", encoding="utf-8")
+            (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
+            (root / "package.json").write_text(
+                json.dumps(
+                    {
+                        "version": "1.0.0",
+                        "engines": {"node": "20"},
+                        "dependencies": {"@test/components": "^18.0.0"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = run_preprocess(root, app_build_type="ng-ui")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("What is the application version? : 18.0.0", result.stdout)
+        self.assertIn("What is the parent version? : 18.0.0", result.stdout)
+        self.assertNotIn("^18.0.0", result.stdout)
+
     def test_temp_ng_ui_version_from_components(self) -> None:
         result = run_preprocess(
             TEMP / "corp-otccustmgt-aaf-ng-ui",
