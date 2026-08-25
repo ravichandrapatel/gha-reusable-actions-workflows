@@ -381,6 +381,52 @@ class PreprocessTests(unittest.TestCase):
             self.assertIn("branch=develop\n", content)
             self.assertIn("approved=true\n", content)
             self.assertIn("application_version=2.1.0\n", content)
+            self.assertIn("checkstyle_skip=false\n", content)
+            self.assertIn("lib_01=\n", content)
+            self.assertIn("lib_02=\n", content)
+            self.assertIn("lib_03=\n", content)
+
+    def test_optional_libs_from_build_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_dotnet_layout(
+                root,
+                build_values=(
+                    "BUILDER_BASE_IMAGE=img\n"
+                    "LIB_01=https://lib1.example\n"
+                    "#LIB_02=https://commented.example\n"
+                    "LIB_03=https://lib3.example\n"
+                ),
+            )
+            result = run_preprocess(root, app_build_type="dotnet")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("What is the lib 01? : https://lib1.example", result.stdout)
+        self.assertIn("What is the lib 02? : \n", result.stdout)
+        self.assertIn("What is the lib 03? : https://lib3.example", result.stdout)
+
+    def test_checkstyle_skip_true_when_app_origin_set(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_dotnet_layout(
+                root,
+                build_values="BUILDER_BASE_IMAGE=img\nCPGBUILD_APP_ORIGIN=https://origin.example\n",
+            )
+            result = run_preprocess(root, app_build_type="dotnet")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("What is the cpgbuild app origin? : https://origin.example", result.stdout)
+        self.assertIn("What is the checkstyle skip? : true", result.stdout)
+
+    def test_checkstyle_skip_accepts_cpgbuild_apporigin_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_dotnet_layout(
+                root,
+                build_values="BUILDER_BASE_IMAGE=img\nCPGBUILD_APPORIGIN=legacy-origin\n",
+            )
+            result = run_preprocess(root, app_build_type="dotnet")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("What is the cpgbuild app origin? : legacy-origin", result.stdout)
+        self.assertIn("What is the checkstyle skip? : true", result.stdout)
 
 
 if __name__ == "__main__":

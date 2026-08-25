@@ -69,8 +69,9 @@ If the caller is not listed and `soft` is false, the action **exits 1**. With `s
 | `teamaadgroupnpg` | From `project.values`. |
 | `teaaadgroupprd` | From `project.values`. |
 | `builder_base_image` | From `build.values`. |
-| `cpgbuild_app_origin` | From `build.values`. |
-| `checks_type_skip` | `false` when `cpgbuild_app_origin` is empty; `true` otherwise. |
+| `cpgbuild_app_origin` | From `build.values` `CPGBUILD_APP_ORIGIN` (fallback `CPGBUILD_APPORIGIN`), stripped. |
+| `checkstyle_skip` | `true` when `cpgbuild_app_origin` is non-empty; `false` otherwise. |
+| `lib_01` / `lib_02` / `lib_03` | Optional from `build.values` `LIB_01` / `LIB_02` / `LIB_03` (empty when unset or commented). |
 | `is_library` | Maven only: `n` when `project.values` has `TEMPLATE`; `y` when `TEMPLATE` is missing. Empty for other types. |
 | `sonar_inclusions` | `-Dsonar.inclusions=<list>` when `CPGBUILD_SONAR_INCLUSION_LIST` is set; empty otherwise. |
 | `sonar_exclusions` | `-Dsonar.exclusions=<list>` when `CPGBUILD_SONAR_EXCLUSION_LIST` is set; empty otherwise. |

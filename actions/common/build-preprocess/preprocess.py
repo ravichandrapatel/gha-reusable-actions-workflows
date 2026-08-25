@@ -1,7 +1,7 @@
 """
 FILE_NAME: preprocess.py
 DESCRIPTION: Branch allowlist, stages, values files, and maven/ng-ui/dotnet metadata.
-VERSION: 2.8.0
+VERSION: 2.8.2
 AUTHORS: DevOps Team
 """
 
@@ -30,6 +30,7 @@ ALLOWED_BRANCHES = (
 
 BUILD_STAGES = ["build_and_unit_test", "owasp", "sonar", "docker"]
 APP_BUILD_TYPES = ["maven", "ng-ui", "dotnet"]
+OPTIONAL_BUILD_LIBS = ("LIB_01", "LIB_02", "LIB_03")
 
 
 def _err(message: str) -> None:
@@ -357,7 +358,13 @@ def build_outputs(
     )
     sonar_inclusions = f"-Dsonar.inclusions={inclusion}" if inclusion else ""
     sonar_exclusions = f"-Dsonar.exclusions={exclusion}" if exclusion else ""
-    cpg_origin = build_values.get("CPGBUILD_APP_ORIGIN", "").strip()
+    cpg_origin = (
+        build_values.get("CPGBUILD_APP_ORIGIN", "").strip()
+        or build_values.get("CPGBUILD_APPORIGIN", "").strip()
+    )
+    lib_outputs = {
+        key.lower(): build_values.get(key, "").strip() for key in OPTIONAL_BUILD_LIBS
+    }
 
     outputs = {
         "branch": branch,
@@ -383,7 +390,8 @@ def build_outputs(
         "node_version": project_meta.get("node_version", ""),
         "dotnet_version": project_meta.get("dotnet_version", ""),
         "cpgbuild_app_origin": cpg_origin,
-        "checks_type_skip": "true" if cpg_origin else "false",
+        "checkstyle_skip": "true" if cpg_origin else "false",
+        **lib_outputs,
         "is_library": project_meta.get("is_library", ""),
         "sonar_inclusions": sonar_inclusions,
         "sonar_exclusions": sonar_exclusions,

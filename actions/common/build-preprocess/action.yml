@@ -110,11 +110,20 @@ outputs:
     description: 'From build.values BUILDER_BASE_IMAGE'
     value: ${{ steps.branch.outputs.builder_base_image }}
   cpgbuild_app_origin:
-    description: 'From build.values CPGBUILD_APP_ORIGIN'
+    description: 'From build.values CPGBUILD_APP_ORIGIN (or CPGBUILD_APPORIGIN), stripped'
     value: ${{ steps.branch.outputs.cpgbuild_app_origin }}
-  checks_type_skip:
-    description: 'false when cpgbuild_app_origin is empty; true otherwise'
-    value: ${{ steps.branch.outputs.checks_type_skip }}
+  checkstyle_skip:
+    description: 'true when cpgbuild_app_origin is non-empty; false otherwise'
+    value: ${{ steps.branch.outputs.checkstyle_skip }}
+  lib_01:
+    description: 'Optional from build.values LIB_01 (empty when unset)'
+    value: ${{ steps.branch.outputs.lib_01 }}
+  lib_02:
+    description: 'Optional from build.values LIB_02 (empty when unset)'
+    value: ${{ steps.branch.outputs.lib_02 }}
+  lib_03:
+    description: 'Optional from build.values LIB_03 (empty when unset)'
+    value: ${{ steps.branch.outputs.lib_03 }}
   is_library:
     description: 'maven only: n when project.values has TEMPLATE; y when TEMPLATE is missing'
     value: ${{ steps.branch.outputs.is_library }}
