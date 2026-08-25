@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/scan-profiles.sh"
 
 # Required env (mapped from action inputs in action.yml).
-: "${IMAGE:?IMAGE environment variable is required}"
+: "${OWASP_DC_IMAGE:?OWASP_DC_IMAGE environment variable is required}"
 : "${project:?project environment variable is required}"
 : "${path:?path environment variable is required}"
 : "${out:?out environment variable is required}"
@@ -31,10 +31,10 @@ if ! command -v podman &>/dev/null; then
 fi
 RUNNER=podman
 echo "Using $RUNNER"
-if $RUNNER image exists "$IMAGE" &>/dev/null; then
-  echo "Image already present: $IMAGE"
+if $RUNNER image exists "$OWASP_DC_IMAGE" &>/dev/null; then
+  echo "Image already present: $OWASP_DC_IMAGE"
 else
-  $RUNNER pull --quiet "$IMAGE"
+  $RUNNER pull --quiet "$OWASP_DC_IMAGE"
 fi
 
 WS=/github/workspace
@@ -46,7 +46,7 @@ if [ -n "${data_dir:-}" ]; then
   mkdir -p "${data_dir}"
   if ! find "${data_dir}" -mindepth 1 -print -quit 2>/dev/null | grep -q .; then
     echo "Seeding empty data_dir from image NVD cache..."
-    if ! $RUNNER run --rm --entrypoint /bin/bash "$IMAGE" -c 'tar -C /usr/share/dependency-check/data -cf - .' \
+    if ! $RUNNER run --rm --entrypoint /bin/bash "$OWASP_DC_IMAGE" -c 'tar -C /usr/share/dependency-check/data -cf - .' \
       | tar -C "${data_dir}" -xf -; then
       echo "::warning::Could not seed NVD cache from image; first scan may download NVD data"
     fi
@@ -216,17 +216,17 @@ $RUNNER run --rm \
   -v "$GITHUB_WORKSPACE:$WS:z" \
   "${DATA_MOUNT[@]}" \
   -w $WS \
-  "$IMAGE" \
+  "$OWASP_DC_IMAGE" \
   --project "${project}" \
   --scan "$WS/${path}" \
   "${FORMAT_ARGS[@]}" \
   --out "$WS/${out}" \
   "${EXTRA[@]}"
 
-if [ "${cleanup_image:-}" = 'true' ] && [ -n "$RUNNER" ] && [ -n "$IMAGE" ]; then
+if [ "${cleanup_image:-}" = 'true' ] && [ -n "$RUNNER" ] && [ -n "${OWASP_DC_IMAGE:-}" ]; then
   echo "Removing owasp-dependency-check image and pruning storage..."
-  if ! $RUNNER rmi "$IMAGE" 2>/dev/null; then
-    echo "::notice::rmi $IMAGE failed (image may already be removed or in use)"
+  if ! $RUNNER rmi "$OWASP_DC_IMAGE" 2>/dev/null; then
+    echo "::notice::rmi $OWASP_DC_IMAGE failed (image may already be removed or in use)"
   fi
   if ! $RUNNER image prune -f 2>/dev/null; then
     echo "::notice::image prune failed"

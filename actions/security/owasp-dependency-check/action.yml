@@ -512,8 +512,8 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Set image
-      id: image
+    - name: Resolve container image
+      id: resolve-image
       shell: bash
       env:
         INPUT_IMAGE: ${{ inputs.image }}
@@ -521,16 +521,16 @@ runs:
       run: |
         set -euo pipefail
         if [ -n "${INPUT_IMAGE}" ]; then
-          echo "image=${INPUT_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "ref=${INPUT_IMAGE}" >> "$GITHUB_OUTPUT"
         else
-          echo "image=ghcr.io/${GITHUB_REPOSITORY}/owasp-dependency-check:latest" >> "$GITHUB_OUTPUT"
+          echo "ref=ghcr.io/${GITHUB_REPOSITORY}/owasp-dependency-check:latest" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Run Dependency-Check
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
-        IMAGE: ${{ steps.image.outputs.image }}
+        OWASP_DC_IMAGE: ${{ steps.resolve-image.outputs.ref }}
         project: ${{ inputs.project }}
         path: ${{ inputs.path }}
         format: ${{ inputs.format }}
