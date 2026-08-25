@@ -13,6 +13,50 @@ SCRIPT = Path(__file__).resolve().parents[1] / "preprocess.py"
 TEMP = Path(__file__).resolve().parents[4] / "temp"
 
 
+def write_dotnet_layout(
+    root: Path,
+    *,
+    project_values: str = "APPLICATION_NAME=ams2-dnc-svc\n",
+    build_values: str = "BUILDER_BASE_IMAGE=img\n",
+    version: str = "1.0.0",
+    sdk_version: str = "8.0.401",
+    assembly_name: str = "ams2-dnc-svc",
+    sonar_inclusions: str = "",
+    sonar_exclusions: str = "",
+    product: str = "",
+) -> None:
+    (root / "project.values").write_text(project_values, encoding="utf-8")
+    (root / "build.values").write_text(build_values, encoding="utf-8")
+    props_bits = [f"<Version>{version}</Version>"]
+    if product:
+        props_bits.append(f"<Product>{product}</Product>")
+    if sonar_inclusions:
+        props_bits.append(f"<sonar.inclusions>{sonar_inclusions}</sonar.inclusions>")
+    if sonar_exclusions:
+        props_bits.append(f"<sonar.exclusions>{sonar_exclusions}</sonar.exclusions>")
+    (root / "Directory.Build.props").write_text(
+        "<Project>\n  <PropertyGroup>\n    "
+        + "\n    ".join(props_bits)
+        + "\n  </PropertyGroup>\n</Project>\n",
+        encoding="utf-8",
+    )
+    (root / "global.json").write_text(
+        json.dumps({"sdk": {"version": sdk_version}}) + "\n",
+        encoding="utf-8",
+    )
+    (root / "build").mkdir(exist_ok=True)
+    (root / "build" / "Build.csproj").write_text(
+        f"""<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>{assembly_name}</AssemblyName>
+  </PropertyGroup>
+</Project>
+""",
+        encoding="utf-8",
+    )
+
+
 def run_preprocess(
     workspace: Path,
     *,
@@ -88,7 +132,7 @@ class PreprocessTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("What is the application version? : 2.1.0", result.stdout)
-        self.assertIn("What is the dotnet version? : net8.0", result.stdout)
+        self.assertIn("What is the dotnet version? : 8.0.401", result.stdout)
         self.assertIn("-Dsonar.inclusions=**/*.cs", result.stdout)
 
     def test_ng_ui_version_from_package_json_when_no_components(self) -> None:
@@ -165,66 +209,32 @@ class PreprocessTests(unittest.TestCase):
     def test_dotnet_version_from_global_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "project.values").write_text("APPLICATION_NAME=svc\n", encoding="utf-8")
-            (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
-            (root / "global.json").write_text(
-                '{"sdk": {"version": "8.0.401"}}\n',
-                encoding="utf-8",
-            )
-            (root / "svc.csproj").write_text(
-                """<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <AssemblyName>svc</AssemblyName>
-    <Version>1.0.0</Version>
-  </PropertyGroup>
-</Project>
-""",
-                encoding="utf-8",
-            )
+            write_dotnet_layout(root, sdk_version="8.0.401", version="1.0.0")
             result = run_preprocess(root, app_build_type="dotnet")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("What is the dotnet version? : 8.0.401", result.stdout)
 
-    def test_dotnet_selects_csproj_by_application_name_among_nested(self) -> None:
-        """Directory.Build.props + build/build.csproj + app csproj; name picks the app."""
+    def test_dotnet_uses_build_csproj_ignoring_other_projects(self) -> None:
+        """Fixed layout: always build/Build.csproj; APPLICATION_NAME does not select."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "project.values").write_text(
-                'APPLICATION_NAME="ams2-dnc-svc"\nTEMPLATE=build-dotnet-core-v1.0\n',
-                encoding="utf-8",
+            write_dotnet_layout(
+                root,
+                project_values=(
+                    "APPLICATION_NAME=does-not-match-any-csproj\n"
+                    "TEMPLATE=build-dotnet-core-v1.0\n"
+                ),
+                version="2.1.0",
+                sdk_version="8.0.401",
+                assembly_name="ams2-dnc-svc",
             )
-            (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
-            (root / "Directory.Build.props").write_text(
-                """<Project>
-  <PropertyGroup>
-    <Version>2.1.0</Version>
-  </PropertyGroup>
-</Project>
-""",
-                encoding="utf-8",
-            )
-            (root / "global.json").write_text(
-                '{"sdk": {"version": "8.0.401"}}\n',
-                encoding="utf-8",
-            )
-            (root / "build").mkdir()
-            (root / "build" / "build.csproj").write_text(
+            other = root / "ams2-dnc-svc"
+            other.mkdir()
+            (other / "ams2-dnc-svc.csproj").write_text(
                 """<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-  </PropertyGroup>
-</Project>
-""",
-                encoding="utf-8",
-            )
-            app_dir = root / "ams2-dnc-svc"
-            app_dir.mkdir()
-            (app_dir / "ams2-dnc-svc.csproj").write_text(
-                """<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <AssemblyName>ams2-dnc-svc</AssemblyName>
+    <AssemblyName>ignored</AssemblyName>
   </PropertyGroup>
 </Project>
 """,
@@ -237,104 +247,33 @@ class PreprocessTests(unittest.TestCase):
         self.assertIn("What is the dotnet version? : 8.0.401", result.stdout)
         self.assertIn("What is the artifact id? : ams2-dnc-svc", result.stdout)
 
-    def test_dotnet_application_name_mismatch_lists_found_stems(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "project.values").write_text(
-                "APPLICATION_NAME=wrong-name\n",
-                encoding="utf-8",
-            )
-            (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
-            (root / "build").mkdir()
-            (root / "build" / "build.csproj").write_text(
-                """<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <Version>1.0.0</Version>
-  </PropertyGroup>
-</Project>
-""",
-                encoding="utf-8",
-            )
-            (root / "svc").mkdir()
-            (root / "svc" / "svc.csproj").write_text(
-                """<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <Version>1.0.0</Version>
-  </PropertyGroup>
-</Project>
-""",
-                encoding="utf-8",
-            )
-            result = run_preprocess(root, app_build_type="dotnet")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("APPLICATION_NAME=wrong-name does not match", result.stderr)
-        self.assertIn("found: build, svc", result.stderr)
-
-    def test_dotnet_prefers_build_csproj_when_name_unset(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "project.values").write_text("ORGANIZATION=test\n", encoding="utf-8")
-            (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
-            (root / "Directory.Build.props").write_text(
-                """<Project>
-  <PropertyGroup>
-    <Version>9.9.9</Version>
-  </PropertyGroup>
-</Project>
-""",
-                encoding="utf-8",
-            )
-            (root / "global.json").write_text(
-                '{"sdk": {"version": "8.0.100"}}\n',
-                encoding="utf-8",
-            )
-            (root / "build").mkdir()
-            (root / "build" / "build.csproj").write_text(
-                """<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <AssemblyName>build</AssemblyName>
-  </PropertyGroup>
-</Project>
-""",
-                encoding="utf-8",
-            )
-            (root / "other").mkdir()
-            (root / "other" / "other.csproj").write_text(
-                """<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-  </PropertyGroup>
-</Project>
-""",
-                encoding="utf-8",
-            )
-            result = run_preprocess(root, app_build_type="dotnet")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("What is the artifact id? : build", result.stdout)
-        self.assertIn("What is the application version? : 9.9.9", result.stdout)
-
-    def test_dotnet_version_from_target_frameworks(self) -> None:
+    def test_dotnet_requires_build_csproj(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "project.values").write_text("APPLICATION_NAME=svc\n", encoding="utf-8")
             (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
-            (root / "svc.csproj").write_text(
-                """<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFrameworks>net9.0;net8.0</TargetFrameworks>
-    <AssemblyName>svc</AssemblyName>
-    <Version>1.0.0</Version>
-  </PropertyGroup>
-</Project>
-""",
+            (root / "Directory.Build.props").write_text(
+                "<Project><PropertyGroup><Version>1.0.0</Version></PropertyGroup></Project>\n",
+                encoding="utf-8",
+            )
+            (root / "global.json").write_text(
+                '{"sdk": {"version": "8.0.401"}}\n',
                 encoding="utf-8",
             )
             result = run_preprocess(root, app_build_type="dotnet")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("build/Build.csproj", result.stderr)
+
+    def test_dotnet_accepts_lowercase_build_csproj(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_dotnet_layout(root, version="9.9.9", sdk_version="8.0.100", assembly_name="build")
+            # Rename to lowercase to exercise case-insensitive fallback
+            (root / "build" / "Build.csproj").rename(root / "build" / "build.csproj")
+            result = run_preprocess(root, app_build_type="dotnet")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("What is the dotnet version? : net9.0", result.stdout)
+        self.assertIn("What is the artifact id? : build", result.stdout)
+        self.assertIn("What is the application version? : 9.9.9", result.stdout)
 
     def test_unapproved_branch_fails(self) -> None:
         result = run_preprocess(TEMP / "coo-ams-aim2-dnc-svc", branch="not-allowed")
@@ -391,21 +330,10 @@ class PreprocessTests(unittest.TestCase):
     def test_library_skips_docker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "project.values").write_text(
-                "APPLICATION_NAME=lib-app\nORGANIZATION=test\n",
-                encoding="utf-8",
-            )
-            (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
-            (root / "lib-app.csproj").write_text(
-                """<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <AssemblyName>lib-app</AssemblyName>
-    <Version>1.0.0</Version>
-  </PropertyGroup>
-</Project>
-""",
-                encoding="utf-8",
+            write_dotnet_layout(
+                root,
+                project_values="APPLICATION_NAME=lib-app\nORGANIZATION=test\n",
+                assembly_name="lib-app",
             )
             result = run_preprocess(
                 root,
@@ -420,21 +348,18 @@ class PreprocessTests(unittest.TestCase):
     def test_build_values_overrides_sonar(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "project.values").write_text(
-                "APPLICATION_NAME=ams2-dnc-svc\nTEMPLATE=build-dotnet-core-v1.0\n",
-                encoding="utf-8",
-            )
-            (root / "build.values").write_text(
-                "BUILDER_BASE_IMAGE=img\n"
-                "CPGBUILD_SONAR_INCLUSION_LIST=src/**\n"
-                "CPGBUILD_SONAR_EXCLUSION_LIST=**/tests/**\n",
-                encoding="utf-8",
-            )
-            (root / "ams2-dnc-svc.csproj").write_text(
-                (TEMP / "coo-ams-aim2-dnc-svc" / "ams2-dnc-svc.csproj").read_text(
-                    encoding="utf-8"
+            write_dotnet_layout(
+                root,
+                project_values=(
+                    "APPLICATION_NAME=ams2-dnc-svc\nTEMPLATE=build-dotnet-core-v1.0\n"
                 ),
-                encoding="utf-8",
+                build_values=(
+                    "BUILDER_BASE_IMAGE=img\n"
+                    "CPGBUILD_SONAR_INCLUSION_LIST=src/**\n"
+                    "CPGBUILD_SONAR_EXCLUSION_LIST=**/tests/**\n"
+                ),
+                sonar_inclusions="**/*.cs",
+                sonar_exclusions="**/bin/**,**/obj/**",
             )
             result = run_preprocess(root, app_build_type="dotnet")
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -444,14 +369,7 @@ class PreprocessTests(unittest.TestCase):
     def test_github_output_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "project.values").write_text("APPLICATION_NAME=ams2-dnc-svc\n", encoding="utf-8")
-            (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
-            (root / "ams2-dnc-svc.csproj").write_text(
-                (TEMP / "coo-ams-aim2-dnc-svc" / "ams2-dnc-svc.csproj").read_text(
-                    encoding="utf-8"
-                ),
-                encoding="utf-8",
-            )
+            write_dotnet_layout(root, version="2.1.0")
             out_file = root / "github-output.txt"
             result = run_preprocess(root, app_build_type="dotnet", output=out_file)
             self.assertEqual(result.returncode, 0, result.stderr)

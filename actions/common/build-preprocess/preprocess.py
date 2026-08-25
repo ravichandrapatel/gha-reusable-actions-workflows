@@ -1,7 +1,7 @@
 """
 FILE_NAME: preprocess.py
 DESCRIPTION: Branch allowlist, stages, values files, and maven/ng-ui/dotnet metadata.
-VERSION: 2.6.1
+VERSION: 2.7.0
 AUTHORS: DevOps Team
 """
 
@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 PROJECT_KEY = "BUILD-PREPROCESS"
-_SKIP_CSPROJ_PARTS = frozenset({"bin", "obj", ".git", "node_modules"})
+DOTNET_CSPROJ = Path("build") / "Build.csproj"
 
 ALLOWED_BRANCHES = (
     "main",
@@ -105,54 +105,18 @@ def load_values(path: Path) -> dict[str, str]:
     return data
 
 
-def _dotnet_csproj_candidates(repo_root: Path) -> list[Path]:
-    return sorted(
-        p
-        for p in repo_root.rglob("*.csproj")
-        if not _SKIP_CSPROJ_PARTS.intersection(p.parts)
-    )
-
-
-def _resolve_dotnet_csproj(repo_root: Path, application_name: str) -> Path:
-    """Pick *.csproj: APPLICATION_NAME must match the filename stem when several exist."""
-    candidates = _dotnet_csproj_candidates(repo_root)
-    if not candidates:
-        _err(f"missing *.csproj under {repo_root}")
-        raise FileNotFoundError(str(repo_root / "*.csproj"))
-
-    stems = ", ".join(sorted({p.stem for p in candidates}))
-    if application_name:
-        name = application_name.casefold()
-        matches = [p for p in candidates if p.stem.casefold() == name]
-        if len(matches) == 1:
-            return matches[0]
-        if len(matches) > 1:
-            preferred = [p for p in matches if p.parent.name.casefold() == name]
-            if len(preferred) == 1:
-                return preferred[0]
-            _err(
-                f"APPLICATION_NAME={application_name} matches multiple *.csproj "
-                f"({', '.join(str(p.relative_to(repo_root)) for p in matches)})"
-            )
-            raise ValueError("ambiguous csproj")
-        _err(
-            f"APPLICATION_NAME={application_name} does not match any *.csproj filename "
-            f"(found: {stems}); set APPLICATION_NAME to match the project filename"
-        )
-        raise ValueError("csproj name mismatch")
-
-    if len(candidates) == 1:
-        return candidates[0]
-
-    build_proj = repo_root / "build" / "build.csproj"
-    if build_proj.is_file() and build_proj in candidates:
-        return build_proj
-
-    _err(
-        "multiple csproj files found; set APPLICATION_NAME in project.values "
-        f"to match the project filename (found: {stems})"
-    )
-    raise ValueError("ambiguous csproj")
+def _resolve_dotnet_csproj(repo_root: Path) -> Path:
+    """Fixed layout: build/Build.csproj (APPLICATION_NAME is not used for selection)."""
+    preferred = repo_root / DOTNET_CSPROJ
+    if preferred.is_file():
+        return preferred
+    build_dir = repo_root / "build"
+    if build_dir.is_dir():
+        for path in sorted(build_dir.iterdir()):
+            if path.is_file() and path.name.casefold() == "build.csproj":
+                return path
+    _err(f"missing {preferred}")
+    raise FileNotFoundError(str(preferred))
 
 
 def branch_approved(branch: str, pattern: str | None = None) -> bool:
@@ -201,51 +165,51 @@ def load_maven_metadata(repo_root: Path, project_values: dict[str, str]) -> dict
 
 
 def load_dotnet_metadata(repo_root: Path, project_values: dict[str, str]) -> dict[str, str]:
-    application_name = project_values.get("APPLICATION_NAME", "").strip()
-    csproj_path = _resolve_dotnet_csproj(repo_root, application_name)
-
+    csproj_path = _resolve_dotnet_csproj(repo_root)
     root = _parse_xml(csproj_path)
+
     props_path = repo_root / "Directory.Build.props"
-    props_root = _parse_xml(props_path) if props_path.is_file() else None
-    parent_version = _xml_prop(props_root, "Version") if props_root is not None else ""
+    if not props_path.is_file():
+        _err(f"missing {props_path}")
+        raise FileNotFoundError(str(props_path))
+    props_root = _parse_xml(props_path)
+    parent_version = _xml_prop(props_root, "Version")
 
-    target_framework = _xml_prop(root, "TargetFramework")
-    if not target_framework:
-        frameworks = _xml_prop(root, "TargetFrameworks")
-        if frameworks:
-            target_framework = frameworks.split(";")[0].strip()
-
-    dotnet_version = ""
     global_json = repo_root / "global.json"
-    if global_json.is_file():
-        sdk = _parse_json(global_json, "global.json").get("sdk")
-        if isinstance(sdk, dict):
-            dotnet_version = str(sdk.get("version", "")).strip()
+    if not global_json.is_file():
+        _err(f"missing {global_json}")
+        raise FileNotFoundError(str(global_json))
+    sdk = _parse_json(global_json, "global.json").get("sdk")
+    dotnet_version = ""
+    if isinstance(sdk, dict):
+        dotnet_version = str(sdk.get("version", "")).strip()
     if not dotnet_version:
-        dotnet_version = target_framework
+        _err("global.json must define sdk.version")
+        raise ValueError("invalid global.json")
 
     project_version = _xml_prop(root, "Version")
     application_version = project_version or parent_version
     artifact_id = _xml_prop(root, "AssemblyName") or csproj_path.stem
-    sonar_inclusions = _xml_prop(root, "sonar.inclusions")
-    sonar_exclusions = _xml_prop(root, "sonar.exclusions")
-    if props_root is not None:
-        sonar_inclusions = sonar_inclusions or _xml_prop(props_root, "sonar.inclusions")
-        sonar_exclusions = sonar_exclusions or _xml_prop(props_root, "sonar.exclusions")
+    sonar_inclusions = _xml_prop(root, "sonar.inclusions") or _xml_prop(
+        props_root, "sonar.inclusions"
+    )
+    sonar_exclusions = _xml_prop(root, "sonar.exclusions") or _xml_prop(
+        props_root, "sonar.exclusions"
+    )
 
-    if not application_version or not artifact_id or not dotnet_version:
+    if not application_version or not artifact_id:
         _err(
-            f"{csproj_path.name} must have Version, AssemblyName or filename, and "
-            "TargetFramework/TargetFrameworks or global.json sdk.version"
+            f"{DOTNET_CSPROJ} / Directory.Build.props must provide Version and "
+            "AssemblyName (or rely on Build.csproj filename)"
         )
-        raise ValueError("invalid csproj")
+        raise ValueError("invalid dotnet metadata")
 
     return {
         "application_version": application_version,
         "parent_version": parent_version,
         "project_version": project_version,
         "artifact_id": artifact_id,
-        "name": _xml_prop(root, "Product"),
+        "name": _xml_prop(root, "Product") or _xml_prop(props_root, "Product"),
         "dotnet_version": dotnet_version,
         "sonar_inclusions": sonar_inclusions,
         "sonar_exclusions": sonar_exclusions,

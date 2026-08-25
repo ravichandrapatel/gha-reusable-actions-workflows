@@ -140,7 +140,7 @@ outputs:
     description: 'From package.json engines.node or .nvmrc/.node-version when app_build_type is ng-ui'
     value: ${{ steps.branch.outputs.node_version }}
   dotnet_version:
-    description: 'From global.json sdk.version or csproj TargetFramework when app_build_type is dotnet'
+    description: 'From global.json sdk.version when app_build_type is dotnet'
     value: ${{ steps.branch.outputs.dotnet_version }}
 
 runs:

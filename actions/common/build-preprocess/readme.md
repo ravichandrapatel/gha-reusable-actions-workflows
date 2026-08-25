@@ -72,16 +72,16 @@ If the caller is not listed and `soft` is false, the action **exits 1**. With `s
 | `sonar_inclusions` | `-Dsonar.inclusions=<list>` when `CPGBUILD_SONAR_INCLUSION_LIST` is set; empty otherwise. |
 | `sonar_exclusions` | `-Dsonar.exclusions=<list>` when `CPGBUILD_SONAR_EXCLUSION_LIST` is set; empty otherwise. |
 | `sonar_cli_args` | Joined inclusion and exclusion `-D` arguments. |
-| `application_version` | ng-ui: `dependencies.@test/components` when declared (strips npm range markers like `^`/`~`), else `package.json` `version`. Maven: parent `<version>` when parent exists, else project `<version>`. Dotnet: csproj `<Version>`, else `Directory.Build.props` `<Version>`. |
+| `application_version` | ng-ui: `dependencies.@test/components` when declared (strips npm range markers like `^`/`~`), else `package.json` `version`. Maven: parent `<version>` when parent exists, else project `<version>`. Dotnet: `build/Build.csproj` `<Version>`, else `Directory.Build.props` `<Version>`. |
 | `parent_version` | ng-ui: `@test/components` version when declared (range markers stripped). Maven: `parent/version`. Dotnet: `Directory.Build.props` `<Version>`. |
-| `project_version` | ng-ui: `package.json` `version`. Maven: project `<version>`. Dotnet: csproj `<Version>`. |
-| `artifact_id` | Maven: `pom.xml` `artifactId`. Dotnet: csproj `AssemblyName` or filename stem. |
+| `project_version` | ng-ui: `package.json` `version`. Maven: project `<version>`. Dotnet: `build/Build.csproj` `<Version>`. |
+| `artifact_id` | Maven: `pom.xml` `artifactId`. Dotnet: `build/Build.csproj` `AssemblyName` or filename stem. |
 | `name` | From `pom.xml` `name` when `app_build_type` is `maven`. |
 | `java_version` | From `pom.xml` `properties/java.version` when `app_build_type` is `maven`. |
 | `node_version` | From `package.json` `engines.node`, or `.nvmrc` / `.node-version`, when `app_build_type` is `ng-ui`. |
-| `dotnet_version` | From `global.json` `sdk.version`, else `TargetFramework` / first `TargetFrameworks` in the selected csproj, when `app_build_type` is `dotnet`. |
+| `dotnet_version` | From root `global.json` `sdk.version` when `app_build_type` is `dotnet`. |
 
-Dotnet csproj selection: `APPLICATION_NAME` in `project.values` must match the `*.csproj` filename (stem). Typical layout is `Directory.Build.props` + `global.json` at repo root, app `*.csproj` under a folder, and optional `build/build.csproj`. When `APPLICATION_NAME` is unset and several projects exist, `build/build.csproj` is preferred if present.
+Dotnet layout is fixed (no `APPLICATION_NAME` → csproj matching): root `Directory.Build.props` + `global.json`, and `build/Build.csproj`.
 
 ## Usage
 
