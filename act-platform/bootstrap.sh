@@ -133,5 +133,5 @@ fi
 echo "==> Next:"
 echo "    1. Install act: https://nektosact.com / https://github.com/nektos/act"
 echo "    2. Build images (if not --build): ${DEST_KIT}/build-images.sh  (or ${KIT_ROOT}/build-images.sh on host)"
-echo "    3. From repo root: act --list"
+echo "    3. From repo root: ./act-platform/act.sh --list"
 echo "    4. Copy .act/secrets.example -> .secrets (gitignored) as needed"

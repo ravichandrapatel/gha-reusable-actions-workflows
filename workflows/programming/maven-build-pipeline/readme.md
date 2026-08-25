@@ -93,7 +93,7 @@ Callers pass **`secrets: inherit`**.
 - Publish writes `settings.xml` in the workflow job (heredoc + org secrets); adjust server `<id>` values to match your `pom.xml`.
 - **`bot_name`:** optional override. When empty, preprocess auto-detects actors ending in `[bot]` and skips publish/docker on those runs.
 - **`maven_setup`:** on self-hosted runners the Maven action installs Apache Maven when `mvn` is not on PATH. Java is always configured with `actions/setup-java` using `java_version` from preprocess.
-- Branch policy: `develop` → snapshot deploy; `workflow_dispatch` on `release/*` / `hotfix/*` → release deploy + docker
+- Branch policy: `develop` push → snapshot + docker; `release/*` / `hotfix/*` push or dispatch → release artifact + docker
 
 ## Usage
 

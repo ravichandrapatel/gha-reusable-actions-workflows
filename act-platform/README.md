@@ -17,9 +17,16 @@ Portable local [nektos/act](https://github.com/nektos/act) platform for **any** 
 ```bash
 # From repository root (kit already present as ./act-platform)
 ./act-platform/bootstrap.sh . --force   # install/refresh root .actrc + .act/
-./act-platform/build-images.sh          # or: ./act-platform/bootstrap.sh . --force --build
-act --list
+./act-platform/build-images.sh          # once per machine (or bootstrap --build)
+
+# One command — auto-syncs workflows/ → .github/workflows/ when stale
+./act-platform/act.sh --list
+./act-platform/act.sh -W workflows/programming/ng-ui-build-pipeline --list
+./act-platform/act.sh -W workflows/programming/ng-ui-build-pipeline -e workflow_dispatch
+./act-platform/act.sh -W .act/callers/retry-smoke.yml
 ```
+
+You no longer need a separate `sync-workflows-for-act.sh` step for normal local runs.
 
 ## Use in another repository
 
@@ -57,8 +64,12 @@ Use `act -s` / `--secret-file` / `--var-file` as needed for your workflows.
 
 ```
 act-platform/
+  act.sh              # preferred entry — auto-sync + tag map + act
+  act-lib.sh
   bootstrap.sh
   build-images.sh
+  run-tagged-act.sh   # alias → act.sh --tagged
+  sync-workflows-for-act.sh
   README.md
   templates/          # source for root .actrc + .act/
   image/ubuntu/
@@ -72,64 +83,39 @@ act-platform/
 | `workflows/{category}/{name}/workflow.yml` | **Source** (author here) |
 | `.github/workflows/{name}.yml` | **Live** — what GitHub Actions and **act** execute / callers `uses:` |
 
-Release Manager `mode: release` copies source → live. For local act **without** changing that architecture:
+Release Manager `mode: release` copies source → live. For local act, **`act.sh` syncs automatically** when files are stale:
 
 ```bash
-# Preview
-./act-platform/sync-workflows-for-act.sh --dry-run
-
-# Copy source → live (local only; commit only if you intend to ship the sync)
-./act-platform/sync-workflows-for-act.sh
-# or one component:
-./act-platform/sync-workflows-for-act.sh workflows/common/dummy-workflow
-
-# Then
-act --list
-act -l -W .github/workflows/dummy-workflow.yml
+./act-platform/act.sh -W workflows/common/dummy-workflow --list
+./act-platform/sync-workflows-for-act.sh --check   # optional drift check in CI
 ```
 
-Detect drift (CI/local):
+Manual sync remains available for inspection:
 
 ```bash
-./act-platform/sync-workflows-for-act.sh --check
+./act-platform/sync-workflows-for-act.sh --dry-run
+./act-platform/sync-workflows-for-act.sh --if-stale
 ```
 
 **Composite actions** (`actions/...`) need no sync — reference `./actions/...` from any workflow under `.github/workflows/` (or `act -W path/to/smoke.yml`). Do not run Release Manager via act.
 
 ## Tagged method (local)
 
-Consumers use `{safe_name}/v{X.Y.Z}` (and stable `{safe_name}/v1`). Keep those refs in YAML. For act, map them onto this clone instead of cloning GitHub:
+Consumers use `{safe_name}/v{X.Y.Z}` (and stable `{safe_name}/v1`). **`act.sh` maps those refs to this clone** and creates local tags when missing:
 
 ```bash
-# WSL: Docker Desktop / engine socket (not containerd)
-export DOCKER_HOST=unix:///var/run/docker.sock
-
-# 1) Smoke a tagged composite (retry/v1.2.0)
-./act-platform/run-tagged-act.sh -W .act/callers/retry-smoke.yml
-
-# 2) Reusable workflow via live copy + tag ng-ui-build-pipeline/v1
-./act-platform/run-tagged-act.sh \
-  --component workflows/programming/ng-ui-build-pipeline \
-  --list
-./act-platform/run-tagged-act.sh \
-  --component workflows/programming/ng-ui-build-pipeline \
-  --dryrun
+./act-platform/act.sh -W .act/callers/retry-smoke.yml
+./act-platform/act.sh --component workflows/programming/ng-ui-build-pipeline --dryrun
 ```
 
-The helper:
-
-- copies `workflows/.../workflow.yml` → `.github/workflows/{name}.yml` (same as Release Manager sync)
-- creates **local** tags when missing (`retry/v1.2.0`, `ng-ui-build-pipeline/v1`, …) — not pushed
-- passes `act --local-repository owner/repo@ref=$PWD` for every house `@ref`
-- if `gha-act-ubuntu:dev` is absent, uses `catthehacker/ubuntu:act-latest`
+`run-tagged-act.sh` is a backward-compatible alias for `act.sh --tagged`.
 
 Throwaway ng-ui app under gitignored `temp/` (any source; stub npm scripts):
 
 ```bash
-export DOCKER_HOST=unix:///var/run/docker.sock
 export GITHUB_TOKEN   # from `gh auth token` so act can fetch setup-node / artifacts
 ./act-platform/seed-ng-ui-temp.sh
-./act-platform/run-tagged-act.sh \
+./act-platform/act.sh \
   --component workflows/programming/ng-ui-build-pipeline \
   --app-dir temp/ng-ui-act-fixture \
   --map-dir temp/gha-local-map \

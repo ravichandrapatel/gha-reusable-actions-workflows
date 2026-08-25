@@ -50,9 +50,9 @@ build-and-unit-test-lint   if stages contains build_and_unit_test
 | `publish` | `npx --no-install semantic-release` after quality gate |
 | `docker-build` | House docker-login + docker-build-and-push after quality gate |
 
-**Publish:** caller owns `.releaserc` / `release.config.js` (prerelease on `develop`, release on `release/*` and `hotfix/*`). Preprocess already sets `snapshot_artifact` on develop (non-PR) and `release_artifact` on `workflow_dispatch` of `release/*` or `hotfix/*`. semantic-release must be in the caller `package.json` (no floating `npx` latest).
+**Publish:** caller owns `.releaserc` / `release.config.js` (prerelease on `develop`, release on `release/*` and `hotfix/*`). Preprocess sets `snapshot_artifact` on develop (non-PR) and `release_artifact` on `push` or `workflow_dispatch` of `release/*` or `hotfix/*`. semantic-release must be in the caller `package.json` (no floating `npx` latest).
 
-**Docker:** `project_version` is the ng-ui `application_version` (package.json). Requires `docker_registry` plus `NEXUS_USERNAME` / `NEXUS_PASSWORD`.
+**Docker:** enabled on `push` or `workflow_dispatch` (not PRs / libraries). `project_version` is the ng-ui `application_version` (package.json). Requires `docker_registry` plus `NEXUS_USERNAME` / `NEXUS_PASSWORD`.
 
 ## Inputs
 

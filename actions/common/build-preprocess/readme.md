@@ -51,8 +51,8 @@ If the caller is not listed and `soft` is false, the action **exits 1**. With `s
 | `approved` | `true` when the branch matches an approved glob. |
 | `stages` | Comma-separated stages to run. |
 | `snapshot_artifact` | `true` when not auto-commit, branch is `develop`, and not a pull request. |
-| `release_artifact` | `true` when not auto-commit and `workflow_dispatch` on `release/*` or `hotfix/*`. |
-| `docker` | `true` when not auto-commit, not a library, `workflow_dispatch`, and not a pull request. |
+| `release_artifact` | `true` when not auto-commit, `push` or `workflow_dispatch` on `release/*` or `hotfix/*`, and not a pull request. |
+| `docker` | `true` when not auto-commit, not a library, `push` or `workflow_dispatch`, and not a pull request. |
 | `auto_commit` | `true` when `github.actor` matches `bot_name`. |
 | `bot_name` | Configured auto-commit bot name. |
 | `app_build_type` | Validated `maven`, `ng-ui`, or `dotnet`. |
@@ -128,8 +128,8 @@ Every build type reads `project.values` and `build.values` from the caller repo 
 
 - Auto-commit (`github.actor` equals `bot_name`, or actor ends with `[bot]` when `bot_name` is empty): `stages` is empty and snapshot/release/docker are `false`.
 - `snapshot_artifact`: not auto-commit, branch is `develop`, and the event is not a pull request.
-- `release_artifact`: not auto-commit, `workflow_dispatch` on `release/*` or `hotfix/*`.
-- `docker`: not auto-commit, not a library (`is_library` is not `y`), `workflow_dispatch`, and not a pull request.
+- `release_artifact`: not auto-commit, `push` or `workflow_dispatch` on `release/*` or `hotfix/*`, and not a pull request.
+- `docker`: not auto-commit, not a library (`is_library` is not `y`), `push` or `workflow_dispatch`, and not a pull request.
 - `build_and_unit_test`, `owasp`, `sonar`: included when not auto-commit.
 - `stages` is the comma-separated subset of `BUILD_STAGES` that should run.
 

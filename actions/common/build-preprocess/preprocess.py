@@ -379,6 +379,7 @@ def build_stages(
     is_pr: bool,
     is_manual: bool,
     is_library: str,
+    event: str = "",
 ) -> list[str]:
     if auto_commit:
         return []
@@ -386,11 +387,13 @@ def build_stages(
     stages = [stage for stage in BUILD_STAGES if stage != "docker"]
     if branch == "develop" and not is_pr:
         stages.append("snapshot_artifact")  # publish token; not a BUILD_STAGES job name
-    if is_manual and (
+    # Release publish: push or workflow_dispatch on release/* / hotfix/* (never PR).
+    if not is_pr and (is_manual or event == "push") and (
         branch_approved(branch, "release/**") or branch_approved(branch, "hotfix/**")
     ):
         stages.append("release_artifact")
-    if is_manual and is_library != "y" and not is_pr:
+    # Image publish: push or workflow_dispatch; never PR / library.
+    if is_library != "y" and not is_pr and (is_manual or event == "push"):
         stages.append("docker")
     return stages
 
@@ -516,6 +519,7 @@ def main() -> int:
             is_pr=event.startswith("pull_request"),
             is_manual=event == "workflow_dispatch",
             is_library=project_meta.get("is_library", ""),
+            event=event,
         ),
         app_build_type=args.app_build_type,
         project_meta=project_meta,

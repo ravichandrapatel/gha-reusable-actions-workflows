@@ -317,13 +317,10 @@ Portable kit: **[`act-platform/`](act-platform/README.md)** — Ubuntu + UBI9 ru
 ```bash
 ./act-platform/bootstrap.sh . --force   # refresh root .actrc + .act/ if needed
 ./act-platform/build-images.sh
-# Source lives in workflows/; act only sees .github/workflows/ — sync first:
-./act-platform/sync-workflows-for-act.sh
-# Tagged consumer path (@{safe_name}/vX.Y.Z) without cloning GitHub:
-export DOCKER_HOST=unix:///var/run/docker.sock   # WSL: not containerd.sock
-./act-platform/run-tagged-act.sh -W .act/callers/retry-smoke.yml
-./act-platform/run-tagged-act.sh --component workflows/programming/ng-ui-build-pipeline --dryrun
-act --list
+# act.sh auto-syncs workflows/ → .github/workflows/ and maps house tags:
+./act-platform/act.sh --list
+./act-platform/act.sh -W workflows/programming/ng-ui-build-pipeline --dryrun
+./act-platform/act.sh -W .act/callers/retry-smoke.yml
 ```
 
 Policy/lint stays on pre-commit and `policies/tests/run_tests.sh`. Do not run Release Manager via act.

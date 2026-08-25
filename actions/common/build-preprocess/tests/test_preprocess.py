@@ -52,7 +52,24 @@ class PreprocessTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("application version? : 2.7.18", result.stdout)
         self.assertIn("Should a snapshot artifact be published? : true", result.stdout)
+        self.assertIn("Should the Docker stage run? : true", result.stdout)
         self.assertIn("sonar.exclusions=***/target/**", result.stdout)
+
+    def test_develop_push_includes_docker(self) -> None:
+        result = run_preprocess(
+            TEMP / "coo-ams-aim2-dnc-svc",
+            event="push",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Should the Docker stage run? : true", result.stdout)
+
+    def test_pull_request_skips_docker(self) -> None:
+        result = run_preprocess(
+            TEMP / "coo-ams-aim2-dnc-svc",
+            event="pull_request",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Should the Docker stage run? : false", result.stdout)
 
     def test_temp_dotnet_develop_snapshot(self) -> None:
         result = run_preprocess(
@@ -172,6 +189,17 @@ class PreprocessTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("release_artifact,docker", result.stdout)
         self.assertIn("Should the Docker stage run? : true", result.stdout)
+
+    def test_release_push_includes_release_artifact_and_docker(self) -> None:
+        result = run_preprocess(
+            TEMP / "coo-ams-aim2-dnc-svc",
+            branch="release/1.0",
+            event="push",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Should a release artifact be published? : true", result.stdout)
+        self.assertIn("Should the Docker stage run? : true", result.stdout)
+        self.assertIn("release_artifact,docker", result.stdout)
 
     def test_pull_request_skips_snapshot(self) -> None:
         result = run_preprocess(

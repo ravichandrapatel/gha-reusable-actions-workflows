@@ -2,7 +2,7 @@
 # =============================================================================
 # FILE_NAME: sync-workflows-for-act.sh
 # DESCRIPTION: Copy source workflows/ → .github/workflows/ for local act (no release).
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 # EXIT_CODES/SIGNALS: 0 ok, 1 drift/error, 2 usage
 # AUTHORS: Platform Team
 # =============================================================================
@@ -16,6 +16,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DRY_RUN=0
 CHECK=0
+IF_STALE=0
 TARGET_PATH=""
 
 usage() {
@@ -27,6 +28,7 @@ Usage: ./act-platform/sync-workflows-for-act.sh [options] [component_path]
 
   --dry-run       Print planned copies; do not write
   --check         Exit 1 if any live file differs from source (no write)
+  --if-stale      Copy only when live file is missing or differs from source
   -h, --help      Show help
 
 Examples:
@@ -49,6 +51,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --check)
       CHECK=1
+      shift
+      ;;
+    --if-stale)
+      IF_STALE=1
       shift
       ;;
     -*)
@@ -101,6 +107,11 @@ sync_one() {
       return 1
     fi
     echo "[OK] ${dest} matches ${src}"
+    return 0
+  fi
+
+  if [[ "${IF_STALE}" -eq 1 && -f "${dest}" ]] && diff -q "${src}" "${dest}" >/dev/null; then
+    echo "[OK] ${dest} already matches ${src}"
     return 0
   fi
 
