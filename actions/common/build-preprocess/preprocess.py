@@ -1,7 +1,7 @@
 """
 FILE_NAME: preprocess.py
 DESCRIPTION: Branch allowlist, stages, values files, and maven/ng-ui/dotnet metadata.
-VERSION: 2.5.0
+VERSION: 2.5.1
 AUTHORS: DevOps Team
 """
 
@@ -65,18 +65,34 @@ OUTPUT_LABELS = {
 
 
 def _log_error(message: str) -> None:
+    """INTENT: Print an error line to stderr with the project prefix.
+    INPUT: message string.
+    OUTPUT: none.
+    """
     print(f"[{PROJECT_KEY}] {message}", file=sys.stderr)
 
 
 def _bool_str(value: bool) -> str:
+    """INTENT: Convert a bool to GitHub Actions output style.
+    INPUT: Python bool.
+    OUTPUT: ``true`` or ``false`` string.
+    """
     return "true" if value else "false"
 
 
 def _tag_name(element: ET.Element) -> str:
+    """INTENT: Strip XML namespace from an element tag.
+    INPUT: ElementTree element.
+    OUTPUT: local tag name without ``{ns}`` prefix.
+    """
     return element.tag.rsplit("}", 1)[-1]
 
 
 def xml_child(el: ET.Element | None, name: str) -> ET.Element | None:
+    """INTENT: Find the first direct child with the given local tag name.
+    INPUT: parent element (or None); child tag name.
+    OUTPUT: matching child element, or None.
+    """
     if el is None:
         return None
     for child in el:
@@ -86,13 +102,20 @@ def xml_child(el: ET.Element | None, name: str) -> ET.Element | None:
 
 
 def xml_text(el: ET.Element | None) -> str:
+    """INTENT: Read trimmed text content of an element.
+    INPUT: element or None.
+    OUTPUT: stripped text, or empty string.
+    """
     if el is None or el.text is None:
         return ""
     return el.text.strip()
 
 
 def xml_property(root: ET.Element, name: str) -> str:
-    """Prefer MSBuild PropertyGroup values over nested matches elsewhere in the tree."""
+    """INTENT: Read an MSBuild property, preferring PropertyGroup values.
+    INPUT: XML root; property element name.
+    OUTPUT: property text, or empty string.
+    """
     for el in root.iter():
         if _tag_name(el) != "PropertyGroup":
             continue
@@ -106,6 +129,10 @@ def xml_property(root: ET.Element, name: str) -> str:
 
 
 def _parse_xml(path: Path) -> ET.Element:
+    """INTENT: Parse an XML file and return its root element.
+    INPUT: path to XML file.
+    OUTPUT: root Element; logs and re-raises on failure.
+    """
     try:
         return ET.parse(path).getroot()
     except OSError as exc:
@@ -117,6 +144,10 @@ def _parse_xml(path: Path) -> ET.Element:
 
 
 def _parse_json_object(path: Path, label: str) -> dict:
+    """INTENT: Load a JSON object from disk.
+    INPUT: path; human label for error messages.
+    OUTPUT: dict; logs and raises on invalid JSON or non-object.
+    """
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except OSError as exc:
@@ -132,6 +163,10 @@ def _parse_json_object(path: Path, label: str) -> dict:
 
 
 def load_values(path: Path) -> dict[str, str]:
+    """INTENT: Parse a KEY=VALUE values file (ignores blank/# lines).
+    INPUT: path to project.values or build.values.
+    OUTPUT: dict of keys to string values.
+    """
     data: dict[str, str] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
@@ -145,6 +180,10 @@ def load_values(path: Path) -> dict[str, str]:
 
 
 def branch_approved(branch: str, pattern: str | None = None) -> bool:
+    """INTENT: Check a branch against allowlist globs (exact or ``prefix/**``).
+    INPUT: branch name; optional single pattern (default: ALLOWED_BRANCHES).
+    OUTPUT: True when the branch matches.
+    """
     ref = branch.removeprefix("refs/heads/").strip()
     patterns = (pattern,) if pattern is not None else ALLOWED_BRANCHES
     for pat in patterns:
@@ -158,6 +197,10 @@ def branch_approved(branch: str, pattern: str | None = None) -> bool:
 
 
 def resolve_branch(raw_branch: str) -> str:
+    """INTENT: Resolve the branch from CLI or GitHub env vars.
+    INPUT: optional ``--branch`` string.
+    OUTPUT: short branch name without ``refs/heads/``.
+    """
     return (
         raw_branch.strip()
         or os.environ.get("GITHUB_HEAD_REF", "").strip()
@@ -166,6 +209,10 @@ def resolve_branch(raw_branch: str) -> str:
 
 
 def load_project_files(repo_root: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """INTENT: Load required project.values and build.values from the repo root.
+    INPUT: caller repository root (GITHUB_WORKSPACE).
+    OUTPUT: (project_values, build_values); raises if either file is missing.
+    """
     project_file = repo_root / "project.values"
     build_file = repo_root / "build.values"
     if not project_file.is_file():
@@ -178,11 +225,18 @@ def load_project_files(repo_root: Path) -> tuple[dict[str, str], dict[str, str]]
 
 
 def is_library_from_template(project_values: dict[str, str]) -> str:
-    # TEMPLATE set => generated deployable app (not a shared library).
+    """INTENT: Derive library flag from TEMPLATE in project.values.
+    INPUT: project_values dict.
+    OUTPUT: ``n`` when TEMPLATE is set (deployable app); ``y`` when missing (library).
+    """
     return "n" if project_values.get("TEMPLATE", "").strip() else "y"
 
 
 def load_maven_metadata(repo_root: Path, project_values: dict[str, str]) -> dict[str, str]:
+    """INTENT: Read version, artifact, Java, and Sonar fields from pom.xml.
+    INPUT: repo root; project_values (for library detection).
+    OUTPUT: metadata dict for Maven app_build_type.
+    """
     pom_path = repo_root / "pom.xml"
     if not pom_path.is_file():
         _log_error(f"missing {pom_path}")
@@ -217,7 +271,10 @@ def load_maven_metadata(repo_root: Path, project_values: dict[str, str]) -> dict
 
 
 def find_csproj(repo_root: Path, application_name: str) -> Path:
-    # Root *.csproj first keeps monorepos with a single top-level project fast and unambiguous.
+    """INTENT: Locate the csproj for a .NET app (root first, then recursive).
+    INPUT: repo root; APPLICATION_NAME to match filename stem when multiple exist.
+    OUTPUT: path to the chosen csproj; raises if none or ambiguous.
+    """
     candidates = sorted(repo_root.glob("*.csproj")) or sorted(repo_root.rglob("*.csproj"))
     if not candidates:
         _log_error(f"missing *.csproj under {repo_root}")
@@ -238,6 +295,10 @@ def find_csproj(repo_root: Path, application_name: str) -> Path:
 
 
 def load_dotnet_metadata(repo_root: Path, project_values: dict[str, str]) -> dict[str, str]:
+    """INTENT: Read version, TFM, and Sonar fields from csproj / global.json / props.
+    INPUT: repo root; project_values.
+    OUTPUT: metadata dict for dotnet app_build_type.
+    """
     csproj_path = find_csproj(repo_root, project_values.get("APPLICATION_NAME", "").strip())
     root = _parse_xml(csproj_path)
 
@@ -295,7 +356,10 @@ def load_dotnet_metadata(repo_root: Path, project_values: dict[str, str]) -> dic
 
 
 def _read_node_version_file(repo_root: Path) -> str:
-    # Pin file wins over package.json engines.node when both exist.
+    """INTENT: Read Node version from .nvmrc or .node-version if present.
+    INPUT: repo root.
+    OUTPUT: version string without leading ``v``, or empty.
+    """
     for filename in (".nvmrc", ".node-version"):
         version_file = repo_root / filename
         if not version_file.is_file():
@@ -308,6 +372,10 @@ def _read_node_version_file(repo_root: Path) -> str:
 
 
 def load_ng_ui_metadata(repo_root: Path) -> dict[str, str]:
+    """INTENT: Read Node and package versions for ng-ui from package.json / pin files.
+    INPUT: repo root.
+    OUTPUT: metadata dict for ng-ui app_build_type.
+    """
     node_version = _read_node_version_file(repo_root)
     pkg_path = repo_root / "package.json"
     if not pkg_path.is_file():
@@ -353,6 +421,10 @@ def load_project_metadata(
     repo_root: Path,
     project_values: dict[str, str],
 ) -> dict[str, str]:
+    """INTENT: Dispatch metadata loading by app_build_type.
+    INPUT: maven | ng-ui | dotnet; repo root; project_values.
+    OUTPUT: type-specific metadata dict.
+    """
     if app_build_type == "maven":
         return load_maven_metadata(repo_root, project_values)
     if app_build_type == "dotnet":
@@ -363,6 +435,10 @@ def load_project_metadata(
 
 
 def resolve_auto_commit(actor: str, bot_name: str) -> tuple[str, bool]:
+    """INTENT: Detect auto-commit / bot runs that should skip publish stages.
+    INPUT: GitHub actor; optional explicit bot_name input.
+    OUTPUT: (resolved_bot_name, is_auto_commit).
+    """
     actor = actor.strip()
     explicit = bot_name.strip()
     if explicit:
@@ -381,7 +457,7 @@ def build_stages(
     is_library: str,
     event: str = "",
 ) -> list[str]:
-    """Decide which pipeline stages/tokens to emit.
+    """INTENT: Decide which pipeline stages and publish tokens to emit.
 
     ``is_manual`` is true only for ``workflow_dispatch`` (not push).
 
@@ -391,6 +467,9 @@ def build_stages(
     - docker: push or workflow_dispatch, not PR, not library
 
     Auto-commit bot runs emit no stages.
+
+    INPUT: auto_commit; branch; is_pr; is_manual; is_library (``y``/``n``/empty); event name.
+    OUTPUT: ordered list of stage/token names for ``stages`` and flags.
     """
     if auto_commit:
         return []
@@ -410,6 +489,10 @@ def build_stages(
 
 
 def sonar_cli_args(build_values: dict[str, str], project_meta: dict[str, str]) -> tuple[str, str, str]:
+    """INTENT: Build Sonar ``-Dsonar.inclusions/exclusions`` CLI fragments.
+    INPUT: build.values; project metadata (pom/csproj fallbacks).
+    OUTPUT: (inclusions_arg, exclusions_arg, joined_cli_args).
+    """
     inclusion = build_values.get("CPGBUILD_SONAR_INCLUSION_LIST", "").strip()
     exclusion = build_values.get("CPGBUILD_SONAR_EXCLUSION_LIST", "").strip()
     if not inclusion:
@@ -435,6 +518,10 @@ def build_outputs(
     build_values: dict[str, str],
     project_values: dict[str, str],
 ) -> dict[str, str]:
+    """INTENT: Assemble the full GITHUB_OUTPUT / stdout key map for the action.
+    INPUT: resolved branch/event/actor; stages list; type metadata; values files.
+    OUTPUT: flat string dict (bools as true/false); merges extra values keys lowercased.
+    """
     cpg_origin = build_values.get("CPGBUILD_APP_ORIGIN", "").strip()
     sonar_inclusions, sonar_exclusions, sonar_cli = sonar_cli_args(build_values, project_meta)
 
@@ -477,17 +564,29 @@ def build_outputs(
 
 
 def emit_outputs(outputs: dict[str, str]) -> None:
+    """INTENT: Print human-readable Q&A lines for each output (CI logs).
+    INPUT: outputs dict.
+    OUTPUT: lines on stdout.
+    """
     for key, value in outputs.items():
         label = OUTPUT_LABELS.get(key, f"What is the {key.replace('_', ' ')}?")
         print(f"{label} : {value}", file=sys.stdout)
 
 
 def write_github_output(output_path: str, outputs: dict[str, str]) -> None:
+    """INTENT: Append ``key=value`` lines to GITHUB_OUTPUT.
+    INPUT: output file path; outputs dict.
+    OUTPUT: none (writes file).
+    """
     with open(output_path, "a", encoding="utf-8") as fh:
         fh.writelines(f"{key}={value}\n" for key, value in outputs.items())
 
 
 def main() -> int:
+    """INTENT: CLI entry — validate branch, load metadata, emit stages/outputs.
+    INPUT: argparse + env (GITHUB_*).
+    OUTPUT: exit 0 on success, 1 on validation/IO/parse failure.
+    """
     parser = argparse.ArgumentParser(description="Check branch against approved globs; emit stages")
     parser.add_argument("--branch", default="")
     parser.add_argument("--app-build-type", required=True, choices=APP_BUILD_TYPES)
