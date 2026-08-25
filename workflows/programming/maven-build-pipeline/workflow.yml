@@ -10,105 +10,56 @@ name: maven-build-pipeline
 on:
   workflow_call:
     inputs:
-      runner:
-        description: Runner label (Podman required for OWASP)
-        type: string
+      runs-on:
+        description: 'The runner to use for the build-preprocess job'
         required: false
-        default: ubuntu-latest
-      bot_name:
-        description: Optional auto-commit bot override; empty auto-detects actors ending in [bot]
         type: string
+        default: '"ubuntu-latest"'
+      skip-sonar:
+        description: 'Whether to skip the Sonar stage'
         required: false
-        default: ""
-      maven_version:
-        description: Optional Apache Maven CLI version; empty auto-detects from pom.xml then 3.9.9
-        type: string
+        type: boolean
+        default: false
+      skip-owasp:
+        description: 'Whether to skip the OWASP stage'
         required: false
-        default: ""
-      scan_profile:
-        description: OWASP scan profile — auto, maven-ui, or maven-svc
-        type: string
+        type: boolean
+        default: false
+      skip-quality-gate-check:
+        description: 'Whether to skip the quality gate check'
         required: false
-        default: auto
-      maven_build_args:
-        description: Maven goals for build-and-unit-test
-        type: string
+        type: boolean
+        default: false
+      coverage-report-retention-days:
+        description: 'The number of days to retain the coverage report'
         required: false
-        default: clean verify -DskipTests
-      maven_publish_args:
-        description: Maven goals for Nexus publish (snapshot and release)
-        type: string
+        type: number
+        default: 1
+      owasp-report-retention-days:
+        description: 'The number of days to retain the OWASP report'
         required: false
-        default: deploy -DskipTests
-      sonar_host_url:
-        description: SonarQube server URL
-        type: string
-        required: true
-      sonar_project_key:
-        description: Sonar project key; empty uses preprocess application_name
-        type: string
+        type: number
+        default: 30
+      build-artifact-retention-days:
+        description: 'The number of days to retain the build artifact'
         required: false
-        default: ""
-      sonar_platform:
-        description: Sonar tag platform-<value>
-        type: string
+        type: number
+        default: 1
+      publish-to-github-packages:
+        description: 'Publish snapshot artifacts to GitHub Packages'
         required: false
-        default: cap
+        type: boolean
+        default: false
       docker_registry:
-        description: Nexus registry host for s2i-build-and-push
-        type: string
+        description: 'Nexus image registry host for pushing the built app image (defaults to vars.NEXUS_DOCKER_REGISTRY_DEV)'
         required: false
-        default: ""
+        type: string
+        default: ''
       docker_environment:
-        description: Image path segment after organization
-        type: string
+        description: 'Image path segment after organization on the Nexus registry'
         required: false
+        type: string
         default: production
-      deploy_environment:
-        description: GitHub Environment for contents:write publish
-        type: string
-        required: false
-        default: ci-publish
-    outputs:
-      build_and_unit_test:
-        description: true when build-and-unit-test should run
-        value: ${{ jobs.build-preprocess.outputs.build_and_unit_test }}
-      owasp:
-        description: true when owasp should run
-        value: ${{ jobs.build-preprocess.outputs.owasp }}
-      sonar:
-        description: true when sonar should run
-        value: ${{ jobs.build-preprocess.outputs.sonar }}
-      checkstyle_skip:
-        description: true when CPGBUILD_APP_ORIGIN is set
-        value: ${{ jobs.build-preprocess.outputs.checkstyle_skip }}
-      cpgbuild_app_origin:
-        description: From build.values CPGBUILD_APP_ORIGIN
-        value: ${{ jobs.build-preprocess.outputs.cpgbuild_app_origin }}
-      lib_01:
-        description: Optional LIB_01 from build.values
-        value: ${{ jobs.build-preprocess.outputs.lib_01 }}
-      lib_02:
-        description: Optional LIB_02 from build.values
-        value: ${{ jobs.build-preprocess.outputs.lib_02 }}
-      lib_03:
-        description: Optional LIB_03 from build.values
-        value: ${{ jobs.build-preprocess.outputs.lib_03 }}
-      application_name:
-        description: From project.values
-        value: ${{ jobs.build-preprocess.outputs.application_name }}
-      application_version:
-        description: Maven application version from pom.xml
-        value: ${{ jobs.build-preprocess.outputs.application_version }}
-      project_version:
-        description: Maven project version from pom.xml
-        value: ${{ jobs.build-preprocess.outputs.project_version }}
-      quality_gate_status:
-        description: Sonar quality gate from branch scan
-        value: ${{ jobs.sonarqube.outputs.quality_gate_status }}
-      docker_image:
-        description: Pushed image reference
-        value: ${{ jobs.docker-build.outputs.image }}
 
 permissions:
   contents: read
@@ -116,13 +67,13 @@ permissions:
 jobs:
   build-preprocess:
     name: build-preprocess
-    runs-on: ${{ inputs.runner }}
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
     permissions:
       contents: read
     outputs:
       build_and_unit_test: ${{ steps.preprocess.outputs.build_and_unit_test }}
-      owasp: ${{ steps.preprocess.outputs.owasp }}
-      sonar: ${{ steps.preprocess.outputs.sonar }}
+      owasp: ${{ inputs.skip-owasp && 'false' || steps.preprocess.outputs.owasp }}
+      sonar: ${{ inputs.skip-sonar && 'false' || steps.preprocess.outputs.sonar }}
       snapshot_artifact: ${{ steps.preprocess.outputs.snapshot_artifact }}
       release_artifact: ${{ steps.preprocess.outputs.release_artifact }}
       docker: ${{ steps.preprocess.outputs.docker }}
@@ -133,6 +84,7 @@ jobs:
       lib_03: ${{ steps.preprocess.outputs.lib_03 }}
       application_name: ${{ steps.preprocess.outputs.application_name }}
       application_version: ${{ steps.preprocess.outputs.application_version }}
+      parent_version: ${{ steps.preprocess.outputs.parent_version }}
       project_version: ${{ steps.preprocess.outputs.project_version }}
       organization: ${{ steps.preprocess.outputs.organization }}
       product: ${{ steps.preprocess.outputs.product }}
@@ -140,10 +92,18 @@ jobs:
       branch: ${{ steps.preprocess.outputs.branch }}
       java_version: ${{ steps.preprocess.outputs.java_version }}
       artifact_id: ${{ steps.preprocess.outputs.artifact_id }}
+      packaging: ${{ steps.preprocess.outputs.packaging }}
+      name: ${{ steps.preprocess.outputs.name }}
       builder_base_image: ${{ steps.preprocess.outputs.builder_base_image }}
       is_library: ${{ steps.preprocess.outputs.is_library }}
+      is_multimodule_lib: ${{ steps.preprocess.outputs.is_multimodule_lib }}
+      coverage_report_retention_days: ${{ inputs.coverage-report-retention-days }}
+      owasp_report_retention_days: ${{ inputs.owasp-report-retention-days }}
+      build_artifact_retention_days: ${{ inputs.build-artifact-retention-days }}
+      skip_quality_gate_check: ${{ inputs.skip-quality-gate-check }}
     steps:
-      - name: Checkout
+      - &checkout
+        name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build preprocess
@@ -151,290 +111,664 @@ jobs:
         uses: ./actions/common/build-preprocess
         with:
           app_build_type: maven
-          bot_name: ${{ inputs.bot_name }}
 
-  build-and-unit-test:
-    name: build-and-unit-test
-    needs: [build-preprocess]
-    if: needs.build-preprocess.outputs.build_and_unit_test == 'true'
-    runs-on: ${{ inputs.runner }}
+  build_and_unit_test:
+    name: build_and_unit_test
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
     permissions:
       contents: read
+    needs: build-preprocess
+    if: needs.build-preprocess.outputs.build_and_unit_test == 'true'
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Java
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+      - *checkout
+      - &setup-java
+        name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          distribution: temurin
           java-version: ${{ needs.build-preprocess.outputs.java_version }}
-          cache: maven
+          distribution: 'temurin'
+          cache: 'maven'
 
-      - name: Maven build and test
+      - &setup-maven
+        name: Setup Maven
+        id: setup-maven
+        shell: bash
+        env:
+          MAVEN_VERSION_DEFAULT: '3.9.9'
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
+
+          if command -v mvn >/dev/null 2>&1; then
+            mvn_bin="$(command -v mvn)"
+            echo "mvn already available at ${mvn_bin}; skipping install"
+            echo "MAVEN_EXECUTABLE=${mvn_bin}" >> "${GITHUB_ENV}"
+            if [[ -z "${MAVEN_HOME:-}" ]]; then
+              maven_home="$("${mvn_bin}" -version 2>/dev/null | sed -n 's/^Maven home:[[:space:]]*//p' | head -1)"
+              [[ -n "${maven_home}" ]] && echo "MAVEN_HOME=${maven_home}" >> "${GITHUB_ENV}"
+            fi
+            "${mvn_bin}" -version
+            detected="$("${mvn_bin}" -version 2>/dev/null | sed -n 's/^Apache Maven \([0-9][0-9.]*\).*/\1/p' | head -1)"
+            echo "maven_version=${detected}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "mvn not on PATH; resolving version and installing"
+
+          MAVEN_VERSION=""
+
+          # Prefer Maven Wrapper pin, then pom <maven.version>, then enforcer requireMavenVersion.
+          if [[ -f .mvn/wrapper/maven-wrapper.properties ]]; then
+            MAVEN_VERSION="$(
+              sed -n 's/.*apache-maven-\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' \
+                .mvn/wrapper/maven-wrapper.properties | head -1 || true
+            )"
+            [[ -n "${MAVEN_VERSION}" ]] && echo "Resolved Maven version from wrapper: ${MAVEN_VERSION}"
+          fi
+
+          if [[ -z "${MAVEN_VERSION:-}" ]] && [[ -f pom.xml ]]; then
+            MAVEN_VERSION="$(
+              grep -E '<maven\.version>' pom.xml \
+                | sed -E 's#.*<maven\.version>[[:space:]]*([^<[:space:]]+)[[:space:]]*</maven\.version>.*#\1#' \
+                | head -1 \
+                | tr -d '[:space:]' || true
+            )"
+            [[ -n "${MAVEN_VERSION}" ]] && echo "Resolved Maven version from pom.xml <maven.version>: ${MAVEN_VERSION}"
+          fi
+
+          if [[ -z "${MAVEN_VERSION:-}" ]] && [[ -f pom.xml ]]; then
+            MAVEN_VERSION="$(
+              tr '\n' ' ' < pom.xml \
+                | grep -oE '<requireMavenVersion>[^<]*<version>[^<]+</version>|<[rR]equireMavenVersion>[^<]+</[rR]equireMavenVersion>' \
+                | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' \
+                | head -1 || true
+            )"
+            [[ -n "${MAVEN_VERSION}" ]] && echo "Resolved Maven version from requireMavenVersion: ${MAVEN_VERSION}"
+          fi
+
+          if [[ -z "${MAVEN_VERSION:-}" ]]; then
+            MAVEN_VERSION="${MAVEN_VERSION_DEFAULT:-3.9.9}"
+            echo "Using default Maven version: ${MAVEN_VERSION}"
+          fi
+
+          echo "maven_version=${MAVEN_VERSION}" >> "${GITHUB_OUTPUT}"
+
+          cache_root="${RUNNER_TOOL_CACHE:-${HOME}/.cache/gha-tools}"
+          install_dir="${cache_root}/Maven/${MAVEN_VERSION}/x64"
+          mvn_bin="${install_dir}/bin/mvn"
+
+          if [[ ! -x "${mvn_bin}" ]]; then
+            url="https://repo1.maven.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
+            echo "Installing Apache Maven CLI ${MAVEN_VERSION} from ${url}"
+            tmp="$(mktemp -d)"
+            curl -fsSL "${url}" -o "${tmp}/maven.tgz"
+            mkdir -p "${install_dir}"
+            tar -xzf "${tmp}/maven.tgz" -C "${tmp}"
+            cp -a "${tmp}/apache-maven-${MAVEN_VERSION}/." "${install_dir}/"
+            rm -rf "${tmp}"
+          else
+            echo "Using cached Maven at ${install_dir}"
+          fi
+
+          echo "MAVEN_HOME=${install_dir}" >> "${GITHUB_ENV}"
+          echo "PATH=${install_dir}/bin:${PATH}" >> "${GITHUB_ENV}"
+          echo "MAVEN_EXECUTABLE=${mvn_bin}" >> "${GITHUB_ENV}"
+          "${mvn_bin}" -version
+
+      - name: Maven clean verify with unit tests
         uses: ./actions/common/maven
         with:
-          args: >-
-            ${{ inputs.maven_build_args }}${{ needs.build-preprocess.outputs.checkstyle_skip == 'true' && ' -Dcheckstyle.skip=true' || '' }}
-          maven-version: ${{ inputs.maven_version }}
+          MAVEN_ARGS: >-
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+            -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=error
+            -B
+            -Dcheckstyle.skip=${{ needs.build-preprocess.outputs.checkstyle_skip }}
+            clean
+            verify
+            --activate-profiles
+            coverage-per-test
 
-      - name: Upload Maven target
+      - name: Upload Maven build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maven-target
-          path: target
+          name: ${{ github.event.repository.name }}-build-artifact-${{ github.run_number }}
+          path: |
+            target/
+            !target/site/jacoco/**
+            */target/
+            !*/target/site/jacoco/**
           if-no-files-found: error
-          retention-days: 7
+          retention-days: ${{ inputs.build-artifact-retention-days }}
 
-      - name: Upload JaCoCo report
-        if: hashFiles('target/site/jacoco/jacoco.xml') != ''
+      - name: Upload Maven coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maven-jacoco
-          path: target/site/jacoco/jacoco.xml
+          name: ${{ github.event.repository.name }}-coverage-${{ github.run_number }}
+          path: |
+            target/site/jacoco/
+            */target/site/jacoco/
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: ${{ inputs.coverage-report-retention-days }}
 
   owasp:
-    name: owasp
-    needs: [build-preprocess]
-    if: needs.build-preprocess.outputs.owasp == 'true'
-    runs-on: ${{ inputs.runner }}
+    name: OWASP Dependency Check
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
     permissions:
       contents: read
+    needs: build-preprocess
+    if: needs.build-preprocess.outputs.owasp == 'true' && !inputs.skip-owasp
     steps:
-      - name: Checkout
+      - &shallow-checkout
+        name: Shallow checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
 
-      - name: Resolve OWASP scan profile
-        id: owasp_profile
+      - name: Generate Token
+        id: generate-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.DEVSECOPS_CLIENT_ID }}
+          private-key: ${{ secrets.DEVSECOPS_APP_PRIVATE_KEY }}
+          repositories: test/owasp-dependency-check-suppressions
+
+      - name: Checkout owasp suppression repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          repository: test/owasp-dependency-check-suppressions
+          path: owasp-dependency-check-suppressions
+          ref: master
+          token: ${{ steps.generate-token.outputs.token }}
+
+      - name: Resolve suppression file
+        id: resolve-suppression
         env:
-          INPUT_PROFILE: ${{ inputs.scan_profile }}
+          PARENT_VERSION: ${{ needs.build-preprocess.outputs.parent_version }}
           APPLICATION_NAME: ${{ needs.build-preprocess.outputs.application_name }}
         run: |
           set -euo pipefail
-          PROFILE="${INPUT_PROFILE}"
-          if [[ "${PROFILE}" == "auto" ]]; then
-            if [[ "${APPLICATION_NAME}" == *-ui || "${APPLICATION_NAME}" == *-UI ]]; then
-              PROFILE="maven-ui"
-            else
-              PROFILE="maven-svc"
-            fi
+          version="${PARENT_VERSION:-}"
+          if [[ -z "${version}" ]]; then
+            echo "::error::parent_version is empty; cannot resolve OWASP suppression file" >&2
+            exit 1
           fi
-          case "${PROFILE}" in
-            maven-ui|maven-svc|jsb-ui|jcr-ui|jsts-ui|jsb-svc|jcr-svc|jsts-svc)
-              echo "profile=${PROFILE}" >> "${GITHUB_OUTPUT}"
+
+          major="$(printf '%s' "${version}" | sed -E 's/^([0-9]+).*/\1/')"
+          case "${major}" in
+            1|2|4)
+              file="owasp-dc-suppression-v${major}.xml"
               ;;
             *)
-              echo "ERROR: scan_profile must be auto, maven-ui, or maven-svc (got '${INPUT_PROFILE}')" >&2
+              echo "::error::unsupported parent major version '${major}' from '${version}' (expected 1.x, 2.x, or 4.x)" >&2
               exit 1
               ;;
           esac
 
-      - name: Restore OWASP NVD cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .owasp-data
-          key: maven-owasp-${{ hashFiles('pom.xml') }}
-          restore-keys: |
-            maven-owasp-
+          app="${APPLICATION_NAME:-}"
+          case "${app}" in
+            *-jsb-ui|*-JSB-UI) archetype="archetype-jsb-ui" ;;
+            *-jcr-ui|*-JCR-UI) archetype="archetype-jcr-ui" ;;
+            *-jsts-ui|*-JSTS-UI) archetype="archetype-jsts-ui" ;;
+            *-jsb-svc|*-JSB-SVC) archetype="archetype-jsb-svc" ;;
+            *-jcr-svc|*-JCR-SVC) archetype="archetype-jcr-svc" ;;
+            *-jsts-svc|*-JSTS-SVC) archetype="archetype-jsts-svc" ;;
+            *-ui|*-UI) archetype="archetype-jsb-ui" ;;
+            *) archetype="archetype-jsb-svc" ;;
+          esac
 
-      - name: OWASP Dependency-Check
-        uses: ./actions/security/owasp-dependency-check
-        with:
-          scan_profile: ${{ steps.owasp_profile.outputs.profile }}
-          project: ${{ needs.build-preprocess.outputs.application_name }}
-          path: .
-          out: reports
-          data_dir: ${{ github.workspace }}/.owasp-data
-          nvdApiKey: ${{ secrets.NVD_API_KEY }}
-
-      - name: Upload OWASP reports
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: owasp-report
-          path: reports
-          if-no-files-found: error
-          retention-days: 7
-
-  sonarqube:
-    name: sonarqube
-    needs: [build-preprocess, build-and-unit-test, owasp]
-    if: >-
-      needs.build-and-unit-test.result == 'success'
-      && (needs.owasp.result == 'success' || needs.owasp.result == 'skipped')
-      && needs.build-preprocess.outputs.sonar == 'true'
-    runs-on: ${{ inputs.runner }}
-    permissions:
-      contents: read
-    outputs:
-      quality_gate_status: ${{ steps.scan.outputs.quality_gate_status }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Download JaCoCo report
-        continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: maven-jacoco
-          path: target/site/jacoco
-
-      - name: Download OWASP reports
-        continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: owasp-report
-          path: reports
-
-      - name: Resolve Sonar project key
-        id: sonar_meta
-        env:
-          KEY_IN: ${{ inputs.sonar_project_key }}
-          APP: ${{ needs.build-preprocess.outputs.application_name }}
-        run: |
-          set -euo pipefail
-          KEY="${KEY_IN}"
-          if [[ -z "${KEY}" ]]; then
-            KEY="${APP}"
-          fi
-          if [[ ! "${KEY}" =~ ^[A-Za-z0-9_.:-]+$ ]]; then
-            echo "ERROR: sonar project key '${KEY}' is invalid" >&2
+          path="owasp-dependency-check-suppressions/owasp-dependency-check/${archetype}/${file}"
+          if [[ ! -f "${path}" ]]; then
+            echo "::error::suppression file not found: ${path}" >&2
+            ls -la "owasp-dependency-check-suppressions/owasp-dependency-check" >&2 || true
             exit 1
           fi
-          echo "project_key=${KEY}" >> "${GITHUB_OUTPUT}"
 
-      - name: SonarQube scan
-        id: scan
-        uses: ravichandrapatel/gha-reusable-actions-workflows/actions/security/sonar-scan@sonar-scan/v1.2.0
+          echo "Resolved parent_version=${version} application_name=${app} → ${path}"
+          echo "suppression_file=${path}" >> "${GITHUB_OUTPUT}"
+
+      - name: OWASP Dependency Check
+        uses: ./actions/security/owasp-dependency-check
+        env:
+          NEXUS_DOCKER_USERNAME: ${{ secrets.NEXUS_DOCKER_USERNAME }}
+          NEXUS_DOCKER_PASSWORD: ${{ secrets.NEXUS_DOCKER_PASSWORD }}
         with:
-          sonar_token: ${{ secrets.SONAR_TOKEN }}
-          sonar_host_url: ${{ inputs.sonar_host_url }}
-          project_key: ${{ steps.sonar_meta.outputs.project_key }}
+          project: ${{ github.event.repository.name }}
+          scan_profile: maven
+          image: ${{ vars.NEXUS_DOCKER_REGISTRY_DEV }}/devcoe/github-runner/owasp-dependency-check:latest
+          path: ./
+          out: target
+          format: ALL
+          nvdApiKey: ${{ secrets.OWASP_DEPENDENCY_CHECK_NVD_API_KEY }}
+          nvdApiDelay: 8000
+          nvdValidForHours: 24
+          nvdDatafeed: ${{ vars.NEXUS_HOST_URL }}/repository/owasp-dc-nvd-api/nvdcve-{0}.json.gz
+          hostedSuppressionsUrl: ${{ vars.NEXUS_HOST_URL }}/repository/owasp-dc-group-raw/publishedSuppression.xml
+          suppression: ${{ steps.resolve-suppression.outputs.suppression_file }}
+
+      - name: Upload OWASP Dependency Check report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ github.event.repository.name }}-owasp-reports-${{ github.run_number }}
+          path: |
+            target/dependency-check-report.xml
+            target/dependency-check-report.html
+          if-no-files-found: warn
+          retention-days: ${{ inputs.owasp-report-retention-days }}
+
+  sonar:
+    name: Sonar-scan and quality gate check
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    permissions:
+      contents: read
+    needs: [build-preprocess, build_and_unit_test, owasp]
+    if: |
+      always() &&
+      github.event_name != 'pull_request' &&
+      !inputs.skip-sonar &&
+      needs.build-preprocess.result == 'success' &&
+      needs.build_and_unit_test.result == 'success' &&
+      needs.build-preprocess.outputs.sonar == 'true' &&
+      (needs.owasp.result == 'success' || needs.owasp.result == 'skipped')
+    steps:
+      - *shallow-checkout
+      - *setup-java
+      - *setup-maven
+      - &maven-artifact
+        name: Download Maven artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}-build-artifact-${{ github.run_number }}
+          path: .
+
+      - &owasp-artifact
+        name: Download OWASP Dependency Check artifact
+        if: needs.owasp.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}-owasp-reports-${{ github.run_number }}
+          path: target/
+
+      - name: Sonar-scan and quality gate check
+        uses: ./actions/common/maven
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_ARTIFACT_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_ARTIFACT_PASSWORD }}
+          NEXUS_BASEURL: ${{ vars.NEXUS_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONARQUBE_INTERNAL_URL }}
+        with:
+          MAVEN_ARGS: >-
+            sonar:sonar
+            --activate-profiles
+            coverage-per-test
+            -Dsonar.host.url=${{ env.SONAR_HOST_URL }}
+            -Dsonar.dependencyCheck.htmlReportPath=target/dependency-check-report.html
+            -Dsonar.dependencyCheck.xmlReportPath=target/dependency-check-report.xml
+            -Dsonar.dependencyCheck.jsonReportPath=target/dependency-check-report.json
+            -Dsonar.branch.name=${{ needs.build-preprocess.outputs.branch }}
+
+      - name: Sonar quality gate check
+        if: ${{ !inputs.skip-quality-gate-check }}
+        uses: ./actions/security/sonar-scan
+        with:
+          sonar_token: ${{ secrets.SONARQUBE_TOKEN }}
+          sonar_host_url: ${{ vars.SONARQUBE_INTERNAL_URL }}
+          project_key: ${{ needs.build-preprocess.outputs.application_name }}
           organization: ${{ needs.build-preprocess.outputs.organization }}
           product: ${{ needs.build-preprocess.outputs.product }}
-          platform: ${{ inputs.sonar_platform }}
+          platform: cap
           application_name: ${{ needs.build-preprocess.outputs.application_name }}
           app_build_type: maven
           args: ${{ needs.build-preprocess.outputs.sonar_cli_args }}
+          continue_on_error: 'false'
 
-  publish:
-    name: publish
-    needs: [build-preprocess, build-and-unit-test, sonarqube]
-    if: >-
-      needs.build-and-unit-test.result == 'success'
-      && (needs.sonarqube.result == 'success' || needs.sonarqube.result == 'skipped')
-      && (needs.build-preprocess.outputs.snapshot_artifact == 'true'
-          || needs.build-preprocess.outputs.release_artifact == 'true')
-    runs-on: ${{ inputs.runner }}
-    environment: ${{ inputs.deploy_environment }}
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          # Token for jgit/scm tag push (override with secrets.GIT_TOKEN when set)
-          token: ${{ secrets.GIT_TOKEN || github.token }}
-
-      - name: Set up Java
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
-        with:
-          distribution: temurin
-          java-version: ${{ needs.build-preprocess.outputs.java_version }}
-          cache: maven
-
-      - name: Maven publish to Nexus
-        uses: ./actions/common/maven
-        env:
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-          GIT_TOKEN: ${{ secrets.GIT_TOKEN || github.token }}
-        with:
-          args: >-
-            ${{ inputs.maven_publish_args }}${{ needs.build-preprocess.outputs.checkstyle_skip == 'true' && ' -Dcheckstyle.skip=true' || '' }}
-          maven-version: ${{ inputs.maven_version }}
-
-  docker-build:
-    name: docker-build
-    needs: [build-preprocess, build-and-unit-test, sonarqube]
-    if: >-
-      needs.build-and-unit-test.result == 'success'
-      && (needs.sonarqube.result == 'success' || needs.sonarqube.result == 'skipped')
-      && needs.build-preprocess.outputs.docker == 'true'
-    runs-on: ${{ inputs.runner }}
+  sonar-pr:
+    name: Sonar-scan and quality gate check (PR)
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
     permissions:
       contents: read
+    needs: [build-preprocess, build_and_unit_test, owasp]
+    if: |
+      always() &&
+      github.event_name == 'pull_request' &&
+      !inputs.skip-sonar &&
+      needs.build-preprocess.result == 'success' &&
+      needs.build_and_unit_test.result == 'success' &&
+      (needs.owasp.result == 'success' || needs.owasp.result == 'skipped') &&
+      needs.build-preprocess.outputs.sonar == 'true'
+    steps:
+      - *shallow-checkout
+      - *setup-java
+      - *setup-maven
+      - *maven-artifact
+      - *owasp-artifact
+      - name: Sonar-scan and quality gate check
+        uses: ./actions/common/maven
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_ARTIFACT_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_ARTIFACT_PASSWORD }}
+          NEXUS_BASEURL: ${{ vars.NEXUS_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONARQUBE_INTERNAL_URL }}
+        with:
+          MAVEN_ARGS: >-
+            sonar:sonar
+            --activate-profiles
+            coverage-per-test
+            -Dsonar.host.url=${{ env.SONAR_HOST_URL }}
+            -Dsonar.dependencyCheck.htmlReportPath=target/dependency-check-report.html
+            -Dsonar.dependencyCheck.xmlReportPath=target/dependency-check-report.xml
+            -Dsonar.dependencyCheck.jsonReportPath=target/dependency-check-report.json
+            -Dsonar.pullrequest.key=${{ github.event.pull_request.number }}
+            -Dsonar.pullrequest.branch=${{ github.event.pull_request.head.ref }}
+            -Dsonar.pullrequest.base=${{ github.event.pull_request.base.ref }}
+
+      - name: Sonar quality gate check
+        if: ${{ !inputs.skip-quality-gate-check }}
+        uses: ./actions/security/sonar-scan
+        with:
+          sonar_token: ${{ secrets.SONARQUBE_TOKEN }}
+          sonar_host_url: ${{ vars.SONARQUBE_INTERNAL_URL }}
+          project_key: ${{ needs.build-preprocess.outputs.application_name }}
+          organization: ${{ needs.build-preprocess.outputs.organization }}
+          product: ${{ needs.build-preprocess.outputs.product }}
+          platform: cap
+          application_name: ${{ needs.build-preprocess.outputs.application_name }}
+          app_build_type: maven
+          args: ${{ needs.build-preprocess.outputs.sonar_cli_args }}
+          pr_key: ${{ github.event.pull_request.number }}
+          pr_branch: ${{ github.event.pull_request.head.ref }}
+          pr_base: ${{ github.event.pull_request.base.ref }}
+          continue_on_error: 'false'
+
+  nexus-artifacts:
+    name: Nexus artifacts
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    permissions:
+      contents: read
+    needs: [build-preprocess, sonar, sonar-pr]
+    if: |
+      always() &&
+      github.event_name != 'pull_request' &&
+      (needs.sonar.result == 'success' || needs.sonar.result == 'skipped') &&
+      (needs.sonar-pr.result == 'success' || needs.sonar-pr.result == 'skipped') &&
+      needs.build-preprocess.outputs.is_multimodule_lib != 'y' &&
+      needs.build-preprocess.outputs.snapshot_artifact == 'true'
+    steps:
+      - *shallow-checkout
+      - *setup-java
+      - *setup-maven
+      - *maven-artifact
+      - name: Deploy snapshot artifact to Nexus
+        uses: ./actions/common/maven
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_ARTIFACT_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_ARTIFACT_PASSWORD }}
+          NEXUS_BASEURL: ${{ vars.NEXUS_HOST_URL }}
+        with:
+          MAVEN_ARGS: >-
+            deploy:deploy-file
+            -DgeneratePom=false
+            -DrepositoryId=devtools-nexus-snapshots
+            -DpomFile=pom.xml
+            -Dpackaging=${{ needs.build-preprocess.outputs.packaging }}
+            -Durl=${{ vars.NEXUS_HOST_URL }}/repository/cpg-snapshots
+            -Dfile=target/${{ needs.build-preprocess.outputs.artifact_id }}-${{ needs.build-preprocess.outputs.project_version }}.${{ needs.build-preprocess.outputs.packaging }}
+
+  multimodule-nexus-artifacts:
+    name: Multimodule Nexus artifacts
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    permissions:
+      contents: read
+    needs: [build-preprocess, sonar, sonar-pr]
+    if: |
+      always() &&
+      github.event_name != 'pull_request' &&
+      (needs.sonar.result == 'success' || needs.sonar.result == 'skipped') &&
+      (needs.sonar-pr.result == 'success' || needs.sonar-pr.result == 'skipped') &&
+      needs.build-preprocess.outputs.is_multimodule_lib == 'y' &&
+      needs.build-preprocess.outputs.snapshot_artifact == 'true'
+    steps:
+      - *shallow-checkout
+      - *setup-java
+      - *setup-maven
+      - name: Deploy snapshot POM to Nexus
+        uses: ./actions/common/maven
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_ARTIFACT_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_ARTIFACT_PASSWORD }}
+          NEXUS_BASEURL: ${{ vars.NEXUS_HOST_URL }}
+        with:
+          MAVEN_ARGS: >-
+            deploy:deploy-file
+            -DgeneratePom=false
+            -DrepositoryId=devtools-nexus-snapshots
+            -DpomFile=pom.xml
+            -Dpackaging=pom
+            -Durl=${{ vars.NEXUS_HOST_URL }}/repository/cpg-snapshots
+            -Dfile=pom.xml
+
+  github-packages:
+    name: GitHub Packages
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    permissions:
+      contents: read
+      packages: write
+    needs: [build-preprocess, sonar, sonar-pr]
+    if: |
+      always() &&
+      github.event_name != 'pull_request' &&
+      inputs.publish-to-github-packages &&
+      (needs.sonar.result == 'success' || needs.sonar.result == 'skipped') &&
+      (needs.sonar-pr.result == 'success' || needs.sonar-pr.result == 'skipped') &&
+      needs.build-preprocess.outputs.is_multimodule_lib != 'y' &&
+      needs.build-preprocess.outputs.snapshot_artifact == 'true'
+    steps:
+      - *shallow-checkout
+      - *setup-java
+      - *setup-maven
+      - *maven-artifact
+      - &create-github-packages-token
+        name: Create GitHub Packages token
+        id: github-packages-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.DEVSECOPS_CLIENT_ID }}
+          private-key: ${{ secrets.DEVSECOPS_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Deploy snapshot artifact to GitHub Packages
+        uses: ./actions/common/maven
+        env:
+          GITHUB_TOKEN: ${{ steps.github-packages-token.outputs.token }}
+        with:
+          MAVEN_ARGS: >-
+            deploy:deploy-file
+            -DgeneratePom=false
+            -DrepositoryId=github
+            -DpomFile=pom.xml
+            -Dpackaging=${{ needs.build-preprocess.outputs.packaging }}
+            -Durl=https://maven.pkg.github.com/${{ github.repository }}
+            -Dfile=target/${{ needs.build-preprocess.outputs.artifact_id }}-${{ needs.build-preprocess.outputs.project_version }}.${{ needs.build-preprocess.outputs.packaging }}
+
+  release-nexus-artifacts:
+    name: Release Nexus artifacts
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    permissions:
+      contents: write
+    needs: [build-preprocess, sonar, sonar-pr]
+    if: |
+      always() &&
+      github.event_name != 'pull_request' &&
+      needs.sonar.result == 'success' &&
+      (needs.sonar-pr.result == 'success' || needs.sonar-pr.result == 'skipped') &&
+      needs.build-preprocess.outputs.is_multimodule_lib != 'y' &&
+      needs.build-preprocess.outputs.release_artifact == 'true'
+    steps:
+      - *shallow-checkout
+      - *setup-java
+      - *setup-maven
+      - *create-github-packages-token
+      - name: Deploy release artifact to Nexus
+        uses: ./actions/common/maven
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_ARTIFACT_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_ARTIFACT_PASSWORD }}
+          NEXUS_BASEURL: ${{ vars.NEXUS_HOST_URL }}
+          GITHUB_TOKEN: ${{ steps.github-packages-token.outputs.token }}
+        with:
+          MAVEN_ARGS: >-
+            -B
+            -Dmaven.scm.provider.git.implementation=jgit
+            release:clean release:prepare release:perform
+            -Darguments="-Dmaven.javadoc.skip=true"
+
+  release-github-packages:
+    name: Release GitHub Packages
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    permissions:
+      contents: write
+      packages: write
+    needs: [build-preprocess, sonar, sonar-pr]
+    if: |
+      always() &&
+      github.event_name != 'pull_request' &&
+      inputs.publish-to-github-packages &&
+      needs.sonar.result == 'success' &&
+      (needs.sonar-pr.result == 'success' || needs.sonar-pr.result == 'skipped') &&
+      needs.build-preprocess.outputs.is_multimodule_lib != 'y' &&
+      needs.build-preprocess.outputs.release_artifact == 'true'
+    steps:
+      - *shallow-checkout
+      - *setup-java
+      - *setup-maven
+      - *create-github-packages-token
+      - name: Deploy release artifact to GitHub Packages
+        uses: ./actions/common/maven
+        env:
+          GITHUB_TOKEN: ${{ steps.github-packages-token.outputs.token }}
+        with:
+          MAVEN_ARGS: >-
+            -B
+            -Dmaven.scm.provider.git.implementation=jgit
+            release:clean release:prepare release:perform
+            -Darguments="-Dmaven.javadoc.skip=true -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/${{ github.repository }}"
+
+  image-build:
+    name: Image build
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    permissions:
+      contents: read
+    needs: [build-preprocess, build_and_unit_test, sonar, sonar-pr]
+    if: |
+      always() &&
+      github.event_name != 'pull_request' &&
+      needs.build-preprocess.result == 'success' &&
+      needs.build_and_unit_test.result == 'success' &&
+      (needs.sonar.result == 'success' || needs.sonar.result == 'skipped') &&
+      (needs.sonar-pr.result == 'success' || needs.sonar-pr.result == 'skipped') &&
+      needs.build-preprocess.outputs.docker == 'true'
     outputs:
       image: ${{ steps.push.outputs.image }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Download Maven target
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: maven-target
-          path: target
-
-      - name: Check docker registry and builder image
-        env:
-          DOCKER_REGISTRY: ${{ inputs.docker_registry }}
-          BUILDER_IMAGE: ${{ needs.build-preprocess.outputs.builder_base_image }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${DOCKER_REGISTRY}" ]]; then
-            echo "ERROR: docker_registry is required when the docker stage runs" >&2
-            exit 1
-          fi
-          if [[ -z "${BUILDER_IMAGE}" ]]; then
-            echo "ERROR: BUILDER_BASE_IMAGE in build.values is required for S2I docker builds" >&2
-            exit 1
-          fi
+      - *shallow-checkout
+      - *maven-artifact
 
       - name: Resolve application jar
         id: artifact
         env:
           ARTIFACT_ID: ${{ needs.build-preprocess.outputs.artifact_id }}
+          PACKAGING: ${{ needs.build-preprocess.outputs.packaging }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          candidates=(target/"${ARTIFACT_ID}"-*.jar target/*.jar)
+          ext="${PACKAGING:-jar}"
+          candidates=(
+            target/"${ARTIFACT_ID}"-*."${ext}"
+            */target/"${ARTIFACT_ID}"-*."${ext}"
+            target/*."${ext}"
+          )
           if [[ "${#candidates[@]}" -eq 0 ]]; then
-            echo "ERROR: no jar found under target/ for artifact ${ARTIFACT_ID}" >&2
+            echo "::error::no ${ext} found under target/ for artifact ${ARTIFACT_ID}" >&2
             exit 1
           fi
-          JAR="${candidates[0]}"
+          ARTIFACT="${candidates[0]}"
           for path in "${candidates[@]}"; do
             case "${path}" in
               *-sources.jar|*-javadoc.jar|*.original.jar) continue ;;
             esac
-            JAR="${path}"
+            ARTIFACT="${path}"
             break
           done
-          echo "jar_path=${JAR}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_path=${ARTIFACT}"
+          echo "artifact_path=${ARTIFACT}" >> "${GITHUB_OUTPUT}"
 
-      - name: Docker login
-        uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/docker-login@docker-login/v1.2.0
+      - name: Resolve S2I builder image (Red Hat registry)
+        id: builder
+        env:
+          BUILDER_BASE_IMAGE: ${{ needs.build-preprocess.outputs.builder_base_image }}
+          REDHAT_REGISTRY: registry.access.redhat.com
+        run: |
+          set -euo pipefail
+          img="${BUILDER_BASE_IMAGE:?BUILDER_BASE_IMAGE from build.values is required}"
+          img="${img#docker://}"
+          # Keep full refs (host.tld/...), otherwise pull builder from Red Hat.
+          if [[ "${img}" =~ ^[A-Za-z0-9._-]+\.[A-Za-z]{2,}/ ]]; then
+            resolved="${img}"
+          else
+            resolved="${REDHAT_REGISTRY}/${img}"
+          fi
+          echo "builder_image=${resolved}"
+          echo "builder_image=${resolved}" >> "${GITHUB_OUTPUT}"
+
+      - name: Resolve Nexus push registry
+        id: push-registry
+        env:
+          INPUT_REGISTRY: ${{ inputs.docker_registry }}
+          NEXUS_REGISTRY: ${{ vars.NEXUS_DOCKER_REGISTRY_DEV }}
+        run: |
+          set -euo pipefail
+          registry="${INPUT_REGISTRY:-}"
+          if [[ -z "${registry}" ]]; then
+            registry="${NEXUS_REGISTRY:-}"
+          fi
+          if [[ -z "${registry}" ]]; then
+            echo "::error::Nexus push registry required: set input docker_registry or vars.NEXUS_DOCKER_REGISTRY_DEV" >&2
+            exit 1
+          fi
+          registry="${registry%/}"
+          echo "registry=${registry}"
+          echo "registry=${registry}" >> "${GITHUB_OUTPUT}"
+
+      - name: Login to Red Hat registry (builder pull)
+        uses: ./actions/common/docker-login
         with:
-          registry: ${{ inputs.docker_registry }}
-          username: ${{ secrets.NEXUS_USERNAME }}
-          password: ${{ secrets.NEXUS_PASSWORD }}
+          registry: registry.access.redhat.com
+          username: ${{ secrets.REDHAT_REGISTRY_USERNAME }}
+          password: ${{ secrets.REDHAT_REGISTRY_PASSWORD }}
+
+      - name: Login to Nexus registry (image push)
+        uses: ./actions/common/docker-login
+        with:
+          registry: ${{ steps.push-registry.outputs.registry }}
+          username: ${{ secrets.NEXUS_DOCKER_USERNAME }}
+          password: ${{ secrets.NEXUS_DOCKER_PASSWORD }}
 
       - name: S2I build and push
         id: push
-        uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/s2i-build-and-push@s2i-build-and-push/v1.1.0
+        uses: ./actions/common/s2i-build-and-push
         with:
-          builder_image: ${{ needs.build-preprocess.outputs.builder_base_image }}
-          artifact_path: ${{ steps.artifact.outputs.jar_path }}
+          builder_image: ${{ steps.builder.outputs.builder_image }}
+          artifact_path: ${{ steps.artifact.outputs.artifact_path }}
           app_build_type: maven
-          registry: ${{ inputs.docker_registry }}
+          registry: ${{ steps.push-registry.outputs.registry }}
           organization: ${{ needs.build-preprocess.outputs.organization }}
           application: ${{ needs.build-preprocess.outputs.application_name }}
           project_version: ${{ needs.build-preprocess.outputs.project_version }}
           application_version: ${{ needs.build-preprocess.outputs.application_version }}
           environment: ${{ inputs.docker_environment }}
           branch: ${{ needs.build-preprocess.outputs.branch }}
+
+

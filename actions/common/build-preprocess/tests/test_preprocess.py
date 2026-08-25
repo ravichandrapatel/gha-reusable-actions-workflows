@@ -349,6 +349,92 @@ class PreprocessTests(unittest.TestCase):
             self.assertIn("What is the docker? : false", result.stdout)
             self.assertIn("What is the release artifact? : true", result.stdout)
 
+    def _write_maven_lib(
+        self,
+        root: Path,
+        *,
+        project_values: str,
+        packaging: str = "jar",
+        modules: list[str] | None = None,
+    ) -> None:
+        (root / "project.values").write_text(project_values, encoding="utf-8")
+        (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
+        modules_xml = ""
+        if modules is not None:
+            body = "".join(f"    <module>{m}</module>\n" for m in modules)
+            modules_xml = f"  <modules>\n{body}  </modules>\n"
+        (root / "pom.xml").write_text(
+            f"""<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example</groupId>
+  <artifactId>demo-lib</artifactId>
+  <version>1.0.0</version>
+  <packaging>{packaging}</packaging>
+  <name>Demo Lib</name>
+  <properties>
+    <java.version>21</java.version>
+  </properties>
+{modules_xml}</project>
+""",
+            encoding="utf-8",
+        )
+
+    def test_maven_app_skips_multimodule_lib_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_maven_lib(
+                root,
+                project_values="TEMPLATE=build-spring-boot-svc-v2.1\nAPPLICATION_NAME=demo\n",
+                packaging="pom",
+                modules=None,
+            )
+            result = run_preprocess(root, app_build_type="maven")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("What is the is library? : n", result.stdout)
+        self.assertIn("What is the is multimodule lib? : \n", result.stdout)
+
+    def test_maven_library_single_module(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_maven_lib(
+                root,
+                project_values="APPLICATION_NAME=demo-lib\n",
+                packaging="jar",
+            )
+            result = run_preprocess(root, app_build_type="maven")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("What is the is library? : y", result.stdout)
+        self.assertIn("What is the is multimodule lib? : n", result.stdout)
+        self.assertIn("What is the docker? : false", result.stdout)
+
+    def test_maven_library_multimodule(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_maven_lib(
+                root,
+                project_values="APPLICATION_NAME=demo-lib\n",
+                packaging="pom",
+                modules=["module-a", "module-b"],
+            )
+            result = run_preprocess(root, app_build_type="maven")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("What is the is library? : y", result.stdout)
+        self.assertIn("What is the is multimodule lib? : y", result.stdout)
+
+    def test_maven_library_pom_packaging_requires_modules(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_maven_lib(
+                root,
+                project_values="APPLICATION_NAME=demo-lib\n",
+                packaging="pom",
+                modules=None,
+            )
+            result = run_preprocess(root, app_build_type="maven")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("packaging=pom must declare at least one", result.stderr)
+
     def test_build_values_overrides_sonar(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

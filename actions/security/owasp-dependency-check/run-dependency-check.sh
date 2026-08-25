@@ -17,10 +17,10 @@ source "${SCRIPT_DIR}/scan-profiles.sh"
 : "${out:?out environment variable is required}"
 : "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE environment variable is required}"
 
-apply_scan_profile "${scan_profile:-full}"
+apply_scan_profile "${scan_profile:?scan_profile is required (maven | ng-ui | dotnet)}"
 
 if [ -z "${format:-}" ]; then
-  echo "::error::format is required when scan_profile is full" >&2
+  echo "::error::format is empty after applying scan_profile '${scan_profile}'" >&2
   exit 1
 fi
 

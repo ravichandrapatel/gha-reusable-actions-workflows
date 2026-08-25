@@ -23,7 +23,7 @@ The container image is built and pushed by this repo’s **OWASP Dependency-Chec
 | **Service Status** | Production |
 | **Repository / Code** | `actions/security/owasp-dependency-check` |
 | **Dependencies** | Podman, GHCR image, OWASP Dependency-Check CLI |
-| **Profiles** | `scan-profiles.sh` (ng-ui, maven-ui, maven-svc, dotnet) |
+| **Profiles** | `scan-profiles.sh` — exactly three: `maven`, `ng-ui`, `dotnet` |
 
 ---
 
@@ -85,7 +85,7 @@ Pin the action ref and set the **image** input when the default GHCR image is no
 ```yaml
 - uses: YOUR_ORG/gha-reusable-actions-workflows/actions/security/owasp-dependency-check@<sha>
   with:
-    scan_profile: maven-svc
+    scan_profile: maven
     project: my-service
     path: .
     image: ghcr.io/YOUR_ORG/gha-reusable-actions-workflows/owasp-dependency-check:latest
@@ -97,23 +97,22 @@ Pin the action ref and set the **image** input when the default GHCR image is no
 
 Set `scan_profile` to apply stack-specific analyzer defaults from `scan-profiles.sh`. Profiles follow [official OWASP analyzer guidance](https://dependency-check.github.io/DependencyCheck/analyzers/index.html): enable only what each stack needs, disable RetireJS for npm/Angular (not recommended for Node projects), and disable Central for Maven (matches Maven plugin default).
 
-When `scan_profile` is **not** `full`, the profile owns the `disable*` analyzer matrix. You can still override **`exclude`**, **`format`**, **`suppression`**, and other non-analyzer inputs.
+The chosen profile owns the `disable*` analyzer matrix. You can still override **`exclude`**, **`format`**, **`suppression`**, and other non-analyzer inputs.
 
-| Profile | Also accepts | Analyzers enabled | Typical use |
-| --- | --- | --- | --- |
-| **`ng-ui`** | — | Node Package, Node Audit | Pure Angular/npm (`app_build_type: ng-ui`) |
-| **`maven-ui`** | `jsb-ui`, `jcr-ui`, `jsts-ui` | Jar, Node Package, Node Audit | Maven repo with Angular frontend |
-| **`maven-svc`** | `jsb-svc`, `jcr-svc`, `jsts-svc`, `maven` | Jar | Spring Boot, Camel, Java services |
-| **`dotnet`** | — | MSBuild, Assembly, Nuspec, Nugetconf | SDK-style `.csproj` / .NET |
-| **`full`** | (default) | All Dependency-Check defaults | Escape hatch; explicit `disable*` inputs apply |
+| Profile | Analyzers enabled | Typical use |
+| --- | --- | --- |
+| **`maven`** | Jar, Node Package, Node Audit | Maven apps (UI + services) |
+| **`ng-ui`** | Node Package, Node Audit | Pure Angular/npm |
+| **`dotnet`** | MSBuild, Assembly, Nuspec, Nugetconf | SDK-style `.csproj` / .NET |
+
+Legacy aliases `maven-ui`, `maven-svc`, and `jsb`/`jcr`/`jsts` `-ui`/`-svc` still normalize to **`maven`**.
 
 ### Default excludes (per profile)
 
 | Profile | Excludes |
 | --- | --- |
 | `ng-ui` | `node_modules/**`, `dist/**`, `coverage/**`, `.angular/**`, `e2e/**`, … |
-| `maven-ui` | above + `target/**` |
-| `maven-svc` | `target/**`, `node_modules/**`, `.git/**`, `.owasp-data/**` |
+| `maven` | `target/**`, `node_modules/**`, `dist/**`, `coverage/**`, `.git/**`, `.owasp-data/**`, … |
 | `dotnet` | `bin/**`, `obj/**`, `node_modules/**`, `.owasp-data/**` |
 
 ### Analyzers disabled by all profiles
@@ -122,7 +121,7 @@ RetireJS, hosted suppressions, KEV feed, version check, and non-target experimen
 
 ### Maven note
 
-For JVM projects, OWASP recommends the [Maven plugin](https://dependency-check.github.io/DependencyCheck/dependency-check-maven/) (`dependency-check-maven:check`) when possible—it uses Maven’s resolved dependency tree. This action’s CLI + Podman path is for unified pipelines; **`maven-svc`** scans best after `mvn package` when `target/*.jar` exists.
+For JVM projects, OWASP recommends the [Maven plugin](https://dependency-check.github.io/DependencyCheck/dependency-check-maven/) (`dependency-check-maven:check`) when possible—it uses Maven’s resolved dependency tree. This action’s CLI + Podman path is for unified pipelines; **`maven`** scans best after `mvn package` when `target/*.jar` exists.
 
 ---
 
@@ -169,8 +168,8 @@ Every input from `action.yml` is listed below. Paths are relative to the workspa
 
 | Input | Default | Description |
 | --- | --- | --- |
-| `scan_profile` | `full` | Stack preset — `ng-ui`, `maven-ui`, `maven-svc`, `dotnet`, `full`; or archetype alias (`jsb-ui`, `jcr-svc`, …). |
-| `format` | `JSON,HTML` | Comma-separated report types. Profile default applies when set via `scan_profile`. Required when `scan_profile: full`. |
+| `scan_profile` | (required) | Stack preset — **`maven`** \| **`ng-ui`** \| **`dotnet`**. |
+| `format` | `JSON,HTML` | Comma-separated report types. Profile default applies when `scan_profile` is set. |
 | `out` | `reports` | Output folder for reports (relative to workspace). |
 | `data_dir` | `""` | Host path for NVD/data cache; mounted at `/usr/share/dependency-check/data`. |
 | `cleanup_image` | `false` | Remove the container image after scan (slower on next run). |
@@ -178,7 +177,7 @@ Every input from `action.yml` is listed below. Paths are relative to the workspa
 
 ### Boolean options (default `false` unless noted)
 
-When `scan_profile` is not `full`, profile presets override these unless you use `scan_profile: full`.
+Profile presets set the analyzer `disable*` matrix. Override individual analyzer inputs only when you need to deviate from the profile.
 
 | Input | Default | Description |
 | --- | --- | --- |
@@ -349,29 +348,19 @@ Profiles default to **`JSON,HTML`** — the combination expected by house `sonar
     if-no-files-found: error
 ```
 
-### Maven UI (`jsb-ui`, `jcr-ui`, `jsts-ui`)
+### Maven (`jsb`/`jcr`/`jsts` UI or SVC)
 
 ```yaml
 - uses: ./actions/security/owasp-dependency-check
   with:
-    scan_profile: jsb-ui
+    scan_profile: maven
     project: snapshipadmin-jsb-ui
     path: .
     data_dir: ${{ github.workspace }}/.owasp-data
     nvdApiKey: ${{ secrets.NVD_API_KEY }}
 ```
 
-### Maven service (`jsb-svc`, `jcr-svc`, `jsts-svc`)
-
-```yaml
-- uses: ./actions/security/owasp-dependency-check
-  with:
-    scan_profile: maven-svc
-    project: my-service
-    path: .
-    data_dir: ${{ github.workspace }}/.owasp-data
-    nvdApiKey: ${{ secrets.NVD_API_KEY }}
-```
+Aliases `maven-ui`, `maven-svc`, `jsb-ui`, `jsb-svc`, … all normalize to **`maven`**.
 
 ### .NET
 
@@ -401,23 +390,10 @@ Profiles default to **`JSON,HTML`** — the combination expected by house `sonar
 ```yaml
 - uses: ./actions/security/owasp-dependency-check
   with:
-    scan_profile: maven-svc
+    scan_profile: maven
     project: my-app
     path: .
     suppression: dependency-check-suppressions.xml
-```
-
-### Full control (no profile)
-
-```yaml
-- uses: ./actions/security/owasp-dependency-check
-  with:
-    scan_profile: full
-    project: my-app
-    path: .
-    format: HTML,JSON
-    disableRetireJS: true
-    exclude: '**/node_modules/**,**/target/**'
 ```
 
 ### SARIF for GitHub Security tab

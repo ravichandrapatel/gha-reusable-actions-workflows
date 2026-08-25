@@ -1,33 +1,24 @@
 # Maven
 
-Composite action that installs the Apache Maven CLI and runs `mvn` with caller-supplied goals.
+Composite action that generates settings, configures git for jgit, and runs `mvn` with caller-supplied goals.
 
 ## Overview
 
-- Use **`actions/setup-java`** in the workflow for Java.
-- Always installs Apache Maven CLI, copies settings, configures git, runs `mvn -s …` in **`GITHUB_WORKSPACE` only**, then cleans up settings (`always()`).
+- Use **`actions/setup-java`** and install the Apache Maven CLI **in the workflow** before this action (sets `PATH` / `MAVEN_EXECUTABLE`).
+- This action copies settings, configures git, runs `mvn -s …` in **`GITHUB_WORKSPACE` only**, then cleans up settings (`always()`).
+- Optional `MAVEN_OPTS` via the step `env:` (not an action input).
 - Use `${env.NAME}` in the template; pass secrets on the step `env:` (`NEXUS_USERNAME`, `NEXUS_PASSWORD`, `GIT_TOKEN`).
 
 ## Inputs
 
 | Input | Required | Default | Description |
 | --- | --- | --- | --- |
-| `args` | Yes | — | Maven goals and options, e.g. `clean verify -DskipTests` or `deploy` |
-| `maven-version` | No | auto | Apache Maven CLI version; empty reads `pom.xml` `<maven.version>`, else `3.9.9` |
-| `maven-opts` | No | `""` | Sets `MAVEN_OPTS` for the run |
-
-## Outputs
-
-| Output | Description |
-| --- | --- |
-| `exit_code` | Maven process exit code |
-| `java_home` | `JAVA_HOME` from the runner |
-| `maven_version` | Installed Maven CLI version |
-| `settings_path` | `$GITHUB_WORKSPACE/maven/settings.xml` |
+| `MAVEN_ARGS` | Yes | — | Maven goals and options, e.g. `clean verify -DskipTests` or `deploy` |
+| `MAVEN_SETTINGS_PATH` | No | `${{ github.workspace }}/maven/settings.xml` | Path written from the template and passed to `mvn -s` |
 
 ## settings.xml template (edit yourself)
 
-File: [`settings.xml.tmpl`](settings.xml.tmpl) → written to `$GITHUB_WORKSPACE/maven/settings.xml`.
+File: [`settings.xml.tmpl`](settings.xml.tmpl) → written to `MAVEN_SETTINGS_PATH`.
 
 | Placeholder | Step env |
 | --- | --- |
@@ -38,13 +29,18 @@ File: [`settings.xml.tmpl`](settings.xml.tmpl) → written to `$GITHUB_WORKSPACE
 ## Example
 
 ```yaml
+- name: Install Maven CLI
+  # workflow installs Maven and exports MAVEN_HOME / PATH / MAVEN_EXECUTABLE
+  run: # … see maven-build-pipeline
+
 - uses: ./actions/common/maven
   env:
     NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
     NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
     GIT_TOKEN: ${{ secrets.GIT_TOKEN || github.token }}
   with:
-    args: deploy -DskipTests
+    MAVEN_ARGS: deploy -DskipTests
+    # MAVEN_SETTINGS_PATH defaults to ${{ github.workspace }}/maven/settings.xml
 ```
 
 ## Related

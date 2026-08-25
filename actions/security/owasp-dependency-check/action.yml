@@ -19,11 +19,11 @@ inputs:
   format:
     required: false
     default: 'JSON,HTML'
-    description: 'Report format(s), comma-separated; profile default when scan_profile is set'
+    description: 'Report format(s), comma-separated; defaults from scan_profile when unset'
   scan_profile:
-    required: false
-    default: 'full'
-    description: 'Preset — ng-ui, maven-ui, maven-svc, dotnet, full; or archetype jsb-ui/jcr-ui/jsts-ui/jsb-svc/jcr-svc/jsts-svc (maven alias → maven-svc). Profiles follow OWASP analyzer guidance per stack.'
+    required: true
+    default: ''
+    description: 'Required stack preset — maven | ng-ui | dotnet (legacy maven-ui/maven-svc/jsb… aliases map to maven)'
   out:
     required: false
     default: 'reports'

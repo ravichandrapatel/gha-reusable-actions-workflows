@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # FILE_NAME: tag.sh
-# DESCRIPTION: Build Nexus image tag: date-snapshot-build-branch-commit-name-version.
+# DESCRIPTION: Build Nexus image tag: date-version-build-branch-commit-name-appversion.
 # VERSION: 1.2.0
 # AUTHORS: DevOps Team
 set -euo pipefail
@@ -93,7 +93,8 @@ if [[ -z "${DATE_STAMP}" ]]; then
   DATE_STAMP="$(date -u +%Y%m%d)"
 fi
 APP_NAME="$(sanitize "${APPLICATION}")"
-SNAP_VERSION="$(sanitize "${PROJECT_VERSION}")"
+# Tag segment uses numeric/version only — drop Maven -SNAPSHOT qualifier.
+SNAP_VERSION="$(sanitize "$(printf '%s' "${PROJECT_VERSION}" | sed -E 's/-[Ss][Nn][Aa][Pp][Ss][Hh][Oo][Tt]$//')")"
 APP_VERSION="$(sanitize "${APPLICATION_VERSION}")"
 SHORT_BRANCH="$(slice "$(sanitize "${BRANCH}")" 3)"
 SHORT_SHA="$(slice "$(sanitize "${SHA}")" 5)"

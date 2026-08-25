@@ -1,7 +1,7 @@
 """
 FILE_NAME: preprocess.py
 DESCRIPTION: Branch allowlist, stages, values files, and maven/ng-ui/dotnet metadata.
-VERSION: 2.8.2
+VERSION: 2.9.0
 AUTHORS: DevOps Team
 """
 
@@ -50,8 +50,25 @@ def _child(el: ET.Element | None, name: str) -> ET.Element | None:
     return None
 
 
+def _children(el: ET.Element | None, name: str) -> list[ET.Element]:
+    if el is None:
+        return []
+    return [child for child in el if _tag(child) == name]
+
+
 def _text(el: ET.Element | None) -> str:
     return "" if el is None or el.text is None else el.text.strip()
+
+
+def _pom_module_names(root: ET.Element) -> list[str]:
+    """Non-empty <module> entries under root <modules>."""
+    modules_el = _child(root, "modules")
+    names: list[str] = []
+    for module_el in _children(modules_el, "module"):
+        name = _text(module_el)
+        if name:
+            names.append(name)
+    return names
 
 
 def _xml_prop(root: ET.Element, name: str) -> str:
@@ -153,6 +170,19 @@ def load_maven_metadata(repo_root: Path, project_values: dict[str, str]) -> dict
         _err("pom.xml must have version, artifactId, and properties/java.version")
         raise ValueError("invalid pom.xml")
 
+    is_library = "n" if project_values.get("TEMPLATE", "").strip() else "y"
+    packaging = _text(_child(root, "packaging")).casefold() or "jar"
+    is_multimodule_lib = ""
+    if is_library == "y":
+        module_names = _pom_module_names(root)
+        if packaging == "pom" and not module_names:
+            _err(
+                "library pom.xml with packaging=pom must declare at least one "
+                "non-empty <module> under <modules>"
+            )
+            raise ValueError("invalid multimodule library pom.xml")
+        is_multimodule_lib = "y" if module_names else "n"
+
     return {
         "application_version": application_version,
         "parent_version": parent_version,
@@ -160,9 +190,11 @@ def load_maven_metadata(repo_root: Path, project_values: dict[str, str]) -> dict
         "artifact_id": artifact_id,
         "name": _text(_child(root, "name")),
         "java_version": java_version,
+        "packaging": packaging,
         "sonar_inclusions": _text(_child(properties_el, "sonar.inclusions")),
         "sonar_exclusions": _text(_child(properties_el, "sonar.exclusions")),
-        "is_library": "n" if project_values.get("TEMPLATE", "").strip() else "y",
+        "is_library": is_library,
+        "is_multimodule_lib": is_multimodule_lib,
     }
 
 
@@ -216,6 +248,7 @@ def load_dotnet_metadata(repo_root: Path, project_values: dict[str, str]) -> dic
         "sonar_inclusions": sonar_inclusions,
         "sonar_exclusions": sonar_exclusions,
         "is_library": "n" if project_values.get("TEMPLATE", "").strip() else "y",
+        "is_multimodule_lib": "",
     }
 
 
@@ -387,12 +420,14 @@ def build_outputs(
         "artifact_id": project_meta.get("artifact_id", ""),
         "name": project_meta.get("name", ""),
         "java_version": project_meta.get("java_version", ""),
+        "packaging": project_meta.get("packaging", ""),
         "node_version": project_meta.get("node_version", ""),
         "dotnet_version": project_meta.get("dotnet_version", ""),
         "cpgbuild_app_origin": cpg_origin,
         "checkstyle_skip": "true" if cpg_origin else "false",
         **lib_outputs,
         "is_library": project_meta.get("is_library", ""),
+        "is_multimodule_lib": project_meta.get("is_multimodule_lib", ""),
         "sonar_inclusions": sonar_inclusions,
         "sonar_exclusions": sonar_exclusions,
         "sonar_cli_args": " ".join(p for p in (sonar_inclusions, sonar_exclusions) if p),

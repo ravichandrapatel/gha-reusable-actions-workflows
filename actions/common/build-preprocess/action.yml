@@ -1,7 +1,7 @@
 # =============================================================================
 # FILE_NAME: action.yml
 # DESCRIPTION: Match inventory, then allowlisted branch + CI stages.
-# VERSION: 2.5.0
+# VERSION: 2.6.0
 # AUTHORS: DevOps Team
 # =============================================================================
 
@@ -125,8 +125,11 @@ outputs:
     description: 'Optional from build.values LIB_03 (empty when unset)'
     value: ${{ steps.branch.outputs.lib_03 }}
   is_library:
-    description: 'maven only: n when project.values has TEMPLATE; y when TEMPLATE is missing'
+    description: 'maven/dotnet: n when project.values has TEMPLATE; y when TEMPLATE is missing'
     value: ${{ steps.branch.outputs.is_library }}
+  is_multimodule_lib:
+    description: 'maven library only: y when pom.xml has non-empty modules; n otherwise; empty for apps/non-maven'
+    value: ${{ steps.branch.outputs.is_multimodule_lib }}
   sonar_inclusions:
     description: '-Dsonar.inclusions=<list> when CPGBUILD_SONAR_INCLUSION_LIST is set in build.values'
     value: ${{ steps.branch.outputs.sonar_inclusions }}
@@ -154,6 +157,9 @@ outputs:
   java_version:
     description: 'From pom.xml properties/java.version when app_build_type is maven'
     value: ${{ steps.branch.outputs.java_version }}
+  packaging:
+    description: 'From pom.xml packaging when app_build_type is maven (default jar)'
+    value: ${{ steps.branch.outputs.packaging }}
   node_version:
     description: 'From package.json engines.node or .nvmrc/.node-version when app_build_type is ng-ui'
     value: ${{ steps.branch.outputs.node_version }}

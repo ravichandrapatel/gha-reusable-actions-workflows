@@ -26,7 +26,7 @@ on:
         required: false
         default: ""
       scan_profile:
-        description: OWASP scan profile — auto, maven-ui, or maven-svc
+        description: OWASP scan profile for Maven apps (auto → maven)
         type: string
         required: false
         default: auto
@@ -171,12 +171,53 @@ jobs:
           java-version: ${{ needs.build-preprocess.outputs.java_version }}
           cache: maven
 
+      - name: Install Maven CLI
+        env:
+          MAVEN_VERSION: ${{ inputs.maven_version }}
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
+
+          if [[ -n "${MAVEN_VERSION:-}" ]]; then
+            version="${MAVEN_VERSION}"
+          elif [[ -f pom.xml ]]; then
+            version="$(
+              grep -E '<maven\.version>' pom.xml \
+                | sed -E 's#.*<maven\.version>[[:space:]]*([^<[:space:]]+)[[:space:]]*</maven\.version>.*#\1#' \
+                | head -1 \
+                | tr -d '[:space:]'
+            )"
+            version="${version:-3.9.9}"
+          else
+            version="3.9.9"
+          fi
+
+          echo "maven_version=${version}"
+          cache_root="${RUNNER_TOOL_CACHE:-${HOME}/.cache/gha-tools}"
+          install_dir="${cache_root}/Maven/${version}/x64"
+          mvn_bin="${install_dir}/bin/mvn"
+
+          if [[ ! -x "${mvn_bin}" ]]; then
+            url="https://archive.apache.org/dist/maven/maven-3/${version}/binaries/apache-maven-${version}-bin.tar.gz"
+            echo "Installing Apache Maven CLI ${version}"
+            tmp="$(mktemp -d)"
+            curl -fsSL "${url}" -o "${tmp}/maven.tgz"
+            mkdir -p "${install_dir}"
+            tar -xzf "${tmp}/maven.tgz" -C "${tmp}"
+            cp -a "${tmp}/apache-maven-${version}/." "${install_dir}/"
+            rm -rf "${tmp}"
+          fi
+
+          echo "MAVEN_HOME=${install_dir}" >> "${GITHUB_ENV}"
+          echo "PATH=${install_dir}/bin:${PATH}" >> "${GITHUB_ENV}"
+          echo "MAVEN_EXECUTABLE=${mvn_bin}" >> "${GITHUB_ENV}"
+          "${mvn_bin}" -version
+
       - name: Maven build and test
         uses: ./actions/common/maven
         with:
-          args: >-
+          MAVEN_ARGS: >-
             ${{ inputs.maven_build_args }}${{ needs.build-preprocess.outputs.checkstyle_skip == 'true' && ' -Dcheckstyle.skip=true' || '' }}
-          maven-version: ${{ inputs.maven_version }}
 
       - name: Upload Maven target
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -210,23 +251,18 @@ jobs:
         id: owasp_profile
         env:
           INPUT_PROFILE: ${{ inputs.scan_profile }}
-          APPLICATION_NAME: ${{ needs.build-preprocess.outputs.application_name }}
         run: |
           set -euo pipefail
-          PROFILE="${INPUT_PROFILE}"
-          if [[ "${PROFILE}" == "auto" ]]; then
-            if [[ "${APPLICATION_NAME}" == *-ui || "${APPLICATION_NAME}" == *-UI ]]; then
-              PROFILE="maven-ui"
-            else
-              PROFILE="maven-svc"
-            fi
+          PROFILE="${INPUT_PROFILE:-maven}"
+          if [[ "${PROFILE}" == "auto" || -z "${PROFILE}" ]]; then
+            PROFILE="maven"
           fi
           case "${PROFILE}" in
-            maven-ui|maven-svc|jsb-ui|jcr-ui|jsts-ui|jsb-svc|jcr-svc|jsts-svc)
-              echo "profile=${PROFILE}" >> "${GITHUB_OUTPUT}"
+            maven|maven-ui|maven-svc|jsb-ui|jcr-ui|jsts-ui|jsb-svc|jcr-svc|jsts-svc)
+              echo "profile=maven" >> "${GITHUB_OUTPUT}"
               ;;
             *)
-              echo "ERROR: scan_profile must be auto, maven-ui, or maven-svc (got '${INPUT_PROFILE}')" >&2
+              echo "ERROR: maven pipeline scan_profile must be auto or maven (got '${INPUT_PROFILE}')" >&2
               exit 1
               ;;
           esac
@@ -347,6 +383,48 @@ jobs:
           java-version: ${{ needs.build-preprocess.outputs.java_version }}
           cache: maven
 
+      - name: Install Maven CLI
+        env:
+          MAVEN_VERSION: ${{ inputs.maven_version }}
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
+
+          if [[ -n "${MAVEN_VERSION:-}" ]]; then
+            version="${MAVEN_VERSION}"
+          elif [[ -f pom.xml ]]; then
+            version="$(
+              grep -E '<maven\.version>' pom.xml \
+                | sed -E 's#.*<maven\.version>[[:space:]]*([^<[:space:]]+)[[:space:]]*</maven\.version>.*#\1#' \
+                | head -1 \
+                | tr -d '[:space:]'
+            )"
+            version="${version:-3.9.9}"
+          else
+            version="3.9.9"
+          fi
+
+          echo "maven_version=${version}"
+          cache_root="${RUNNER_TOOL_CACHE:-${HOME}/.cache/gha-tools}"
+          install_dir="${cache_root}/Maven/${version}/x64"
+          mvn_bin="${install_dir}/bin/mvn"
+
+          if [[ ! -x "${mvn_bin}" ]]; then
+            url="https://archive.apache.org/dist/maven/maven-3/${version}/binaries/apache-maven-${version}-bin.tar.gz"
+            echo "Installing Apache Maven CLI ${version}"
+            tmp="$(mktemp -d)"
+            curl -fsSL "${url}" -o "${tmp}/maven.tgz"
+            mkdir -p "${install_dir}"
+            tar -xzf "${tmp}/maven.tgz" -C "${tmp}"
+            cp -a "${tmp}/apache-maven-${version}/." "${install_dir}/"
+            rm -rf "${tmp}"
+          fi
+
+          echo "MAVEN_HOME=${install_dir}" >> "${GITHUB_ENV}"
+          echo "PATH=${install_dir}/bin:${PATH}" >> "${GITHUB_ENV}"
+          echo "MAVEN_EXECUTABLE=${mvn_bin}" >> "${GITHUB_ENV}"
+          "${mvn_bin}" -version
+
       - name: Maven publish to Nexus
         uses: ./actions/common/maven
         env:
@@ -354,9 +432,8 @@ jobs:
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
           GIT_TOKEN: ${{ secrets.GIT_TOKEN || github.token }}
         with:
-          args: >-
+          MAVEN_ARGS: >-
             ${{ inputs.maven_publish_args }}${{ needs.build-preprocess.outputs.checkstyle_skip == 'true' && ' -Dcheckstyle.skip=true' || '' }}
-          maven-version: ${{ inputs.maven_version }}
 
   docker-build:
     name: docker-build

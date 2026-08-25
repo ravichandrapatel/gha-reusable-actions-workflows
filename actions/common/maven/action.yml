@@ -1,39 +1,21 @@
 # =============================================================================
 # FILE_NAME: action.yml
 # DESCRIPTION: Run Maven with caller-supplied goals and CLI arguments.
-# VERSION: 2.9.0
+# VERSION: 3.1.0
 # AUTHORS: DevOps Team
 # =============================================================================
 
 name: 'Maven'
-description: 'Install Maven CLI and run mvn in GITHUB_WORKSPACE; pair with actions/setup-java for Java'
+description: 'Generate settings, configure git, and run mvn in GITHUB_WORKSPACE; pair with setup-java and a workflow Maven install'
 
 inputs:
-  args:
+  MAVEN_ARGS:
     description: 'Maven goals and options (e.g. clean package -DskipTests or deploy)'
     required: true
-  maven-version:
-    description: 'Apache Maven CLI version to install; empty auto-detects from pom.xml, then 3.9.9'
+  MAVEN_SETTINGS_PATH:
+    description: 'Path to settings.xml passed to mvn -s'
     required: false
-    default: ''
-  maven-opts:
-    description: 'Value for MAVEN_OPTS environment variable'
-    required: false
-    default: ''
-
-outputs:
-  exit_code:
-    description: 'Maven process exit code'
-    value: ${{ steps.maven-goals.outputs.exit_code }}
-  java_home:
-    description: 'JAVA_HOME from the runner (typically set by actions/setup-java)'
-    value: ${{ steps.maven-goals.outputs.java_home }}
-  maven_version:
-    description: 'Installed Apache Maven CLI version'
-    value: ${{ steps.install.outputs.maven_version }}
-  settings_path:
-    description: 'Path to generated settings.xml ($GITHUB_WORKSPACE/maven/settings.xml)'
-    value: ${{ steps.settings.outputs.settings_path }}
+    default: "${{ github.workspace }}/maven/settings.xml"
 
 runs:
   using: composite
@@ -43,6 +25,7 @@ runs:
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
+        MAVEN_SETTINGS_PATH: ${{ inputs.MAVEN_SETTINGS_PATH }}
       run: |
         set -euo pipefail
         tmpl="${ACTION_PATH}/settings.xml.tmpl"
@@ -50,8 +33,7 @@ runs:
           echo "::error::missing settings template: ${tmpl}" >&2
           exit 1
         fi
-        ws="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
-        out="${ws}/maven/settings.xml"
+        out="${MAVEN_SETTINGS_PATH:?MAVEN_SETTINGS_PATH is required}"
         mkdir -p "$(dirname "${out}")"
         cp -f "${tmpl}" "${out}"
         chmod 600 "${out}"
@@ -67,80 +49,38 @@ runs:
         echo "git user.name=$(git config --global --get user.name)"
         echo "git user.email=$(git config --global --get user.email)"
 
-    - name: Install Maven CLI
-      id: install
-      shell: bash
-      env:
-        MAVEN_VERSION: ${{ inputs.maven-version }}
-      run: |
-        set -euo pipefail
-        cd "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
-
-        if [[ -n "${MAVEN_VERSION:-}" ]]; then
-          version="${MAVEN_VERSION}"
-        elif [[ -f pom.xml ]]; then
-          version="$(
-            grep -E '<maven\.version>' pom.xml \
-              | sed -E 's#.*<maven\.version>[[:space:]]*([^<[:space:]]+)[[:space:]]*</maven\.version>.*#\1#' \
-              | head -1 \
-              | tr -d '[:space:]'
-          )"
-          version="${version:-3.9.9}"
-        else
-          version="3.9.9"
-        fi
-
-        echo "maven_version=${version}" >> "${GITHUB_OUTPUT}"
-        cache_root="${RUNNER_TOOL_CACHE:-${HOME}/.cache/gha-tools}"
-        install_dir="${cache_root}/Maven/${version}/x64"
-        mvn_bin="${install_dir}/bin/mvn"
-
-        if [[ ! -x "${mvn_bin}" ]]; then
-          url="https://archive.apache.org/dist/maven/maven-3/${version}/binaries/apache-maven-${version}-bin.tar.gz"
-          echo "Installing Apache Maven CLI ${version}"
-          tmp="$(mktemp -d)"
-          curl -fsSL "${url}" -o "${tmp}/maven.tgz"
-          mkdir -p "${install_dir}"
-          tar -xzf "${tmp}/maven.tgz" -C "${tmp}"
-          cp -a "${tmp}/apache-maven-${version}/." "${install_dir}/"
-          rm -rf "${tmp}"
-        fi
-
-        echo "MAVEN_HOME=${install_dir}" >> "${GITHUB_ENV}"
-        echo "PATH=${install_dir}/bin:${PATH}" >> "${GITHUB_ENV}"
-        echo "MAVEN_EXECUTABLE=${mvn_bin}" >> "${GITHUB_ENV}"
-        "${mvn_bin}" -version
-
     - name: maven-goals
       id: maven-goals
       shell: bash
       env:
-        MAVEN_ARGS: ${{ inputs.args }}
-        MAVEN_OPTS: ${{ inputs.maven-opts }}
-        SETTINGS_PATH: ${{ steps.settings.outputs.settings_path }}
+        MAVEN_ARGS: ${{ inputs.MAVEN_ARGS }}
+        MAVEN_SETTINGS_PATH: ${{ inputs.MAVEN_SETTINGS_PATH }}
       run: |
         set -euo pipefail
         cd "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
         [[ -n "${MAVEN_OPTS:-}" ]] && export MAVEN_OPTS
-        [[ -n "${JAVA_HOME:-}" ]] && echo "java_home=${JAVA_HOME}" >> "${GITHUB_OUTPUT}"
 
         executable="${MAVEN_EXECUTABLE:-mvn}"
+        settings="${MAVEN_SETTINGS_PATH:?MAVEN_SETTINGS_PATH is required}"
         IFS=' ' read -r -a args <<< "${MAVEN_ARGS}"
 
-        echo "+ ${executable} -s ${SETTINGS_PATH} ${args[*]}"
-        "${executable}" -s "${SETTINGS_PATH}" "${args[@]}"
+        echo "+ ${executable} -s ${settings} ${args[*]}"
+        "${executable}" -s "${settings}" "${args[@]}"
         echo "exit_code=0" >> "${GITHUB_OUTPUT}"
 
     - name: Cleanup settings.xml
       if: always()
       shell: bash
       env:
-        SETTINGS_PATH: ${{ steps.settings.outputs.settings_path }}
+        MAVEN_SETTINGS_PATH: ${{ inputs.MAVEN_SETTINGS_PATH }}
       run: |
         set -euo pipefail
-        path="${SETTINGS_PATH:-${GITHUB_WORKSPACE}/maven/settings.xml}"
+        path="${MAVEN_SETTINGS_PATH:-${GITHUB_WORKSPACE}/maven/settings.xml}"
         if [[ -f "${path}" ]]; then
+          echo "Found settings file at ${path}; purging"
           : > "${path}" || true
           rm -f "${path}"
           echo "Removed ${path}"
+        else
+          echo "Settings file already removed or missing: ${path}"
         fi
