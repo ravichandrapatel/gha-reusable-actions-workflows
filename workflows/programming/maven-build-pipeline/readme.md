@@ -70,9 +70,8 @@ Set `scan_profile: auto` (default) to derive from `application_name`, or pass `m
 | `sonar_host_url` | **yes** | — | SonarQube URL |
 | `sonar_project_key` | no | `""` → `application_name` | Sonar project key |
 | `sonar_platform` | no | `cap` | Sonar tag |
-| `docker_registry` | no | `""` | Required when docker stage runs |
-| `docker_environment` | no | `production` | Image path segment |
-| `deploy_environment` | no | `ci-publish` | GitHub Environment for publish |
+| `docker_registry` | no | `""` | Nexus host for app image push (falls back to `vars.NEXUS_DOCKER_REGISTRY_DEV`) |
+| `deploy_environment` | no | `ci-publish` | **GitHub Environment** on publish jobs (`contents: write` + protection rules) |
 
 ## Secrets
 
@@ -82,7 +81,7 @@ Callers pass **`secrets: inherit`**.
 | --- | --- | --- |
 | `SONAR_TOKEN` | **yes** | sonarqube |
 | `NVD_API_KEY` | no | owasp (recommended) |
-| `NEXUS_USERNAME` / `NEXUS_PASSWORD` | no | publish, docker-build |
+| `NEXUS_USERNAME` / `NEXUS_PASSWORD` | no | publish, image-build (Nexus push) |
 | `GIT_TOKEN` | no | publish settings.xml jgit/scm (defaults to `github.token`) |
 
 ## Caller requirements

@@ -55,11 +55,6 @@ on:
         required: false
         type: string
         default: ''
-      docker_environment:
-        description: 'Image path segment after organization on the Nexus registry'
-        required: false
-        type: string
-        default: production
       deploy_environment:
         description: 'GitHub Environment for contents:write release jobs'
         required: false
@@ -685,54 +680,39 @@ jobs:
           echo "artifact_path=${ARTIFACT}"
           echo "artifact_path=${ARTIFACT}" >> "${GITHUB_OUTPUT}"
 
-      - name: Resolve S2I builder image (Red Hat registry)
-        id: builder
+      # Builder: short names (ubi8/openjdk-21:…) → registry.access.redhat.com (no login);
+      # already-qualified refs are left as-is. App image always pushes to Nexus.
+      - name: Resolve builder and Nexus push registry
+        id: images
         env:
           BUILDER_BASE_IMAGE: ${{ needs.build-preprocess.outputs.builder_base_image }}
+          INPUT_REGISTRY: ${{ inputs.docker_registry }}
+          NEXUS_REGISTRY: ${{ vars.NEXUS_DOCKER_REGISTRY_DEV }}
           REDHAT_REGISTRY: registry.access.redhat.com
         run: |
           set -euo pipefail
           img="${BUILDER_BASE_IMAGE:?BUILDER_BASE_IMAGE from build.values is required}"
           img="${img#docker://}"
-          # Keep full refs (host.tld/...), otherwise pull builder from Red Hat.
           if [[ "${img}" =~ ^[A-Za-z0-9._-]+\.[A-Za-z]{2,}/ ]]; then
-            resolved="${img}"
+            builder="${img}"
           else
-            resolved="${REDHAT_REGISTRY}/${img}"
+            builder="${REDHAT_REGISTRY}/${img}"
           fi
-          echo "builder_image=${resolved}"
-          echo "builder_image=${resolved}" >> "${GITHUB_OUTPUT}"
-
-      - name: Resolve Nexus push registry
-        id: push-registry
-        env:
-          INPUT_REGISTRY: ${{ inputs.docker_registry }}
-          NEXUS_REGISTRY: ${{ vars.NEXUS_DOCKER_REGISTRY_DEV }}
-        run: |
-          set -euo pipefail
-          registry="${INPUT_REGISTRY:-}"
-          if [[ -z "${registry}" ]]; then
-            registry="${NEXUS_REGISTRY:-}"
-          fi
+          registry="${INPUT_REGISTRY:-${NEXUS_REGISTRY:-}}"
           if [[ -z "${registry}" ]]; then
             echo "::error::Nexus push registry required: set input docker_registry or vars.NEXUS_DOCKER_REGISTRY_DEV" >&2
             exit 1
           fi
           registry="${registry%/}"
-          echo "registry=${registry}"
-          echo "registry=${registry}" >> "${GITHUB_OUTPUT}"
-
-      - name: Login to Red Hat registry (builder pull)
-        uses: ./actions/common/docker-login
-        with:
-          registry: registry.access.redhat.com
-          username: ${{ secrets.REDHAT_REGISTRY_USERNAME }}
-          password: ${{ secrets.REDHAT_REGISTRY_PASSWORD }}
+          {
+            echo "builder_image=${builder}"
+            echo "registry=${registry}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Login to Nexus registry (image push)
         uses: ./actions/common/docker-login
         with:
-          registry: ${{ steps.push-registry.outputs.registry }}
+          registry: ${{ steps.images.outputs.registry }}
           username: ${{ secrets.NEXUS_DOCKER_USERNAME }}
           password: ${{ secrets.NEXUS_DOCKER_PASSWORD }}
 
@@ -740,15 +720,15 @@ jobs:
         id: push
         uses: ./actions/common/s2i-build-and-push
         with:
-          builder_image: ${{ steps.builder.outputs.builder_image }}
+          builder_image: ${{ steps.images.outputs.builder_image }}
           artifact_path: ${{ steps.artifact.outputs.artifact_path }}
           app_build_type: maven
-          registry: ${{ steps.push-registry.outputs.registry }}
+          registry: ${{ steps.images.outputs.registry }}
           organization: ${{ needs.build-preprocess.outputs.organization }}
+          product: ${{ needs.build-preprocess.outputs.product }}
           application: ${{ needs.build-preprocess.outputs.application_name }}
           project_version: ${{ needs.build-preprocess.outputs.project_version }}
-          application_version: ${{ needs.build-preprocess.outputs.application_version }}
-          environment: ${{ inputs.docker_environment }}
+          parent_version: ${{ needs.build-preprocess.outputs.parent_version }}
           branch: ${{ needs.build-preprocess.outputs.branch }}
 
 

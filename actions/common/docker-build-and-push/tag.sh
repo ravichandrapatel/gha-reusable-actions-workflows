@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # FILE_NAME: tag.sh
-# DESCRIPTION: Build Nexus image tag: date-version-build-branch-commit-name-appversion.
-# VERSION: 1.2.0
+# DESCRIPTION: Image path registry/org/product/app; tag date-version-build-branch-sha-archetype-parentversion.
+# VERSION: 1.3.0
 # AUTHORS: DevOps Team
 set -euo pipefail
 
@@ -31,10 +31,10 @@ pad5() {
 
 REGISTRY="${REGISTRY:-}"
 ORGANIZATION="${ORGANIZATION:-}"
+PRODUCT="${PRODUCT:-}"
 APPLICATION="${APPLICATION:-}"
 PROJECT_VERSION="${PROJECT_VERSION:-}"
-APPLICATION_VERSION="${APPLICATION_VERSION:-}"
-ENVIRONMENT="${ENVIRONMENT:-production}"
+PARENT_VERSION="${PARENT_VERSION:-}"
 REPO="${REPO:-${GITHUB_REPOSITORY:-}}"
 BRANCH="${BRANCH:-${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}}"
 SHA="${SHA:-${GIT_SHA:-${GITHUB_SHA:-}}}"
@@ -46,10 +46,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --registry) REGISTRY="$2"; shift 2 ;;
     --organization) ORGANIZATION="$2"; shift 2 ;;
+    --product) PRODUCT="$2"; shift 2 ;;
     --application) APPLICATION="$2"; shift 2 ;;
     --project-version) PROJECT_VERSION="$2"; shift 2 ;;
-    --application-version) APPLICATION_VERSION="$2"; shift 2 ;;
-    --environment) ENVIRONMENT="$2"; shift 2 ;;
+    --parent-version) PARENT_VERSION="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
     --branch) BRANCH="$2"; shift 2 ;;
     --sha) SHA="$2"; shift 2 ;;
@@ -62,8 +62,8 @@ done
 
 REGISTRY="$(printf '%s' "${REGISTRY}" | sed 's:/*$::')"
 BRANCH="${BRANCH#refs/heads/}"
-if [[ -z "${REGISTRY}" || -z "${ORGANIZATION}" || -z "${APPLICATION}" || -z "${PROJECT_VERSION}" || -z "${APPLICATION_VERSION}" ]]; then
-  echo "ERROR: registry, organization, application, project-version, and application-version are required" >&2
+if [[ -z "${REGISTRY}" || -z "${ORGANIZATION}" || -z "${PRODUCT}" || -z "${APPLICATION}" || -z "${PROJECT_VERSION}" || -z "${PARENT_VERSION}" ]]; then
+  echo "ERROR: registry, organization, product, application, project-version, and parent-version are required" >&2
   exit 1
 fi
 if [[ -z "${SHA}" ]]; then
@@ -89,25 +89,33 @@ if [[ -n "${REPO}" ]]; then
     APP_ARCHETYPE="$(sanitize "${parts[prev]}-${parts[last]}")"
   fi
 fi
+if [[ -z "${APP_ARCHETYPE}" ]]; then
+  echo "ERROR: app_archetype requires a repo name with at least two hyphen segments (pass --repo or set GITHUB_REPOSITORY)" >&2
+  exit 1
+fi
 if [[ -z "${DATE_STAMP}" ]]; then
   DATE_STAMP="$(date -u +%Y%m%d)"
 fi
+ORG="$(sanitize "${ORGANIZATION}")"
+PRODUCT_NAME="$(sanitize "${PRODUCT}")"
 APP_NAME="$(sanitize "${APPLICATION}")"
 # Tag segment uses numeric/version only — drop Maven -SNAPSHOT qualifier.
 SNAP_VERSION="$(sanitize "$(printf '%s' "${PROJECT_VERSION}" | sed -E 's/-[Ss][Nn][Aa][Pp][Ss][Hh][Oo][Tt]$//')")"
-APP_VERSION="$(sanitize "${APPLICATION_VERSION}")"
+PARENT_VER="$(sanitize "${PARENT_VERSION}")"
 SHORT_BRANCH="$(slice "$(sanitize "${BRANCH}")" 3)"
 SHORT_SHA="$(slice "$(sanitize "${SHA}")" 5)"
 BUILD_ID="$(pad5 "$(sanitize "${BUILD_NUMBER}")")"
-TAG="${DATE_STAMP}-${SNAP_VERSION}-${BUILD_ID}-${SHORT_BRANCH}-${SHORT_SHA}-${APP_NAME}-${APP_VERSION}"
-IMAGE="$(sanitize "${REGISTRY}")/$(sanitize "${ORGANIZATION}")/$(sanitize "${ENVIRONMENT}")/${APP_NAME}:${TAG}"
+TAG="${DATE_STAMP}-${SNAP_VERSION}-${BUILD_ID}-${SHORT_BRANCH}-${SHORT_SHA}-${APP_ARCHETYPE}-${PARENT_VER}"
+IMAGE="$(sanitize "${REGISTRY}")/${ORG}/${PRODUCT_NAME}/${APP_NAME}:${TAG}"
 
 echo "tag : ${TAG}"
 echo "image : ${IMAGE}"
 echo "app_archetype : ${APP_ARCHETYPE}"
 echo "application_name : ${APP_NAME}"
+echo "product : ${PRODUCT_NAME}"
+echo "organization : ${ORG}"
 echo "project_version : ${SNAP_VERSION}"
-echo "application_version : ${APP_VERSION}"
+echo "parent_version : ${PARENT_VER}"
 echo "short_branch : ${SHORT_BRANCH}"
 echo "short_sha : ${SHORT_SHA}"
 echo "build_number : ${BUILD_ID}"
@@ -117,8 +125,10 @@ if [[ -n "${OUTPUT}" ]]; then
     echo "image=${IMAGE}"
     echo "app_archetype=${APP_ARCHETYPE}"
     echo "application_name=${APP_NAME}"
+    echo "product=${PRODUCT_NAME}"
+    echo "organization=${ORG}"
     echo "project_version=${SNAP_VERSION}"
-    echo "application_version=${APP_VERSION}"
+    echo "parent_version=${PARENT_VER}"
     echo "short_branch=${SHORT_BRANCH}"
     echo "short_sha=${SHORT_SHA}"
     echo "build_number=${BUILD_ID}"

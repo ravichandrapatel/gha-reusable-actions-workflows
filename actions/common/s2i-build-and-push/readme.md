@@ -28,11 +28,11 @@ Binary Source-to-Image build from a **pre-built** artifact using Red Hat **`s2i 
 | `log_level` | No | `1` | `s2i` log level (0–5). |
 | `registry` | Yes | — | Nexus registry host. |
 | `organization` | Yes | — | Org path segment. |
-| `application` | Yes | — | Application name from build-preprocess. |
+| `product` | Yes | — | Product path segment (`registry/org/product/app`). |
+| `application` | Yes | — | Application name (final path segment). |
 | `project_version` | Yes | — | Snapshot/project version from build-preprocess. |
-| `application_version` | Yes | — | Application version from build-preprocess. |
-| `environment` | No | `production` | Path segment after org. |
-| `repo` | No | `""` | `owner/repo` or repo name. |
+| `parent_version` | Yes | — | Parent version (last tag segment). |
+| `repo` | No | `""` | Used to derive `app_archetype` (last two hyphen parts). |
 | `branch` | No | `""` | Empty uses `GITHUB_HEAD_REF` then `GITHUB_REF_NAME`. |
 | `sha` | No | `""` | Empty uses `GITHUB_SHA`. |
 | `build_number` | No | `""` | Empty uses `GITHUB_RUN_NUMBER`. |
@@ -72,9 +72,10 @@ Caller downloads the prior-stage artifact, then:
     app_build_type: maven
     registry: ${{ vars.NEXUS_REGISTRY }}
     organization: ${{ needs.build-preprocess.outputs.organization }}
+    product: ${{ needs.build-preprocess.outputs.product }}
     application: ${{ needs.build-preprocess.outputs.application_name }}
     project_version: ${{ needs.build-preprocess.outputs.project_version }}
-    application_version: ${{ needs.build-preprocess.outputs.application_version }}
+    parent_version: ${{ needs.build-preprocess.outputs.parent_version }}
 ```
 
 .NET: set `app_build_type: dotnet` and point `artifact_path` at the downloaded publish directory.
@@ -90,7 +91,7 @@ bash actions/common/s2i-build-and-push/prepare.sh \
 bash actions/common/s2i-build-and-push/s2i-build.sh \
   --source /tmp/s2i-source \
   --builder-image nexus.example.com/ubi8/openjdk-11:1.14 \
-  --image nexus.example.com/org/production/my-app:tag
+  --image nexus.example.com/org/product/my-app:tag
 ```
 
 ## Release

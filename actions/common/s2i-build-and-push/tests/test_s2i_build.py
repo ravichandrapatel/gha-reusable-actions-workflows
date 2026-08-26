@@ -14,7 +14,7 @@ def run_s2i_build(
     *,
     source: Path,
     builder_image: str = "nexus.example.com/ubi8/openjdk-11:1.14",
-    image: str = "nexus.example.com/org/production/app:tag",
+    image: str = "nexus.example.com/org/product/app:tag",
     tls_verify: str = "true",
     pull_policy: str = "if-not-present",
 ) -> subprocess.CompletedProcess[str]:

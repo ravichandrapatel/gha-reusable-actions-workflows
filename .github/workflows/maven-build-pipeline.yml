@@ -59,11 +59,6 @@ on:
         type: string
         required: false
         default: ""
-      docker_environment:
-        description: Image path segment after organization
-        type: string
-        required: false
-        default: production
       deploy_environment:
         description: GitHub Environment for contents:write publish
         type: string
@@ -449,21 +444,6 @@ jobs:
           name: maven-target
           path: target
 
-      - name: Check docker registry and builder image
-        env:
-          DOCKER_REGISTRY: ${{ inputs.docker_registry }}
-          BUILDER_IMAGE: ${{ needs.build-preprocess.outputs.builder_base_image }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${DOCKER_REGISTRY}" ]]; then
-            echo "ERROR: docker_registry is required when the docker stage runs" >&2
-            exit 1
-          fi
-          if [[ -z "${BUILDER_IMAGE}" ]]; then
-            echo "ERROR: BUILDER_BASE_IMAGE in build.values is required for S2I docker builds" >&2
-            exit 1
-          fi
-
       - name: Resolve application jar
         id: artifact
         run: |
@@ -484,10 +464,38 @@ jobs:
           done
           echo "jar_path=${JAR}" >> "${GITHUB_OUTPUT}"
 
-      - name: Docker login
+      # Short builder names → registry.access.redhat.com (no login); qualified refs left as-is.
+      - name: Resolve builder and Nexus push registry
+        id: images
+        env:
+          BUILDER_BASE_IMAGE: ${{ needs.build-preprocess.outputs.builder_base_image }}
+          INPUT_REGISTRY: ${{ inputs.docker_registry }}
+          NEXUS_REGISTRY: ${{ vars.NEXUS_DOCKER_REGISTRY_DEV }}
+          REDHAT_REGISTRY: registry.access.redhat.com
+        run: |
+          set -euo pipefail
+          img="${BUILDER_BASE_IMAGE:?BUILDER_BASE_IMAGE from build.values is required}"
+          img="${img#docker://}"
+          if [[ "${img}" =~ ^[A-Za-z0-9._-]+\.[A-Za-z]{2,}/ ]]; then
+            builder="${img}"
+          else
+            builder="${REDHAT_REGISTRY}/${img}"
+          fi
+          registry="${INPUT_REGISTRY:-${NEXUS_REGISTRY:-}}"
+          if [[ -z "${registry}" ]]; then
+            echo "::error::Nexus push registry required: set input docker_registry or vars.NEXUS_DOCKER_REGISTRY_DEV" >&2
+            exit 1
+          fi
+          registry="${registry%/}"
+          {
+            echo "builder_image=${builder}"
+            echo "registry=${registry}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Login to Nexus registry (image push)
         uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/docker-login@docker-login/v1.2.0
         with:
-          registry: ${{ inputs.docker_registry }}
+          registry: ${{ steps.images.outputs.registry }}
           username: ${{ secrets.NEXUS_USERNAME }}
           password: ${{ secrets.NEXUS_PASSWORD }}
 
@@ -495,13 +503,13 @@ jobs:
         id: push
         uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/s2i-build-and-push@s2i-build-and-push/v1.1.0
         with:
-          builder_image: ${{ needs.build-preprocess.outputs.builder_base_image }}
+          builder_image: ${{ steps.images.outputs.builder_image }}
           artifact_path: ${{ steps.artifact.outputs.jar_path }}
           app_build_type: maven
-          registry: ${{ inputs.docker_registry }}
+          registry: ${{ steps.images.outputs.registry }}
           organization: ${{ needs.build-preprocess.outputs.organization }}
+          product: ${{ needs.build-preprocess.outputs.product }}
           application: ${{ needs.build-preprocess.outputs.application_name }}
           project_version: ${{ needs.build-preprocess.outputs.project_version }}
-          application_version: ${{ needs.build-preprocess.outputs.application_version }}
-          environment: ${{ inputs.docker_environment }}
+          parent_version: ${{ needs.build-preprocess.outputs.parent_version }}
           branch: ${{ needs.build-preprocess.outputs.branch }}

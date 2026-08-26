@@ -4,8 +4,8 @@ Generate a Nexus image tag, `buildah bud`, then retried `buildah push`. Log in f
 
 ## Overview & context
 
-- **Purpose**: Build and push `{registry}/{organization}/production/{application}:{tag}`.
-- **Tag**: `{date}-{snapshot}-{build:5}-{branch:0:3}-{commit:0:5}-{application_name}-{application_version}` (UTC `YYYYMMDD`, sanitized).
+- **Purpose**: Build and push `{registry}/{organization}/{product}/{application}:{tag}`.
+- **Tag**: `{date}-{version}-{build:5}-{branch:0:3}-{sha:0:5}-{archetype}-{parent_version}` (UTC `YYYYMMDD`, sanitized).
 - **Scope**: Tag via `tag.sh`; `buildah bud` in bash; push via `ravichandrapatel/gha-reusable-actions-workflows/actions/common/retry@retry/v1.2.0`.
 - **Success criteria**: `buildah bud` succeeds and push exits 0 within `max_attempts`.
 
@@ -26,8 +26,8 @@ Generate a Nexus image tag, `buildah bud`, then retried `buildah push`. Log in f
 | `organization` | Yes | — | Org path segment. |
 | `application` | Yes | — | Application name from build-preprocess. |
 | `project_version` | Yes | — | Snapshot/project version from build-preprocess. |
-| `application_version` | Yes | — | Application version from build-preprocess. |
-| `environment` | No | `production` | Path segment after org. |
+| `parent_version` | Yes | — | Parent version (last tag segment; ng-ui falls back to application_version). |
+| `product` | Yes | — | Product path segment. |
 | `repo` | No | `""` | `owner/repo` or repo name. Empty uses `GITHUB_REPOSITORY`. |
 | `branch` | No | `""` | Empty uses `GITHUB_HEAD_REF` then `GITHUB_REF_NAME`. Tag uses `[0:3]`. |
 | `sha` | No | `""` | Empty uses `GITHUB_SHA`. Tag uses `[0:5]`. |
@@ -44,11 +44,11 @@ Generate a Nexus image tag, `buildah bud`, then retried `buildah push`. Log in f
 | Output | Description |
 | --- | --- |
 | `tag` | Generated tag. |
-| `image` | Full `registry/org/env/app:tag`. |
+| `image` | Full `registry/org/product/app:tag`. |
 | `app_archetype` | Last two hyphen parts of the repo name. |
 | `application_name` | Sanitized application name in the tag. |
 | `project_version` | Snapshot/project version in the tag. |
-| `application_version` | Application version in the tag. |
+| `parent_version` | Application version in the tag. |
 | `short_branch` | First 3 of the sanitized branch. |
 | `short_sha` | First 5 of the SHA. |
 | `build_number` | 5-character build number. |
@@ -63,13 +63,14 @@ Generate a Nexus image tag, `buildah bud`, then retried `buildah push`. Log in f
     username: ${{ secrets.NEXUS_USERNAME }}
     password: ${{ secrets.NEXUS_PASSWORD }}
 
-- uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/docker-build-and-push@docker-build-and-push/v1.4.0
+- uses: ./actions/common/docker-build-and-push
   with:
     registry: ${{ vars.NEXUS_REGISTRY }}
     organization: ${{ steps.preprocess.outputs.organization }}
+    product: ${{ steps.preprocess.outputs.product }}
     application: ${{ steps.preprocess.outputs.application_name }}
     project_version: ${{ steps.preprocess.outputs.project_version }}
-    application_version: ${{ steps.preprocess.outputs.application_version }}
+    parent_version: ${{ steps.preprocess.outputs.parent_version || steps.preprocess.outputs.application_version }}
 ```
 
 ## Manual run (tag only)
@@ -78,9 +79,10 @@ Generate a Nexus image tag, `buildah bud`, then retried `buildah push`. Log in f
 bash actions/common/docker-build-and-push/tag.sh \
   --registry nexus.example.com \
   --organization ccmo \
+  --product shippingtools \
   --application snapshipadmin-jsb-ui \
   --project-version 2.7.18-SNAPSHOT \
-  --application-version 2.7.18 \
+  --parent-version 2.7.18 \
   --repo ccmo-shippingtools-snapshipadmin-jsb-ui \
   --branch feature/foo \
   --sha abcdef1234567890 \

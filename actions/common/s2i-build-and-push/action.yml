@@ -32,21 +32,20 @@ inputs:
   organization:
     description: 'Organization path segment'
     required: true
+  product:
+    description: 'Product path segment from build-preprocess (registry/org/product/app)'
+    required: true
   application:
-    description: 'Application name from build-preprocess (image path and tag segment)'
+    description: 'Application name from build-preprocess (final image path segment)'
     required: true
   project_version:
     description: 'Snapshot/project version from build-preprocess'
     required: true
-  application_version:
-    description: 'Application version from build-preprocess'
+  parent_version:
+    description: 'Parent version from build-preprocess (last tag segment)'
     required: true
-  environment:
-    description: 'Path segment after organization'
-    required: false
-    default: 'production'
   repo:
-    description: 'owner/repo or repo name; archetype is the last two hyphen parts. Empty uses GITHUB_REPOSITORY'
+    description: 'owner/repo or repo name; archetype is the last two hyphen parts used in the tag. Empty uses GITHUB_REPOSITORY'
     required: false
     default: ''
   branch:
@@ -80,23 +79,29 @@ inputs:
 
 outputs:
   tag:
-    description: 'Generated image tag'
+    description: 'Generated image tag (date-version-build-branch-sha-archetype-parentversion)'
     value: ${{ steps.tag.outputs.tag }}
   image:
-    description: 'Full registry/org/env/app:tag reference'
+    description: 'Full registry/org/product/app:tag reference'
     value: ${{ steps.tag.outputs.image }}
   app_archetype:
-    description: 'Last two hyphen parts of the repo name (jsb-ui, ng-ui, dnc-svc)'
+    description: 'Last two hyphen parts of the repo name (jsb-ui, ng-ui, dnc-svc); used in the tag'
     value: ${{ steps.tag.outputs.app_archetype }}
   application_name:
-    description: 'Sanitized application name used in the tag'
+    description: 'Sanitized application name used in the image path'
     value: ${{ steps.tag.outputs.application_name }}
+  product:
+    description: 'Sanitized product path segment'
+    value: ${{ steps.tag.outputs.product }}
+  organization:
+    description: 'Sanitized organization path segment'
+    value: ${{ steps.tag.outputs.organization }}
   project_version:
     description: 'Snapshot/project version used in the tag'
     value: ${{ steps.tag.outputs.project_version }}
-  application_version:
-    description: 'Application version used in the tag'
-    value: ${{ steps.tag.outputs.application_version }}
+  parent_version:
+    description: 'Parent version used in the tag'
+    value: ${{ steps.tag.outputs.parent_version }}
   short_branch:
     description: 'First 3 sanitized chars of the branch'
     value: ${{ steps.tag.outputs.short_branch }}
@@ -123,10 +128,10 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
         REGISTRY: ${{ inputs.registry }}
         ORGANIZATION: ${{ inputs.organization }}
+        PRODUCT: ${{ inputs.product }}
         APPLICATION: ${{ inputs.application }}
         PROJECT_VERSION: ${{ inputs.project_version }}
-        APPLICATION_VERSION: ${{ inputs.application_version }}
-        ENVIRONMENT: ${{ inputs.environment }}
+        PARENT_VERSION: ${{ inputs.parent_version }}
         REPO: ${{ inputs.repo }}
         BRANCH: ${{ inputs.branch }}
         SHA: ${{ inputs.sha }}
@@ -136,10 +141,10 @@ runs:
         ARGS=(
           --registry "${REGISTRY}"
           --organization "${ORGANIZATION}"
+          --product "${PRODUCT}"
           --application "${APPLICATION}"
           --project-version "${PROJECT_VERSION}"
-          --application-version "${APPLICATION_VERSION}"
-          --environment "${ENVIRONMENT}"
+          --parent-version "${PARENT_VERSION}"
           --output "${GITHUB_OUTPUT}"
         )
         if [[ -n "${REPO}" ]]; then

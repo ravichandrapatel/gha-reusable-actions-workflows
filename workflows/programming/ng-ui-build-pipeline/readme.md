@@ -67,7 +67,6 @@ build-and-unit-test-lint   if build_and_unit_test == true
 | `docker_registry` | no | `""` | Required when the docker stage runs |
 | `docker_file` | no | `Dockerfile` | Dockerfile path |
 | `docker_context` | no | `""` | Build context (workspace if empty) |
-| `docker_environment` | no | `production` | Image path segment |
 | `deploy_environment` | no | `ci-publish` | GitHub Environment for publish |
 
 ## Outputs
@@ -76,7 +75,7 @@ build-and-unit-test-lint   if build_and_unit_test == true
 | --- | --- |
 | `stages` | preprocess |
 | `application_name` | preprocess |
-| `application_version` | preprocess |
+| `parent_version` | preprocess |
 | `quality_gate_status` | sonarqube or sonarqube-pr |
 | `docker_image` | docker-build |
 

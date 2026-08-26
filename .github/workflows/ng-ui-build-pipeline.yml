@@ -54,11 +54,6 @@ on:
         type: string
         required: false
         default: ""
-      docker_environment:
-        description: Image path segment after organization
-        type: string
-        required: false
-        default: production
       deploy_environment:
         description: GitHub Environment for contents:write publish
         type: string
@@ -382,14 +377,14 @@ jobs:
 
       - name: Docker build and push
         id: push
-        uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/docker-build-and-push@docker-build-and-push/v1.4.0
+        uses: ./actions/common/docker-build-and-push
         with:
           registry: ${{ inputs.docker_registry }}
           organization: ${{ needs.build-preprocess.outputs.organization }}
+          product: ${{ needs.build-preprocess.outputs.product }}
           application: ${{ needs.build-preprocess.outputs.application_name }}
-          project_version: ${{ needs.build-preprocess.outputs.application_version }}
-          application_version: ${{ needs.build-preprocess.outputs.application_version }}
-          environment: ${{ inputs.docker_environment }}
+          project_version: ${{ needs.build-preprocess.outputs.project_version }}
+          parent_version: ${{ needs.build-preprocess.outputs.parent_version || needs.build-preprocess.outputs.application_version }}
           file: ${{ inputs.docker_file }}
           context: ${{ inputs.docker_context }}
           branch: ${{ needs.build-preprocess.outputs.branch }}
