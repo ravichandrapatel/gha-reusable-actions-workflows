@@ -52,7 +52,7 @@ build-and-unit-test-lint   if build_and_unit_test == true
 
 **Publish:** caller owns `.releaserc` / `release.config.js` (prerelease on `develop`, release on `release/*` and `hotfix/*`). Preprocess sets `snapshot_artifact` on develop (non-PR) and `release_artifact` on `push` or `workflow_dispatch` of `release/*` or `hotfix/*`. semantic-release must be in the caller `package.json` (no floating `npx` latest).
 
-**Docker:** enabled on `push` or `workflow_dispatch` (not PRs / libraries). `project_version` is the ng-ui `application_version` (package.json). Requires `docker_registry` plus `NEXUS_USERNAME` / `NEXUS_PASSWORD`.
+**Docker:** enabled on `push` or `workflow_dispatch` (not PRs / libraries). `project_version` is the ng-ui `application_version` (package.json). Uses `vars.NEXUS_DOCKER_REGISTRY_DEV` plus `NEXUS_USERNAME` / `NEXUS_PASSWORD`.
 
 ## Inputs
 
@@ -64,7 +64,6 @@ build-and-unit-test-lint   if build_and_unit_test == true
 | `sonar_project_key` | no | `""` → `application_name` | Sonar project key |
 | `sonar_platform` | no | `cap` | Tag `platform-<value>` |
 | `npm_registry` | no | `""` | Nexus npm registry for `.npmrc` |
-| `docker_registry` | no | `""` | Required when the docker stage runs |
 | `docker_file` | no | `Dockerfile` | Dockerfile path |
 | `docker_context` | no | `""` | Build context (workspace if empty) |
 | `deploy_environment` | no | `ci-publish` | GitHub Environment for publish |
@@ -132,7 +131,6 @@ jobs:
     uses: ravichandrapatel/gha-reusable-actions-workflows/.github/workflows/ng-ui-build-pipeline.yml@<sha>
     with:
       sonar_host_url: https://sonar.example.com
-      docker_registry: nexus.example.com
       npm_registry: https://nexus.example.com/repository/npm/
       runner: arc-podman
     secrets: inherit

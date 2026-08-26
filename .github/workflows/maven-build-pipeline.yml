@@ -54,11 +54,6 @@ on:
         type: string
         required: false
         default: cap
-      docker_registry:
-        description: Nexus registry host for s2i-build-and-push
-        type: string
-        required: false
-        default: ""
       deploy_environment:
         description: GitHub Environment for contents:write publish
         type: string
@@ -464,12 +459,12 @@ jobs:
           done
           echo "jar_path=${JAR}" >> "${GITHUB_OUTPUT}"
 
-      # Short builder names → registry.access.redhat.com (no login); qualified refs left as-is.
+      # Short builder names → registry.access.redhat.com (no login).
+      # Push registry: vars.NEXUS_DOCKER_REGISTRY_DEV only.
       - name: Resolve builder and Nexus push registry
         id: images
         env:
           BUILDER_BASE_IMAGE: ${{ needs.build-preprocess.outputs.builder_base_image }}
-          INPUT_REGISTRY: ${{ inputs.docker_registry }}
           NEXUS_REGISTRY: ${{ vars.NEXUS_DOCKER_REGISTRY_DEV }}
           REDHAT_REGISTRY: registry.access.redhat.com
         run: |
@@ -481,9 +476,9 @@ jobs:
           else
             builder="${REDHAT_REGISTRY}/${img}"
           fi
-          registry="${INPUT_REGISTRY:-${NEXUS_REGISTRY:-}}"
+          registry="${NEXUS_REGISTRY:-}"
           if [[ -z "${registry}" ]]; then
-            echo "::error::Nexus push registry required: set input docker_registry or vars.NEXUS_DOCKER_REGISTRY_DEV" >&2
+            echo "::error::vars.NEXUS_DOCKER_REGISTRY_DEV is required for image push" >&2
             exit 1
           fi
           registry="${registry%/}"

@@ -70,7 +70,6 @@ Set `scan_profile: auto` (default) to derive from `application_name`, or pass `m
 | `sonar_host_url` | **yes** | — | SonarQube URL |
 | `sonar_project_key` | no | `""` → `application_name` | Sonar project key |
 | `sonar_platform` | no | `cap` | Sonar tag |
-| `docker_registry` | no | `""` | Nexus host for app image push (falls back to `vars.NEXUS_DOCKER_REGISTRY_DEV`) |
 | `deploy_environment` | no | `ci-publish` | **GitHub Environment** on publish jobs (`contents: write` + protection rules) |
 
 ## Secrets
@@ -109,7 +108,6 @@ jobs:
     uses: ravichandrapatel/gha-reusable-actions-workflows/.github/workflows/maven-build-pipeline.yml@<sha>
     with:
       sonar_host_url: https://sonar.example.com
-      docker_registry: nexus.example.com
       scan_profile: auto
       runner: arc-podman
     secrets: inherit

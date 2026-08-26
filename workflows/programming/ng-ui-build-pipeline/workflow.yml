@@ -39,11 +39,6 @@ on:
         type: string
         required: false
         default: ""
-      docker_registry:
-        description: Nexus registry host for docker-build-and-push
-        type: string
-        required: false
-        default: ""
       docker_file:
         description: Dockerfile path relative to context
         type: string
@@ -360,18 +355,18 @@ jobs:
 
       - name: Check docker registry
         env:
-          DOCKER_REGISTRY: ${{ inputs.docker_registry }}
+          DOCKER_REGISTRY: ${{ vars.NEXUS_DOCKER_REGISTRY_DEV }}
         run: |
           set -euo pipefail
           if [[ -z "${DOCKER_REGISTRY}" ]]; then
-            echo "ERROR: docker_registry is required when the docker stage runs" >&2
+            echo "ERROR: vars.NEXUS_DOCKER_REGISTRY_DEV is required when the docker stage runs" >&2
             exit 1
           fi
 
       - name: Docker login
         uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/docker-login@docker-login/v1.2.0
         with:
-          registry: ${{ inputs.docker_registry }}
+          registry: ${{ vars.NEXUS_DOCKER_REGISTRY_DEV }}
           username: ${{ secrets.NEXUS_USERNAME }}
           password: ${{ secrets.NEXUS_PASSWORD }}
 
@@ -379,7 +374,7 @@ jobs:
         id: push
         uses: ./actions/common/docker-build-and-push
         with:
-          registry: ${{ inputs.docker_registry }}
+          registry: ${{ vars.NEXUS_DOCKER_REGISTRY_DEV }}
           organization: ${{ needs.build-preprocess.outputs.organization }}
           product: ${{ needs.build-preprocess.outputs.product }}
           application: ${{ needs.build-preprocess.outputs.application_name }}
