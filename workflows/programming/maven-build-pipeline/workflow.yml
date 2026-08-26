@@ -76,12 +76,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      build_and_unit_test: ${{ steps.preprocess.outputs.build_and_unit_test }}
-      owasp: ${{ inputs.skip-owasp && 'false' || steps.preprocess.outputs.owasp }}
-      sonar: ${{ inputs.skip-sonar && 'false' || steps.preprocess.outputs.sonar }}
-      snapshot_artifact: ${{ steps.preprocess.outputs.snapshot_artifact }}
-      release_artifact: ${{ steps.preprocess.outputs.release_artifact }}
-      docker: ${{ steps.preprocess.outputs.docker }}
+      build_stages: ${{ steps.preprocess.outputs.build_stages }}
       checkstyle_skip: ${{ steps.preprocess.outputs.checkstyle_skip }}
       cpgbuild_app_origin: ${{ steps.preprocess.outputs.cpgbuild_app_origin }}
       lib_01: ${{ steps.preprocess.outputs.lib_01 }}
@@ -96,12 +91,9 @@ jobs:
       sonar_cli_args: ${{ steps.preprocess.outputs.sonar_cli_args }}
       branch: ${{ steps.preprocess.outputs.branch }}
       java_version: ${{ steps.preprocess.outputs.java_version }}
-      artifact_id: ${{ steps.preprocess.outputs.artifact_id }}
-      packaging: ${{ steps.preprocess.outputs.packaging }}
       name: ${{ steps.preprocess.outputs.name }}
       builder_base_image: ${{ steps.preprocess.outputs.builder_base_image }}
       is_library: ${{ steps.preprocess.outputs.is_library }}
-      is_multimodule_lib: ${{ steps.preprocess.outputs.is_multimodule_lib }}
       coverage_report_retention_days: ${{ inputs.coverage-report-retention-days }}
       owasp_report_retention_days: ${{ inputs.owasp-report-retention-days }}
       build_artifact_retention_days: ${{ inputs.build-artifact-retention-days }}
@@ -123,7 +115,7 @@ jobs:
     permissions:
       contents: read
     needs: build-preprocess
-    if: needs.build-preprocess.outputs.build_and_unit_test == 'true'
+    if: contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'build_and_unit_test')
     steps:
       - *checkout
       - &setup-java
@@ -251,7 +243,7 @@ jobs:
     permissions:
       contents: read
     needs: build-preprocess
-    if: needs.build-preprocess.outputs.owasp == 'true' && !inputs.skip-owasp
+    if: contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'owasp') && !inputs.skip-owasp
     steps:
       - &shallow-checkout
         name: Shallow checkout
@@ -355,7 +347,7 @@ jobs:
       !inputs.skip-sonar &&
       needs.build-preprocess.result == 'success' &&
       needs.build_and_unit_test.result == 'success' &&
-      needs.build-preprocess.outputs.sonar == 'true' &&
+      contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'sonar') &&
       (needs.owasp.result == 'success' || needs.owasp.result == 'skipped')
     steps:
       - *shallow-checkout
@@ -423,7 +415,7 @@ jobs:
       needs.build-preprocess.result == 'success' &&
       needs.build_and_unit_test.result == 'success' &&
       (needs.owasp.result == 'success' || needs.owasp.result == 'skipped') &&
-      needs.build-preprocess.outputs.sonar == 'true'
+      contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'sonar')
     steps:
       - *shallow-checkout
       - *setup-java
@@ -480,13 +472,51 @@ jobs:
       github.event_name != 'pull_request' &&
       (needs.sonar.result == 'success' || needs.sonar.result == 'skipped') &&
       (needs.sonar-pr.result == 'success' || needs.sonar-pr.result == 'skipped') &&
-      needs.build-preprocess.outputs.is_multimodule_lib != 'y' &&
-      needs.build-preprocess.outputs.snapshot_artifact == 'true'
+      contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'snapshot_artifact')
     steps:
       - *shallow-checkout
       - *setup-java
       - *setup-maven
       - *maven-artifact
+      - &resolve-deploy-artifact
+        name: Resolve deploy artifact from pom
+        id: deploy-artifact
+        env:
+          PROJECT_VERSION: ${{ needs.build-preprocess.outputs.project_version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packaging="$(
+            tr '\n' ' ' < pom.xml \
+              | grep -oE '<packaging>[^<]+</packaging>' \
+              | head -1 \
+              | sed -E 's#</?packaging>##g' \
+              | tr '[:upper:]' '[:lower:]' \
+              | tr -d '[:space:]' || true
+          )"
+          packaging="${packaging:-jar}"
+          candidates=(
+            target/*-"${PROJECT_VERSION}"."${packaging}"
+            */target/*-"${PROJECT_VERSION}"."${packaging}"
+            target/*."${packaging}"
+          )
+          if [[ "${#candidates[@]}" -eq 0 ]]; then
+            echo "::error::no ${packaging} found under target/ for version ${PROJECT_VERSION}" >&2
+            exit 1
+          fi
+          ARTIFACT="${candidates[0]}"
+          for path in "${candidates[@]}"; do
+            case "${path}" in
+              *-sources.jar|*-javadoc.jar|*.original.jar) continue ;;
+            esac
+            ARTIFACT="${path}"
+            break
+          done
+          echo "packaging=${packaging}"
+          echo "file=${ARTIFACT}"
+          echo "packaging=${packaging}" >> "${GITHUB_OUTPUT}"
+          echo "file=${ARTIFACT}" >> "${GITHUB_OUTPUT}"
+
       - name: Deploy snapshot artifact to Nexus
         uses: ./actions/common/maven
         env:
@@ -499,42 +529,9 @@ jobs:
             -DgeneratePom=false
             -DrepositoryId=devtools-nexus-snapshots
             -DpomFile=pom.xml
-            -Dpackaging=${{ needs.build-preprocess.outputs.packaging }}
+            -Dpackaging=${{ steps.deploy-artifact.outputs.packaging }}
             -Durl=${{ vars.NEXUS_HOST_URL }}/repository/cpg-snapshots
-            -Dfile=target/${{ needs.build-preprocess.outputs.artifact_id }}-${{ needs.build-preprocess.outputs.project_version }}.${{ needs.build-preprocess.outputs.packaging }}
-
-  multimodule-nexus-artifacts:
-    name: Multimodule Nexus artifacts
-    runs-on: ${{ fromJSON(inputs.runs-on) }}
-    permissions:
-      contents: read
-    needs: [build-preprocess, sonar, sonar-pr]
-    if: |
-      always() &&
-      github.event_name != 'pull_request' &&
-      (needs.sonar.result == 'success' || needs.sonar.result == 'skipped') &&
-      (needs.sonar-pr.result == 'success' || needs.sonar-pr.result == 'skipped') &&
-      needs.build-preprocess.outputs.is_multimodule_lib == 'y' &&
-      needs.build-preprocess.outputs.snapshot_artifact == 'true'
-    steps:
-      - *shallow-checkout
-      - *setup-java
-      - *setup-maven
-      - name: Deploy snapshot POM to Nexus
-        uses: ./actions/common/maven
-        env:
-          NEXUS_USERNAME: ${{ secrets.NEXUS_ARTIFACT_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_ARTIFACT_PASSWORD }}
-          NEXUS_BASEURL: ${{ vars.NEXUS_HOST_URL }}
-        with:
-          MAVEN_ARGS: >-
-            deploy:deploy-file
-            -DgeneratePom=false
-            -DrepositoryId=devtools-nexus-snapshots
-            -DpomFile=pom.xml
-            -Dpackaging=pom
-            -Durl=${{ vars.NEXUS_HOST_URL }}/repository/cpg-snapshots
-            -Dfile=pom.xml
+            -Dfile=${{ steps.deploy-artifact.outputs.file }}
 
   github-packages:
     name: GitHub Packages
@@ -549,13 +546,13 @@ jobs:
       inputs.publish-to-github-packages &&
       (needs.sonar.result == 'success' || needs.sonar.result == 'skipped') &&
       (needs.sonar-pr.result == 'success' || needs.sonar-pr.result == 'skipped') &&
-      needs.build-preprocess.outputs.is_multimodule_lib != 'y' &&
-      needs.build-preprocess.outputs.snapshot_artifact == 'true'
+      contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'snapshot_artifact')
     steps:
       - *shallow-checkout
       - *setup-java
       - *setup-maven
       - *maven-artifact
+      - *resolve-deploy-artifact
       - &create-github-packages-token
         name: Create GitHub Packages token
         id: github-packages-token
@@ -575,9 +572,9 @@ jobs:
             -DgeneratePom=false
             -DrepositoryId=github
             -DpomFile=pom.xml
-            -Dpackaging=${{ needs.build-preprocess.outputs.packaging }}
+            -Dpackaging=${{ steps.deploy-artifact.outputs.packaging }}
             -Durl=https://maven.pkg.github.com/${{ github.repository }}
-            -Dfile=target/${{ needs.build-preprocess.outputs.artifact_id }}-${{ needs.build-preprocess.outputs.project_version }}.${{ needs.build-preprocess.outputs.packaging }}
+            -Dfile=${{ steps.deploy-artifact.outputs.file }}
 
   release-nexus-artifacts:
     name: Release Nexus artifacts
@@ -591,8 +588,7 @@ jobs:
       github.event_name != 'pull_request' &&
       needs.sonar.result == 'success' &&
       (needs.sonar-pr.result == 'success' || needs.sonar-pr.result == 'skipped') &&
-      needs.build-preprocess.outputs.is_multimodule_lib != 'y' &&
-      needs.build-preprocess.outputs.release_artifact == 'true'
+      contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'release_artifact')
     steps:
       - *shallow-checkout
       - *setup-java
@@ -626,8 +622,7 @@ jobs:
       inputs.publish-to-github-packages &&
       needs.sonar.result == 'success' &&
       (needs.sonar-pr.result == 'success' || needs.sonar-pr.result == 'skipped') &&
-      needs.build-preprocess.outputs.is_multimodule_lib != 'y' &&
-      needs.build-preprocess.outputs.release_artifact == 'true'
+      contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'release_artifact')
     steps:
       - *shallow-checkout
       - *setup-java
@@ -657,7 +652,7 @@ jobs:
       needs.build_and_unit_test.result == 'success' &&
       (needs.sonar.result == 'success' || needs.sonar.result == 'skipped') &&
       (needs.sonar-pr.result == 'success' || needs.sonar-pr.result == 'skipped') &&
-      needs.build-preprocess.outputs.docker == 'true'
+      contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'docker')
     outputs:
       image: ${{ steps.push.outputs.image }}
     steps:
@@ -666,20 +661,17 @@ jobs:
 
       - name: Resolve application jar
         id: artifact
-        env:
-          ARTIFACT_ID: ${{ needs.build-preprocess.outputs.artifact_id }}
-          PACKAGING: ${{ needs.build-preprocess.outputs.packaging }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          ext="${PACKAGING:-jar}"
           candidates=(
-            target/"${ARTIFACT_ID}"-*."${ext}"
-            */target/"${ARTIFACT_ID}"-*."${ext}"
-            target/*."${ext}"
+            target/*.jar
+            */target/*.jar
+            target/*.war
+            */target/*.war
           )
           if [[ "${#candidates[@]}" -eq 0 ]]; then
-            echo "::error::no ${ext} found under target/ for artifact ${ARTIFACT_ID}" >&2
+            echo "::error::no jar/war found under target/" >&2
             exit 1
           fi
           ARTIFACT="${candidates[0]}"

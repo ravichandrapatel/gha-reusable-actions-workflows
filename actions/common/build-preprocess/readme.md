@@ -52,13 +52,7 @@ If the caller is not listed and `soft` is false, the action **exits 1**. With `s
 | `repo` | Resolved caller repo used for the match. |
 | `branch` | Resolved branch used for the allowlist check. |
 | `approved` | `true` when the branch matches an approved glob. |
-| `stages` | Comma-separated summary of stages to run (prefer the boolean outputs below). |
-| `build_and_unit_test` | `true` when the build/unit-test stage should run. |
-| `owasp` | `true` when the OWASP stage should run. |
-| `sonar` | `true` when the Sonar stage should run. |
-| `snapshot_artifact` | `true` when not auto-commit, branch is `develop`, and not a pull request. |
-| `release_artifact` | `true` when not auto-commit, `push` or `workflow_dispatch` on `release/*` or `hotfix/*`, and not a pull request. |
-| `docker` | `true` when not auto-commit, not a library, `push` or `workflow_dispatch`, and not a pull request. |
+| `build_stages` | JSON array of **enabled** stage names. Gate with `contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'owasp')`. |
 | `auto_commit` | `true` when `github.actor` matches `bot_name`. |
 | `bot_name` | Configured auto-commit bot name. |
 | `app_build_type` | Validated `maven`, `ng-ui`, or `dotnet`. |
@@ -75,15 +69,13 @@ If the caller is not listed and `soft` is false, the action **exits 1**. With `s
 | `cpgbuild_app_origin` | From `build.values` `CPGBUILD_APP_ORIGIN` (fallback `CPGBUILD_APPORIGIN`), stripped. |
 | `checkstyle_skip` | `true` when `cpgbuild_app_origin` is non-empty; `false` otherwise. |
 | `lib_01` / `lib_02` / `lib_03` | Optional from `build.values` `LIB_01` / `LIB_02` / `LIB_03` (empty when unset or commented). |
-| `is_library` | Maven/dotnet: `n` when `project.values` has `TEMPLATE`; `y` when `TEMPLATE` is missing. Empty for ng-ui. |
-| `is_multimodule_lib` | Maven library only (`is_library=y`): `y` when root `pom.xml` has at least one non-empty `<module>` under `<modules>`; `n` otherwise. Empty for apps and non-maven. Fails when a library has `packaging=pom` but no modules. |
+| `is_library` | Maven/dotnet: `n` when `project.values` has `TEMPLATE`; `y` when `TEMPLATE` is missing. Empty for ng-ui. Docker is skipped when this value equals `y` (case-insensitive). |
 | `sonar_inclusions` | `-Dsonar.inclusions=<list>` when `CPGBUILD_SONAR_INCLUSION_LIST` is set; empty otherwise. |
 | `sonar_exclusions` | `-Dsonar.exclusions=<list>` when `CPGBUILD_SONAR_EXCLUSION_LIST` is set; empty otherwise. |
 | `sonar_cli_args` | Joined inclusion and exclusion `-D` arguments. |
 | `application_version` | ng-ui: `dependencies.@test/components` when declared (strips npm range markers like `^`/`~`), else `package.json` `version`. Maven: parent `<version>` when parent exists, else project `<version>`. Dotnet: `build/Build.csproj` `<Version>`, else `Directory.Build.props` `<Version>`. |
 | `parent_version` | ng-ui: `@test/components` version when declared (range markers stripped). Maven: `parent/version`. Dotnet: `Directory.Build.props` `<Version>`. |
 | `project_version` | ng-ui: `package.json` `version`. Maven: project `<version>`. Dotnet: `build/Build.csproj` `<Version>`. |
-| `artifact_id` | Maven: `pom.xml` `artifactId`. Dotnet: `build/Build.csproj` `AssemblyName` or filename stem. |
 | `name` | From `pom.xml` `name` when `app_build_type` is `maven`. |
 | `java_version` | From `pom.xml` `properties/java.version` when `app_build_type` is `maven`. |
 | `node_version` | From `package.json` `engines.node`, or `.nvmrc` / `.node-version`, when `app_build_type` is `ng-ui`. |
@@ -136,12 +128,18 @@ python3 -u actions/common/build-preprocess/preprocess.py --branch feature/foo --
 
 Every build type reads `project.values` and `build.values` from the caller repo root (`GITHUB_WORKSPACE` after checkout, else the current directory). Missing files fail the step.
 
-- Auto-commit (`github.actor` equals `bot_name`, or actor ends with `[bot]` when `bot_name` is empty): stage booleans are `false`, `stages` is empty, and snapshot/release/docker are `false`.
-- `build_and_unit_test` / `owasp` / `sonar`: `true` when not auto-commit.
-- `snapshot_artifact`: not auto-commit, branch is `develop`, and the event is not a pull request.
-- `release_artifact`: not auto-commit, `push` or `workflow_dispatch` on `release/*` or `hotfix/*`, and not a pull request.
-- `docker`: not auto-commit, not a library (`is_library` is not `y`), `push` or `workflow_dispatch`, and not a pull request.
-- `stages` is a comma-separated summary of the same tokens; use the boolean outputs in job `if:` conditions.
+- Auto-commit (`github.actor` equals `bot_name`, or actor ends with `[bot]` when `bot_name` is empty): `build_stages` is `[]`.
+- Otherwise `build_stages` includes `build_and_unit_test`, `owasp`, and `sonar`.
+- Branch names are normalized (`refs/heads/` stripped, whitespace trimmed) before stage checks; `main` / `master` / `develop` comparisons are case-insensitive.
+- `snapshot_artifact` is included when branch is `develop` and the event is not a pull request.
+- `release_artifact` is included for `push` / `workflow_dispatch` on `release/*` or `hotfix/*` (child segment required; bare `release` / `hotfix` do not match). For **ng-ui**, also on `main` / `master`.
+- `docker` is included for `push` / `workflow_dispatch` when not a library (`is_library` is not `y`/`Y`) and not a PR.
+
+Example job gate:
+
+```yaml
+if: contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'owasp')
+```
 
 Approved branches: `main`, `master`, `develop`, `feature/**`, `release/**`, `hotfix/**`, `bugfix/**`.
 

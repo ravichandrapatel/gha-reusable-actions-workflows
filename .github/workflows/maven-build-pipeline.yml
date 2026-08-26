@@ -70,15 +70,9 @@ on:
         required: false
         default: ci-publish
     outputs:
-      build_and_unit_test:
-        description: true when build-and-unit-test should run
-        value: ${{ jobs.build-preprocess.outputs.build_and_unit_test }}
-      owasp:
-        description: true when owasp should run
-        value: ${{ jobs.build-preprocess.outputs.owasp }}
-      sonar:
-        description: true when sonar should run
-        value: ${{ jobs.build-preprocess.outputs.sonar }}
+      stages:
+        description: JSON array of stages to run
+        value: ${{ jobs.build-preprocess.outputs.build_stages }}
       checkstyle_skip:
         description: true when CPGBUILD_APP_ORIGIN is set
         value: ${{ jobs.build-preprocess.outputs.checkstyle_skip }}
@@ -120,12 +114,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      build_and_unit_test: ${{ steps.preprocess.outputs.build_and_unit_test }}
-      owasp: ${{ steps.preprocess.outputs.owasp }}
-      sonar: ${{ steps.preprocess.outputs.sonar }}
-      snapshot_artifact: ${{ steps.preprocess.outputs.snapshot_artifact }}
-      release_artifact: ${{ steps.preprocess.outputs.release_artifact }}
-      docker: ${{ steps.preprocess.outputs.docker }}
+      build_stages: ${{ steps.preprocess.outputs.build_stages }}
       checkstyle_skip: ${{ steps.preprocess.outputs.checkstyle_skip }}
       cpgbuild_app_origin: ${{ steps.preprocess.outputs.cpgbuild_app_origin }}
       lib_01: ${{ steps.preprocess.outputs.lib_01 }}
@@ -139,7 +128,6 @@ jobs:
       sonar_cli_args: ${{ steps.preprocess.outputs.sonar_cli_args }}
       branch: ${{ steps.preprocess.outputs.branch }}
       java_version: ${{ steps.preprocess.outputs.java_version }}
-      artifact_id: ${{ steps.preprocess.outputs.artifact_id }}
       builder_base_image: ${{ steps.preprocess.outputs.builder_base_image }}
       is_library: ${{ steps.preprocess.outputs.is_library }}
     steps:
@@ -156,7 +144,7 @@ jobs:
   build-and-unit-test:
     name: build-and-unit-test
     needs: [build-preprocess]
-    if: needs.build-preprocess.outputs.build_and_unit_test == 'true'
+    if: contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'build_and_unit_test')
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
@@ -241,7 +229,7 @@ jobs:
   owasp:
     name: owasp
     needs: [build-preprocess]
-    if: needs.build-preprocess.outputs.owasp == 'true'
+    if: contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'owasp')
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
@@ -301,7 +289,7 @@ jobs:
     if: >-
       needs.build-and-unit-test.result == 'success'
       && (needs.owasp.result == 'success' || needs.owasp.result == 'skipped')
-      && needs.build-preprocess.outputs.sonar == 'true'
+      && contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'sonar')
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
@@ -364,8 +352,8 @@ jobs:
     if: >-
       needs.build-and-unit-test.result == 'success'
       && (needs.sonarqube.result == 'success' || needs.sonarqube.result == 'skipped')
-      && (needs.build-preprocess.outputs.snapshot_artifact == 'true'
-          || needs.build-preprocess.outputs.release_artifact == 'true')
+      && (contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'snapshot_artifact')
+          || contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'release_artifact'))
     runs-on: ${{ inputs.runner }}
     environment: ${{ inputs.deploy_environment }}
     permissions:
@@ -445,7 +433,7 @@ jobs:
     if: >-
       needs.build-and-unit-test.result == 'success'
       && (needs.sonarqube.result == 'success' || needs.sonarqube.result == 'skipped')
-      && needs.build-preprocess.outputs.docker == 'true'
+      && contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'docker')
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
@@ -478,14 +466,12 @@ jobs:
 
       - name: Resolve application jar
         id: artifact
-        env:
-          ARTIFACT_ID: ${{ needs.build-preprocess.outputs.artifact_id }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          candidates=(target/"${ARTIFACT_ID}"-*.jar target/*.jar)
+          candidates=(target/*.jar */target/*.jar)
           if [[ "${#candidates[@]}" -eq 0 ]]; then
-            echo "ERROR: no jar found under target/ for artifact ${ARTIFACT_ID}" >&2
+            echo "ERROR: no jar found under target/" >&2
             exit 1
           fi
           JAR="${candidates[0]}"

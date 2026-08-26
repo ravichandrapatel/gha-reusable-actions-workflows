@@ -1,7 +1,7 @@
 """
 FILE_NAME: preprocess.py
 DESCRIPTION: Branch allowlist, stages, values files, and maven/ng-ui/dotnet metadata.
-VERSION: 2.9.0
+VERSION: 2.10.0
 AUTHORS: DevOps Team
 """
 
@@ -16,7 +16,6 @@ from pathlib import Path
 import defusedxml.ElementTree as ET
 
 PROJECT_KEY = "BUILD-PREPROCESS"
-DOTNET_CSPROJ = Path("build") / "Build.csproj"
 
 ALLOWED_BRANCHES = (
     "main",
@@ -37,6 +36,11 @@ def _err(message: str) -> None:
     print(f"[{PROJECT_KEY}] {message}", file=sys.stderr)
 
 
+def _normalize_branch(branch: str) -> str:
+    """Strip whitespace and optional refs/heads/ prefix."""
+    return branch.removeprefix("refs/heads/").strip()
+
+
 def _tag(el: ET.Element) -> str:
     return el.tag.rsplit("}", 1)[-1]
 
@@ -50,25 +54,8 @@ def _child(el: ET.Element | None, name: str) -> ET.Element | None:
     return None
 
 
-def _children(el: ET.Element | None, name: str) -> list[ET.Element]:
-    if el is None:
-        return []
-    return [child for child in el if _tag(child) == name]
-
-
 def _text(el: ET.Element | None) -> str:
     return "" if el is None or el.text is None else el.text.strip()
-
-
-def _pom_module_names(root: ET.Element) -> list[str]:
-    """Non-empty <module> entries under root <modules>."""
-    modules_el = _child(root, "modules")
-    names: list[str] = []
-    for module_el in _children(modules_el, "module"):
-        name = _text(module_el)
-        if name:
-            names.append(name)
-    return names
 
 
 def _xml_prop(root: ET.Element, name: str) -> str:
@@ -126,7 +113,7 @@ def load_values(path: Path) -> dict[str, str]:
 
 def _resolve_dotnet_csproj(repo_root: Path) -> Path:
     """Fixed layout: build/Build.csproj (APPLICATION_NAME is not used for selection)."""
-    preferred = repo_root / DOTNET_CSPROJ
+    preferred = repo_root / "build" / "Build.csproj"
     if preferred.is_file():
         return preferred
     build_dir = repo_root / "build"
@@ -139,13 +126,14 @@ def _resolve_dotnet_csproj(repo_root: Path) -> Path:
 
 
 def branch_approved(branch: str, pattern: str | None = None) -> bool:
-    ref = branch.removeprefix("refs/heads/").strip()
+    ref = _normalize_branch(branch)
     for pat in ((pattern,) if pattern is not None else ALLOWED_BRANCHES):
         if pat.endswith("/**"):
+            # require a child segment: release/1.0 matches, bare "release" does not
             prefix = pat[:-3]
-            if ref == prefix or ref.startswith(prefix + "/"):
+            if ref.startswith(prefix + "/"):
                 return True
-        elif ref == pat:
+        elif ref.casefold() == pat.casefold():
             return True
     return False
 
@@ -171,30 +159,16 @@ def load_maven_metadata(repo_root: Path, project_values: dict[str, str]) -> dict
         raise ValueError("invalid pom.xml")
 
     is_library = "n" if project_values.get("TEMPLATE", "").strip() else "y"
-    packaging = _text(_child(root, "packaging")).casefold() or "jar"
-    is_multimodule_lib = ""
-    if is_library == "y":
-        module_names = _pom_module_names(root)
-        if packaging == "pom" and not module_names:
-            _err(
-                "library pom.xml with packaging=pom must declare at least one "
-                "non-empty <module> under <modules>"
-            )
-            raise ValueError("invalid multimodule library pom.xml")
-        is_multimodule_lib = "y" if module_names else "n"
 
     return {
         "application_version": application_version,
         "parent_version": parent_version,
         "project_version": project_version,
-        "artifact_id": artifact_id,
         "name": _text(_child(root, "name")),
         "java_version": java_version,
-        "packaging": packaging,
         "sonar_inclusions": _text(_child(properties_el, "sonar.inclusions")),
         "sonar_exclusions": _text(_child(properties_el, "sonar.exclusions")),
         "is_library": is_library,
-        "is_multimodule_lib": is_multimodule_lib,
     }
 
 
@@ -233,7 +207,7 @@ def load_dotnet_metadata(repo_root: Path, project_values: dict[str, str]) -> dic
 
     if not application_version or not artifact_id:
         _err(
-            f"{DOTNET_CSPROJ} / Directory.Build.props must provide Version and "
+            f"{csproj_path} / Directory.Build.props must provide Version and "
             "AssemblyName (or rely on Build.csproj filename)"
         )
         raise ValueError("invalid dotnet metadata")
@@ -242,13 +216,11 @@ def load_dotnet_metadata(repo_root: Path, project_values: dict[str, str]) -> dic
         "application_version": application_version,
         "parent_version": parent_version,
         "project_version": project_version,
-        "artifact_id": artifact_id,
         "name": _xml_prop(root, "Product") or _xml_prop(props_root, "Product"),
         "dotnet_version": dotnet_version,
         "sonar_inclusions": sonar_inclusions,
         "sonar_exclusions": sonar_exclusions,
         "is_library": "n" if project_values.get("TEMPLATE", "").strip() else "y",
-        "is_multimodule_lib": "",
     }
 
 
@@ -338,29 +310,31 @@ def build_stages(
     branch: str,
     event: str,
     is_library: str,
+    app_build_type: str,
 ) -> list[str]:
-    """Stage / publish tokens for the pipeline.
+    """Enabled stage names for the pipeline (JSON array for contains(fromJSON(...))).
 
     - snapshot_artifact: develop, not PR
-    - release_artifact: release/* or hotfix/*, push or workflow_dispatch, not PR
+    - release_artifact: release/* or hotfix/* (ng-ui also main/master), push or workflow_dispatch, not PR
     - docker: push or workflow_dispatch, not PR, not library
     """
     if auto_commit:
         return []
 
+    ref = _normalize_branch(branch)
+    ref_key = ref.casefold()
     is_pr = event.startswith("pull_request")
     is_ship_event = event in ("push", "workflow_dispatch")
-    stages = [s for s in BUILD_STAGES if s != "docker"]
+    stages = [name for name in BUILD_STAGES if name != "docker"]
 
-    if branch == "develop" and not is_pr:
+    if ref_key == "develop" and not is_pr:
         stages.append("snapshot_artifact")
-    if (
-        not is_pr
-        and is_ship_event
-        and (branch_approved(branch, "release/**") or branch_approved(branch, "hotfix/**"))
-    ):
+    release_ok = branch_approved(ref, "release/**") or branch_approved(ref, "hotfix/**")
+    if app_build_type == "ng-ui" and ref_key in ("main", "master"):
+        release_ok = True
+    if not is_pr and is_ship_event and release_ok:
         stages.append("release_artifact")
-    if is_library != "y" and not is_pr and is_ship_event:
+    if is_library.casefold() != "y" and not is_pr and is_ship_event:
         stages.append("docker")
     return stages
 
@@ -378,9 +352,6 @@ def build_outputs(
     build_values: dict[str, str],
     project_values: dict[str, str],
 ) -> dict[str, str]:
-    def flag(name: str) -> str:
-        return "true" if name in stages else "false"
-
     inclusion = (
         build_values.get("CPGBUILD_SONAR_INCLUSION_LIST", "").strip()
         or project_meta.get("sonar_inclusions", "").strip()
@@ -406,28 +377,19 @@ def build_outputs(
         "actor": actor,
         "bot_name": bot_name,
         "auto_commit": "true" if auto_commit else "false",
-        "build_and_unit_test": flag("build_and_unit_test"),
-        "owasp": flag("owasp"),
-        "sonar": flag("sonar"),
-        "snapshot_artifact": flag("snapshot_artifact"),
-        "release_artifact": flag("release_artifact"),
-        "docker": flag("docker"),
-        "stages": ",".join(stages),
+        "build_stages": json.dumps(stages, separators=(",", ":"), ensure_ascii=False),
         "app_build_type": app_build_type,
         "application_version": project_meta.get("application_version", ""),
         "parent_version": project_meta.get("parent_version", ""),
         "project_version": project_meta.get("project_version", ""),
-        "artifact_id": project_meta.get("artifact_id", ""),
         "name": project_meta.get("name", ""),
         "java_version": project_meta.get("java_version", ""),
-        "packaging": project_meta.get("packaging", ""),
         "node_version": project_meta.get("node_version", ""),
         "dotnet_version": project_meta.get("dotnet_version", ""),
         "cpgbuild_app_origin": cpg_origin,
         "checkstyle_skip": "true" if cpg_origin else "false",
         **lib_outputs,
         "is_library": project_meta.get("is_library", ""),
-        "is_multimodule_lib": project_meta.get("is_multimodule_lib", ""),
         "sonar_inclusions": sonar_inclusions,
         "sonar_exclusions": sonar_exclusions,
         "sonar_cli_args": " ".join(p for p in (sonar_inclusions, sonar_exclusions) if p),
@@ -456,11 +418,11 @@ def main() -> int:
     parser.add_argument("--output", default="")
     args = parser.parse_args()
 
-    branch = (
+    branch = _normalize_branch(
         args.branch.strip()
         or os.environ.get("GITHUB_HEAD_REF", "").strip()
         or os.environ.get("GITHUB_REF_NAME", "").strip()
-    ).removeprefix("refs/heads/").strip()
+    )
     if not branch:
         _err("pass --branch or set GITHUB_HEAD_REF / GITHUB_REF_NAME")
         return 1
@@ -503,6 +465,7 @@ def main() -> int:
         branch=branch,
         event=event,
         is_library=project_meta.get("is_library", ""),
+        app_build_type=args.app_build_type,
     )
     outputs = build_outputs(
         branch=branch,

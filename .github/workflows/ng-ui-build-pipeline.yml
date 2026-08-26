@@ -65,15 +65,9 @@ on:
         required: false
         default: ci-publish
     outputs:
-      build_and_unit_test:
-        description: true when build-and-unit-test-lint should run
-        value: ${{ jobs.build-preprocess.outputs.build_and_unit_test }}
-      owasp:
-        description: true when owasp should run
-        value: ${{ jobs.build-preprocess.outputs.owasp }}
-      sonar:
-        description: true when sonar should run
-        value: ${{ jobs.build-preprocess.outputs.sonar }}
+      stages:
+        description: JSON array of stages to run
+        value: ${{ jobs.build-preprocess.outputs.build_stages }}
       checkstyle_skip:
         description: true when CPGBUILD_APP_ORIGIN is set
         value: ${{ jobs.build-preprocess.outputs.checkstyle_skip }}
@@ -112,12 +106,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      build_and_unit_test: ${{ steps.preprocess.outputs.build_and_unit_test }}
-      owasp: ${{ steps.preprocess.outputs.owasp }}
-      sonar: ${{ steps.preprocess.outputs.sonar }}
-      snapshot_artifact: ${{ steps.preprocess.outputs.snapshot_artifact }}
-      release_artifact: ${{ steps.preprocess.outputs.release_artifact }}
-      docker: ${{ steps.preprocess.outputs.docker }}
+      build_stages: ${{ steps.preprocess.outputs.build_stages }}
       checkstyle_skip: ${{ steps.preprocess.outputs.checkstyle_skip }}
       cpgbuild_app_origin: ${{ steps.preprocess.outputs.cpgbuild_app_origin }}
       lib_01: ${{ steps.preprocess.outputs.lib_01 }}
@@ -144,7 +133,7 @@ jobs:
   build-and-unit-test-lint:
     name: build-and-unit-test-lint
     needs: [build-preprocess]
-    if: needs.build-preprocess.outputs.build_and_unit_test == 'true'
+    if: contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'build_and_unit_test')
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
@@ -208,7 +197,7 @@ jobs:
   owasp:
     name: owasp
     needs: [build-preprocess]
-    if: needs.build-preprocess.outputs.owasp == 'true'
+    if: contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'owasp')
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
@@ -248,7 +237,7 @@ jobs:
     if: >-
       needs.build-and-unit-test-lint.result == 'success'
       && (needs.owasp.result == 'success' || needs.owasp.result == 'skipped')
-      && needs.build-preprocess.outputs.sonar == 'true'
+      && contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'sonar')
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
@@ -314,8 +303,8 @@ jobs:
     if: >-
       needs.build-and-unit-test-lint.result == 'success'
       && (needs.sonarqube.result == 'success' || needs.sonarqube.result == 'skipped')
-      && (needs.build-preprocess.outputs.snapshot_artifact == 'true'
-          || needs.build-preprocess.outputs.release_artifact == 'true')
+      && (contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'snapshot_artifact')
+          || contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'release_artifact'))
     runs-on: ${{ inputs.runner }}
     environment: ${{ inputs.deploy_environment }}
     permissions:
@@ -358,7 +347,7 @@ jobs:
     if: >-
       needs.build-and-unit-test-lint.result == 'success'
       && (needs.sonarqube.result == 'success' || needs.sonarqube.result == 'skipped')
-      && needs.build-preprocess.outputs.docker == 'true'
+      && contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'docker')
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read

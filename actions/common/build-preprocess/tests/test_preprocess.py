@@ -12,6 +12,17 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parents[1] / "preprocess.py"
 TEMP = Path(__file__).resolve().parents[4] / "temp"
 
+sys.path.insert(0, str(SCRIPT.parent))
+from preprocess import branch_approved, build_stages  # noqa: E402
+
+
+def stages_from_stdout(stdout: str) -> list[str]:
+    for line in stdout.splitlines():
+        if line.startswith("What is the build stages? : "):
+            return json.loads(line.split(" : ", 1)[1])
+    raise AssertionError("build_stages output line not found")
+
+
 
 def write_dotnet_layout(
     root: Path,
@@ -95,8 +106,8 @@ class PreprocessTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("What is the application version? : 2.7.18", result.stdout)
-        self.assertIn("What is the snapshot artifact? : true", result.stdout)
-        self.assertIn("What is the docker? : true", result.stdout)
+        self.assertIn("snapshot_artifact", stages_from_stdout(result.stdout))
+        self.assertIn("docker", stages_from_stdout(result.stdout))
         self.assertIn("sonar.exclusions=***/target/**", result.stdout)
 
     def test_develop_push_includes_docker(self) -> None:
@@ -105,7 +116,7 @@ class PreprocessTests(unittest.TestCase):
             event="push",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("What is the docker? : true", result.stdout)
+        self.assertIn("docker", stages_from_stdout(result.stdout))
 
     def test_develop_defaults_event_to_push_when_unset(self) -> None:
         """Local CLI without --event should behave like push (docker on)."""
@@ -115,7 +126,7 @@ class PreprocessTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("What is the event? : push", result.stdout)
-        self.assertIn("What is the docker? : true", result.stdout)
+        self.assertIn("docker", stages_from_stdout(result.stdout))
 
     def test_pull_request_skips_docker(self) -> None:
         result = run_preprocess(
@@ -123,7 +134,7 @@ class PreprocessTests(unittest.TestCase):
             event="pull_request",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("What is the docker? : false", result.stdout)
+        self.assertNotIn("docker", stages_from_stdout(result.stdout))
 
     def test_temp_dotnet_develop_snapshot(self) -> None:
         result = run_preprocess(
@@ -187,6 +198,40 @@ class PreprocessTests(unittest.TestCase):
         self.assertIn("What is the project version? : 1.0.0", result.stdout)
         self.assertIn("What is the node version? : >=18.20.0 <22.0.0", result.stdout)
 
+    def test_ng_ui_main_push_includes_release_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "project.values").write_text(
+                "TEMPLATE=build-ng-ui\nAPPLICATION_NAME=ng-ui\n",
+                encoding="utf-8",
+            )
+            (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
+            (root / "package.json").write_text(
+                json.dumps({"version": "1.0.0", "engines": {"node": "20"}}),
+                encoding="utf-8",
+            )
+            result = run_preprocess(
+                root,
+                app_build_type="ng-ui",
+                branch="main",
+                event="push",
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        stages = stages_from_stdout(result.stdout)
+        self.assertIn("release_artifact", stages)
+        self.assertIn("docker", stages)
+        self.assertNotIn("snapshot_artifact", stages)
+
+    def test_maven_main_push_skips_release_artifact(self) -> None:
+        result = run_preprocess(
+            TEMP / "ccmo-shippingtools-snapshipadmin-jsb-ui",
+            app_build_type="maven",
+            branch="main",
+            event="push",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("release_artifact", stages_from_stdout(result.stdout))
+
     def test_ng_ui_node_version_from_nvmrc(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -245,7 +290,6 @@ class PreprocessTests(unittest.TestCase):
         self.assertIn("What is the application version? : 2.1.0", result.stdout)
         self.assertIn("What is the parent version? : 2.1.0", result.stdout)
         self.assertIn("What is the dotnet version? : 8.0.401", result.stdout)
-        self.assertIn("What is the artifact id? : ams2-dnc-svc", result.stdout)
 
     def test_dotnet_requires_build_csproj(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -272,8 +316,8 @@ class PreprocessTests(unittest.TestCase):
             (root / "build" / "Build.csproj").rename(root / "build" / "build.csproj")
             result = run_preprocess(root, app_build_type="dotnet")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("What is the artifact id? : build", result.stdout)
         self.assertIn("What is the application version? : 9.9.9", result.stdout)
+        self.assertIn("What is the dotnet version? : 8.0.100", result.stdout)
 
     def test_unapproved_branch_fails(self) -> None:
         result = run_preprocess(TEMP / "coo-ams-aim2-dnc-svc", branch="not-allowed")
@@ -287,8 +331,9 @@ class PreprocessTests(unittest.TestCase):
             event="workflow_dispatch",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("release_artifact,docker", result.stdout)
-        self.assertIn("What is the docker? : true", result.stdout)
+        stages = stages_from_stdout(result.stdout)
+        self.assertIn("release_artifact", stages)
+        self.assertIn("docker", stages)
 
     def test_release_push_includes_release_artifact_and_docker(self) -> None:
         result = run_preprocess(
@@ -297,10 +342,10 @@ class PreprocessTests(unittest.TestCase):
             event="push",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("What is the release artifact? : true", result.stdout)
-        self.assertIn("What is the docker? : true", result.stdout)
-        self.assertIn("What is the build and unit test? : true", result.stdout)
-        self.assertIn("release_artifact,docker", result.stdout)
+        stages = stages_from_stdout(result.stdout)
+        self.assertIn("release_artifact", stages)
+        self.assertIn("docker", stages)
+        self.assertIn("build_and_unit_test", stages)
 
     def test_pull_request_skips_snapshot(self) -> None:
         result = run_preprocess(
@@ -308,7 +353,7 @@ class PreprocessTests(unittest.TestCase):
             event="pull_request",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("What is the snapshot artifact? : false", result.stdout)
+        self.assertNotIn("snapshot_artifact", stages_from_stdout(result.stdout))
 
     def test_auto_commit_skips_stages(self) -> None:
         result = run_preprocess(
@@ -318,10 +363,11 @@ class PreprocessTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("What is the auto commit? : true", result.stdout)
-        self.assertIn("What is the build and unit test? : false", result.stdout)
-        self.assertIn("What is the owasp? : false", result.stdout)
-        self.assertIn("What is the sonar? : false", result.stdout)
-        self.assertIn("What is the stages? : \n", result.stdout)
+        stages = stages_from_stdout(result.stdout)
+        self.assertNotIn("build_and_unit_test", stages)
+        self.assertNotIn("owasp", stages)
+        self.assertNotIn("sonar", stages)
+        self.assertEqual(stages, [])
 
     def test_auto_detect_github_actions_bot_without_bot_name(self) -> None:
         result = run_preprocess(
@@ -346,94 +392,45 @@ class PreprocessTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("What is the is library? : y", result.stdout)
-            self.assertIn("What is the docker? : false", result.stdout)
-            self.assertIn("What is the release artifact? : true", result.stdout)
+            self.assertNotIn("docker", stages_from_stdout(result.stdout))
+            self.assertIn("release_artifact", stages_from_stdout(result.stdout))
 
     def _write_maven_lib(
         self,
         root: Path,
         *,
         project_values: str,
-        packaging: str = "jar",
-        modules: list[str] | None = None,
     ) -> None:
         (root / "project.values").write_text(project_values, encoding="utf-8")
         (root / "build.values").write_text("BUILDER_BASE_IMAGE=img\n", encoding="utf-8")
-        modules_xml = ""
-        if modules is not None:
-            body = "".join(f"    <module>{m}</module>\n" for m in modules)
-            modules_xml = f"  <modules>\n{body}  </modules>\n"
         (root / "pom.xml").write_text(
-            f"""<?xml version="1.0" encoding="UTF-8"?>
+            """<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.example</groupId>
   <artifactId>demo-lib</artifactId>
   <version>1.0.0</version>
-  <packaging>{packaging}</packaging>
+  <packaging>jar</packaging>
   <name>Demo Lib</name>
   <properties>
     <java.version>21</java.version>
   </properties>
-{modules_xml}</project>
+</project>
 """,
             encoding="utf-8",
         )
 
-    def test_maven_app_skips_multimodule_lib_check(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            self._write_maven_lib(
-                root,
-                project_values="TEMPLATE=build-spring-boot-svc-v2.1\nAPPLICATION_NAME=demo\n",
-                packaging="pom",
-                modules=None,
-            )
-            result = run_preprocess(root, app_build_type="maven")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("What is the is library? : n", result.stdout)
-        self.assertIn("What is the is multimodule lib? : \n", result.stdout)
-
-    def test_maven_library_single_module(self) -> None:
+    def test_maven_library_skips_docker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._write_maven_lib(
                 root,
                 project_values="APPLICATION_NAME=demo-lib\n",
-                packaging="jar",
             )
             result = run_preprocess(root, app_build_type="maven")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("What is the is library? : y", result.stdout)
-        self.assertIn("What is the is multimodule lib? : n", result.stdout)
-        self.assertIn("What is the docker? : false", result.stdout)
-
-    def test_maven_library_multimodule(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            self._write_maven_lib(
-                root,
-                project_values="APPLICATION_NAME=demo-lib\n",
-                packaging="pom",
-                modules=["module-a", "module-b"],
-            )
-            result = run_preprocess(root, app_build_type="maven")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("What is the is library? : y", result.stdout)
-        self.assertIn("What is the is multimodule lib? : y", result.stdout)
-
-    def test_maven_library_pom_packaging_requires_modules(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            self._write_maven_lib(
-                root,
-                project_values="APPLICATION_NAME=demo-lib\n",
-                packaging="pom",
-                modules=None,
-            )
-            result = run_preprocess(root, app_build_type="maven")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("packaging=pom must declare at least one", result.stderr)
+        self.assertNotIn("docker", stages_from_stdout(result.stdout))
 
     def test_build_values_overrides_sonar(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -513,6 +510,73 @@ class PreprocessTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("What is the cpgbuild app origin? : legacy-origin", result.stdout)
         self.assertIn("What is the checkstyle skip? : true", result.stdout)
+
+    def test_normalize_refs_heads_for_snapshot_and_ng_ui_release(self) -> None:
+        develop = build_stages(
+            auto_commit=False,
+            branch="refs/heads/develop",
+            event="push",
+            is_library="n",
+            app_build_type="maven",
+        )
+        self.assertIn("snapshot_artifact", develop)
+        self.assertIn("docker", develop)
+
+        ng_main = build_stages(
+            auto_commit=False,
+            branch="refs/heads/main",
+            event="push",
+            is_library="n",
+            app_build_type="ng-ui",
+        )
+        self.assertIn("release_artifact", ng_main)
+        self.assertIn("docker", ng_main)
+
+        spaced = build_stages(
+            auto_commit=False,
+            branch=" develop ",
+            event="push",
+            is_library="n",
+            app_build_type="maven",
+        )
+        self.assertIn("snapshot_artifact", spaced)
+
+    def test_casefold_well_known_branches(self) -> None:
+        stages = build_stages(
+            auto_commit=False,
+            branch="Main",
+            event="push",
+            is_library="n",
+            app_build_type="ng-ui",
+        )
+        self.assertIn("release_artifact", stages)
+        self.assertTrue(branch_approved("MAIN"))
+        self.assertTrue(branch_approved("Develop"))
+
+    def test_is_library_casefold_skips_docker(self) -> None:
+        stages = build_stages(
+            auto_commit=False,
+            branch="main",
+            event="push",
+            is_library="Y",
+            app_build_type="maven",
+        )
+        self.assertNotIn("docker", stages)
+
+    def test_bare_release_hotfix_not_approved(self) -> None:
+        self.assertFalse(branch_approved("release"))
+        self.assertFalse(branch_approved("hotfix"))
+        self.assertFalse(branch_approved("feature"))
+        self.assertTrue(branch_approved("release/1.0"))
+        self.assertTrue(branch_approved("hotfix/x"))
+        bare = build_stages(
+            auto_commit=False,
+            branch="release",
+            event="push",
+            is_library="n",
+            app_build_type="maven",
+        )
+        self.assertNotIn("release_artifact", bare)
 
 
 if __name__ == "__main__":

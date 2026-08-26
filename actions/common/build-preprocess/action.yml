@@ -49,27 +49,11 @@ outputs:
   approved:
     description: 'true when the branch matches an approved glob; false on --soft miss'
     value: ${{ steps.branch.outputs.approved }}
-  stages:
-    description: 'Comma-separated stages to run (summary; prefer per-stage booleans)'
-    value: ${{ steps.branch.outputs.stages }}
-  build_and_unit_test:
-    description: 'true when the build_and_unit_test stage should run'
-    value: ${{ steps.branch.outputs.build_and_unit_test }}
-  owasp:
-    description: 'true when the owasp stage should run'
-    value: ${{ steps.branch.outputs.owasp }}
-  sonar:
-    description: 'true when the sonar stage should run'
-    value: ${{ steps.branch.outputs.sonar }}
-  snapshot_artifact:
-    description: 'true when not auto-commit, branch is develop, and the event is not a pull request'
-    value: ${{ steps.branch.outputs.snapshot_artifact }}
-  release_artifact:
-    description: 'true when not auto-commit, push or workflow_dispatch on release/* or hotfix/*, and not a pull request'
-    value: ${{ steps.branch.outputs.release_artifact }}
-  docker:
-    description: 'true when not auto-commit, not a library, push or workflow_dispatch, and not a pull request'
-    value: ${{ steps.branch.outputs.docker }}
+  build_stages:
+    description: >-
+      JSON array of enabled stage names. Gate with
+      contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'owasp')
+    value: ${{ steps.branch.outputs.build_stages }}
   auto_commit:
     description: 'true when github.actor matches bot_name'
     value: ${{ steps.branch.outputs.auto_commit }}
@@ -127,9 +111,6 @@ outputs:
   is_library:
     description: 'maven/dotnet: n when project.values has TEMPLATE; y when TEMPLATE is missing'
     value: ${{ steps.branch.outputs.is_library }}
-  is_multimodule_lib:
-    description: 'maven library only: y when pom.xml has non-empty modules; n otherwise; empty for apps/non-maven'
-    value: ${{ steps.branch.outputs.is_multimodule_lib }}
   sonar_inclusions:
     description: '-Dsonar.inclusions=<list> when CPGBUILD_SONAR_INCLUSION_LIST is set in build.values'
     value: ${{ steps.branch.outputs.sonar_inclusions }}
@@ -148,18 +129,12 @@ outputs:
   project_version:
     description: 'ng-ui package.json version; maven project version (SNAPSHOT left as-is)'
     value: ${{ steps.branch.outputs.project_version }}
-  artifact_id:
-    description: 'From pom.xml artifactId when app_build_type is maven'
-    value: ${{ steps.branch.outputs.artifact_id }}
   name:
     description: 'From pom.xml name when app_build_type is maven'
     value: ${{ steps.branch.outputs.name }}
   java_version:
     description: 'From pom.xml properties/java.version when app_build_type is maven'
     value: ${{ steps.branch.outputs.java_version }}
-  packaging:
-    description: 'From pom.xml packaging when app_build_type is maven (default jar)'
-    value: ${{ steps.branch.outputs.packaging }}
   node_version:
     description: 'From package.json engines.node or .nvmrc/.node-version when app_build_type is ng-ui'
     value: ${{ steps.branch.outputs.node_version }}
