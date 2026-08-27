@@ -1,7 +1,7 @@
 # =============================================================================
 # FILE_NAME: workflow.yml
 # DESCRIPTION: Reusable ng-ui CI — preprocess, build/test/lint, OWASP, Sonar, publish, docker.
-# VERSION: 1.4.0
+# VERSION: 1.6.0
 # AUTHORS: DevOps Team
 # =============================================================================
 
@@ -77,8 +77,14 @@ on:
         description: From project.values
         value: ${{ jobs.build-preprocess.outputs.application_name }}
       application_version:
-        description: package.json version
+        description: '@test/components when declared, else package.json version'
         value: ${{ jobs.build-preprocess.outputs.application_version }}
+      parent_version:
+        description: '@test/components version when declared (range markers stripped)'
+        value: ${{ jobs.build-preprocess.outputs.parent_version }}
+      project_version:
+        description: package.json version
+        value: ${{ jobs.build-preprocess.outputs.project_version }}
       quality_gate_status:
         description: Sonar quality gate from branch or PR scan
         value: ${{ jobs.sonarqube.outputs.quality_gate_status }}
@@ -104,6 +110,8 @@ jobs:
       lib_03: ${{ steps.preprocess.outputs.lib_03 }}
       application_name: ${{ steps.preprocess.outputs.application_name }}
       application_version: ${{ steps.preprocess.outputs.application_version }}
+      parent_version: ${{ steps.preprocess.outputs.parent_version }}
+      project_version: ${{ steps.preprocess.outputs.project_version }}
       organization: ${{ steps.preprocess.outputs.organization }}
       product: ${{ steps.preprocess.outputs.product }}
       sonar_cli_args: ${{ steps.preprocess.outputs.sonar_cli_args }}
@@ -120,8 +128,8 @@ jobs:
           app_build_type: ng-ui
           bot_name: ${{ inputs.bot_name }}
 
-  build-and-unit-test-lint:
-    name: build-and-unit-test-lint
+  build-and-unit-test:
+    name: build-and-unit-test
     needs: [build-preprocess]
     if: contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'build_and_unit_test')
     runs-on: ${{ inputs.runner }}
@@ -223,9 +231,9 @@ jobs:
 
   sonarqube:
     name: sonarqube
-    needs: [build-preprocess, build-and-unit-test-lint, owasp]
+    needs: [build-preprocess, build-and-unit-test, owasp]
     if: >-
-      needs.build-and-unit-test-lint.result == 'success'
+      needs.build-and-unit-test.result == 'success'
       && (needs.owasp.result == 'success' || needs.owasp.result == 'skipped')
       && contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'sonar')
     runs-on: ${{ inputs.runner }}
@@ -289,9 +297,9 @@ jobs:
 
   publish:
     name: publish
-    needs: [build-preprocess, build-and-unit-test-lint, sonarqube]
+    needs: [build-preprocess, build-and-unit-test, sonarqube]
     if: >-
-      needs.build-and-unit-test-lint.result == 'success'
+      needs.build-and-unit-test.result == 'success'
       && (needs.sonarqube.result == 'success' || needs.sonarqube.result == 'skipped')
       && (contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'snapshot_artifact')
           || contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'release_artifact'))
@@ -333,9 +341,9 @@ jobs:
 
   docker-build:
     name: docker-build
-    needs: [build-preprocess, build-and-unit-test-lint, sonarqube]
+    needs: [build-preprocess, build-and-unit-test, sonarqube]
     if: >-
-      needs.build-and-unit-test-lint.result == 'success'
+      needs.build-and-unit-test.result == 'success'
       && (needs.sonarqube.result == 'success' || needs.sonarqube.result == 'skipped')
       && contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'docker')
     runs-on: ${{ inputs.runner }}

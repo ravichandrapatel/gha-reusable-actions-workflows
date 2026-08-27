@@ -1,0 +1,60 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Read Maven POM coordinates, packaging, project version, and multi-module flag.
+# VERSION: 1.2.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: 'Read Maven POM'
+description: 'Extract groupId, artifactId, packaging, version, and is_multi_module from a Maven POM'
+
+inputs:
+  pom_file:
+    description: 'POM path relative to working_directory (basename or nested path; no ..)'
+    required: false
+    default: 'pom.xml'
+  working_directory:
+    description: 'Directory that contains the POM. Empty uses GITHUB_WORKSPACE, else cwd'
+    required: false
+    default: ''
+
+outputs:
+  group_id:
+    description: 'Project groupId, else parent groupId'
+    value: ${{ steps.read.outputs.group_id }}
+  artifact_id:
+    description: 'Project artifactId'
+    value: ${{ steps.read.outputs.artifact_id }}
+  packaging:
+    description: 'Project packaging; jar when the element is omitted'
+    value: ${{ steps.read.outputs.packaging }}
+  version:
+    description: 'Project <version> with trailing -SNAPSHOT stripped (not parent)'
+    value: ${{ steps.read.outputs.version }}
+  is_multi_module:
+    description: 'true when the POM lists at least one <modules>/<module>'
+    value: ${{ steps.read.outputs.is_multi_module }}
+
+runs:
+  using: composite
+  steps:
+    - name: Read Maven POM
+      id: read
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        POM_FILE: ${{ inputs.pom_file }}
+        WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        PYTHONUNBUFFERED: "1"
+        PIP_BREAK_SYSTEM_PACKAGES: "1"
+      run: |
+        set -euo pipefail
+        python3 -m pip install --user --quiet --disable-pip-version-check -r "${ACTION_PATH}/requirements.txt"
+        ARGS=(
+          --pom "${POM_FILE}"
+          --output "${GITHUB_OUTPUT}"
+        )
+        if [[ -n "${WORKING_DIRECTORY}" ]]; then
+          ARGS+=(--working-directory "${WORKING_DIRECTORY}")
+        fi
+        python3 -u "${ACTION_PATH}/read_maven_pom.py" "${ARGS[@]}"

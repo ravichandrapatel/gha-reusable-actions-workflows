@@ -186,7 +186,6 @@ jobs:
         with:
           repo: ${{ inputs.app-repo != '' && inputs.app-repo || github.repository }}
           app_build_type: ${{ inputs.app-build-type }}
-          soft: "true"
 
   build-test-lint:
     name: build-test-lint

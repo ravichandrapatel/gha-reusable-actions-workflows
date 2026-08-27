@@ -1,7 +1,7 @@
 """
 FILE_NAME: checkInventory.py
 DESCRIPTION: Match caller repo against inventory.json under ACTION_PATH.
-VERSION: 1.6.0
+VERSION: 1.7.0
 AUTHORS: DevOps Team
 """
 
@@ -20,7 +20,6 @@ def main() -> int:
     parser.add_argument("--inventory-file", default="inventory.json")
     parser.add_argument("--repo", default="")
     parser.add_argument("--output", default="")
-    parser.add_argument("--soft", action="store_true")
     args = parser.parse_args()
 
     action_dir = (
@@ -60,8 +59,7 @@ def main() -> int:
     }
     if not matched:
         print(f"ERROR: '{caller}' not in {path.name}: {outputs['repos']}", file=sys.stderr)
-        if not args.soft:
-            return 1
+        return 1
 
     for key, value in outputs.items():
         print(f"{key} : {value}")

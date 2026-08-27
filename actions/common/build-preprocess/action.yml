@@ -1,20 +1,20 @@
 # =============================================================================
 # FILE_NAME: action.yml
-# DESCRIPTION: Match inventory, then allowlisted branch + CI stages.
-# VERSION: 2.6.0
+# DESCRIPTION: Nested inventory check at v1, then allowlisted branch + CI stages.
+# VERSION: 2.11.0
 # AUTHORS: DevOps Team
 # =============================================================================
 
 name: 'Build Preprocess'
-description: 'Match inventory.json and allowlisted branch; emit CI stages'
+description: 'Match inventory via check-inventory/v1, then allowlisted branch; emit CI stages'
 
 inputs:
   inventory_file:
-    description: 'Inventory JSON basename inside this action directory'
+    description: 'Passed through to check-inventory (basename inside that action directory)'
     required: false
     default: 'inventory.json'
   repo:
-    description: 'Caller owner/repo or repo name to match; empty uses GITHUB_REPOSITORY'
+    description: 'Passed through to check-inventory; empty uses GITHUB_REPOSITORY'
     required: false
     default: ''
   branch:
@@ -28,17 +28,13 @@ inputs:
     description: 'Actor treated as auto-commit bot; other stages skip when github.actor matches'
     required: false
     default: ''
-  soft:
-    description: 'If true, inventory or branch miss writes false and the step succeeds'
-    required: false
-    default: 'false'
 
 outputs:
   repos:
     description: 'JSON array of repo names'
     value: ${{ steps.read.outputs.repos }}
   matched:
-    description: 'true when the caller repo is listed; false on --soft miss'
+    description: 'true when the caller repo is listed'
     value: ${{ steps.read.outputs.matched }}
   repo:
     description: 'Resolved caller repo used for the inventory match'
@@ -47,7 +43,7 @@ outputs:
     description: 'Resolved branch used for the allowlist check'
     value: ${{ steps.branch.outputs.branch }}
   approved:
-    description: 'true when the branch matches an approved glob; false on --soft miss'
+    description: 'true when the branch matches an approved glob'
     value: ${{ steps.branch.outputs.approved }}
   build_stages:
     description: >-
@@ -147,27 +143,10 @@ runs:
   steps:
     - name: Match caller against inventory
       id: read
-      shell: bash
-      env:
-        ACTION_PATH: ${{ github.action_path }}
-        INVENTORY_FILE: ${{ inputs.inventory_file }}
-        REPO: ${{ inputs.repo }}
-        SOFT: ${{ inputs.soft }}
-        PYTHONUNBUFFERED: "1"
-      run: |
-        set -euo pipefail
-        ARGS=(
-          --action-path "${ACTION_PATH}"
-          --inventory-file "${INVENTORY_FILE}"
-          --output "${GITHUB_OUTPUT}"
-        )
-        if [[ -n "${REPO}" ]]; then
-          ARGS+=(--repo "${REPO}")
-        fi
-        if [[ "${SOFT}" == "true" ]]; then
-          ARGS+=(--soft)
-        fi
-        python3 -u "${ACTION_PATH}/checkInventory.py" "${ARGS[@]}"
+      uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/check-inventory@check-inventory/v1
+      with:
+        inventory_file: ${{ inputs.inventory_file }}
+        repo: ${{ inputs.repo }}
 
     - name: Check branch and emit stages
       id: branch

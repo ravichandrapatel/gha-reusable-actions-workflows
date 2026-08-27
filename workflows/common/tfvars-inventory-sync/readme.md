@@ -1,10 +1,10 @@
 # Tfvars Inventory Sync
 
-Reusable workflow that discovers `*.tfvars` names in a caller-repo folder, writes `inventory.json`, pushes that file into `actions/common/build-preprocess` on the destination repo using a GitHub App token, and dispatches Release Manager to release the preprocess action.
+Reusable workflow that discovers `*.tfvars` names in a caller-repo folder, writes `inventory.json`, pushes that file into `actions/common/check-inventory` on the destination repo using a GitHub App token, and dispatches Release Manager to release the inventory action.
 
 ## Overview & context
 
-- **Purpose**: Keep the versioned `build-preprocess` inventory in the destination catalog in sync with Terraform `*.tfvars` files that live in another repository.
+- **Purpose**: Keep the versioned `check-inventory` inventory in the destination catalog in sync with Terraform `*.tfvars` files that live in another repository.
 - **Scope**: Non-recursive `*.tfvars` discovery; basename without `.tfvars` becomes a repo name; commit to destination `main`; auto-release when the JSON changes.
 - **Primary users**: Platform / Terraform owners whose env files live in an app or infra repo.
 - **Success criteria**: Destination `inventory.json` matches a sorted JSON array of repo names; Release Manager is dispatched only when the file changed.
@@ -25,8 +25,8 @@ Reusable workflow that discovers `*.tfvars` names in a caller-repo folder, write
 2. Finds `*.tfvars` in `working_directory`/`folder_name` (non-recursive).
 3. Strips the `.tfvars` extension and writes sorted JSON: `["dev","prod",...]`.
 4. Mints a GitHub App installation token scoped to `destination_repo` (credentials from inherited secrets `APP_ID` / `APP_PRIVATE_KEY`).
-5. Checks out the destination, commits `actions/common/build-preprocess/inventory.json` to `main` when the file changed.
-6. Dispatches the destination’s **Release Manager** (`mode: release-promote`, `component_path: actions/common/build-preprocess`).
+5. Checks out the destination, commits `actions/common/check-inventory/inventory.json` to `main` when the file changed.
+6. Dispatches the destination’s **Release Manager** (`mode: release-promote`, `component_path: actions/common/check-inventory`).
 
 If destination `inventory.json` already has the same repo list as the generated file, the job succeeds without a commit and **does not** dispatch Release Manager. Comparison is on the sorted unique array, so whitespace-only JSON differences do not count as a change.
 
@@ -45,8 +45,8 @@ If destination `inventory.json` already has the same repo list as the generated 
 | --- | --- | --- | --- |
 | `folder_name` | Yes | — | Folder with `*.tfvars` relative to `working_directory`. |
 | `working_directory` | No | `.` | Source root relative to the caller repo. |
-| `destination_repo` | Yes | — | Destination `owner/repo` that owns `build-preprocess`. |
-| `commit_message` | No | `DCDT-0000 chore(build-preprocess): sync inventory.json` | Ticket-prefixed conventional subject. |
+| `destination_repo` | Yes | — | Destination `owner/repo` that owns `check-inventory`. |
+| `commit_message` | No | `DCDT-0000 chore(check-inventory): sync inventory.json` | Ticket-prefixed conventional subject. |
 | `release_version` | No | `""` | Optional explicit SemVer for Release Manager. |
 
 Commits always target **`main`**.
@@ -120,7 +120,7 @@ Bootstrap:
 
 1. Merge this component to the destination default branch.
 2. Run Release Manager on `workflows/common/tfvars-inventory-sync` (`release-promote`) so callers can `uses:` the synced file.
-3. Ensure `actions/common/build-preprocess/action.yml` is already on `main` before the first caller sync.
+3. Ensure `actions/common/check-inventory/action.yml` is already on `main` before the first caller sync.
 
 ## Requirements
 

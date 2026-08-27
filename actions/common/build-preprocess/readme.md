@@ -1,12 +1,12 @@
 # Build Preprocess
 
-Composite action that ships `inventory.json` (repo names derived from `*.tfvars`) and matches the caller repo against that list.
+Composite action that allowlists the branch and emits CI stages. Inventory matching is a nested house action pinned at `@check-inventory/v1`.
 
 ## Overview & context
 
-- **Purpose**: Versioned inventory consumed by CI after `tfvars-inventory-sync` writes `inventory.json` and Release Manager tags this action.
-- **Scope**: Read-only; does not discover tfvars. Discovery lives in `workflows/common/tfvars-inventory-sync`. Match logic is `checkInventory.py` (stdlib JSON + argparse); the composite launches `python3 -u` with CLI args.
-- **Success criteria**: hard mode exits 0 only when the caller is listed; `--soft` exits 0 on a miss with `matched=false`.
+- **Purpose**: Resolve project metadata and `build_stages` for Maven / ng-ui / dotnet pipelines.
+- **Scope**: Does not ship `inventory.json`. Repo allowlist lives in `actions/common/check-inventory` (populated by `tfvars-inventory-sync`). This composite calls that action at the stable tag, then runs `preprocess.py`.
+- **Success criteria**: inventory step succeeds (caller listed); then branch/stage emission exits 0.
 
 ## Metadata dashboard
 
@@ -15,41 +15,25 @@ Composite action that ships `inventory.json` (repo names derived from `*.tfvars`
 | **Owner / Lead** | DevOps Team |
 | **Service Status** | Draft (pre-release) |
 | **Repository / Code** | `actions/common/build-preprocess` |
-| **Dependencies** | Python 3; composite step installs `requirements.txt` (`defusedxml`) |
-
-## JSON shape
-
-```json
-[
-  "reponame",
-  "repo"
-]
-```
-
-Top-level JSON array of repo names (no `repos` wrapper).
+| **Dependencies** | Python 3; composite step installs `requirements.txt` (`defusedxml`); nested `check-inventory@check-inventory/v1` |
 
 ## Inputs
 
 | Input | Required | Default | Description |
 | --- | --- | --- | --- |
-| `inventory_file` | No | `inventory.json` | Basename under this action directory. |
-| `repo` | No | `""` | Caller `owner/repo` or repo name to match. Empty uses `GITHUB_REPOSITORY`. |
+| `inventory_file` | No | `inventory.json` | Passed through to `check-inventory`. |
+| `repo` | No | `""` | Passed through to `check-inventory`. Empty uses `GITHUB_REPOSITORY`. |
 | `branch` | No | `""` | Branch to allowlist. Empty uses `GITHUB_HEAD_REF` then `GITHUB_REF_NAME`. |
 | `app_build_type` | Yes | — | `maven`, `ng-ui`, or `dotnet`. |
 | `bot_name` | No | `""` | Actor treated as auto-commit bot. Other stages skip when `github.actor` matches. |
-| `soft` | No | `false` | If `true`, inventory or branch miss writes `false` and the step succeeds. |
-
-Match is exact against each inventory entry, the caller’s repo name (`owner/repo` → `repo`), or the last path segment of an inventory `owner/repo` entry.
-
-If the caller is not listed and `soft` is false, the action **exits 1**. With `soft: true` it writes `matched=false` and **exits 0**.
 
 ## Outputs
 
 | Output | Description |
 | --- | --- |
-| `repos` | Compact JSON array of names. |
-| `matched` | `true` when listed; `false` on a `--soft` miss. |
-| `repo` | Resolved caller repo used for the match. |
+| `repos` | Compact JSON array of names (from `check-inventory`). |
+| `matched` | `true` when listed (from `check-inventory`). |
+| `repo` | Resolved caller repo used for the match (from `check-inventory`). |
 | `branch` | Resolved branch used for the allowlist check. |
 | `approved` | `true` when the branch matches an approved glob. |
 | `build_stages` | JSON array of **enabled** stage names. Gate with `contains(fromJSON(needs.build-preprocess.outputs.build_stages), 'owasp')`. |
@@ -86,20 +70,21 @@ Dotnet layout is fixed (no `APPLICATION_NAME` → csproj matching): root `Direct
 ## Usage
 
 ```yaml
-- name: Load repo inventory
+- name: Build preprocess
   id: preprocess
-  uses: my-org/gha-reusable-actions-workflows/actions/common/build-preprocess@build-preprocess/v1
+  uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/build-preprocess@build-preprocess/v1
+  with:
+    app_build_type: maven
 ```
 
 Override the matched name (still fails if not in inventory):
 
 ```yaml
-- uses: my-org/gha-reusable-actions-workflows/actions/common/build-preprocess@build-preprocess/v1
+- uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/build-preprocess@build-preprocess/v1
   with:
     repo: my-app
     app_build_type: maven
     bot_name: github-actions[bot]
-    soft: true
 ```
 
 Local path (this monorepo):
@@ -108,22 +93,19 @@ Local path (this monorepo):
 - uses: ./actions/common/build-preprocess
 ```
 
+The nested inventory step always uses `ravichandrapatel/gha-reusable-actions-workflows/actions/common/check-inventory@check-inventory/v1`. Release and promote `check-inventory` first so that tag exists.
+
 ## Manual run
 
 ```bash
-python3 -u actions/common/build-preprocess/checkInventory.py --repo my-app
-python3 -u actions/common/build-preprocess/checkInventory.py \
-  --action-path actions/common/build-preprocess \
-  --inventory-file inventory.json \
-  --repo org/my-app \
-  --soft
+python3 -u actions/common/build-preprocess/preprocess.py --branch main --app-build-type maven
+python3 -u actions/common/build-preprocess/preprocess.py --branch feature/foo --app-build-type ng-ui
 ```
 
-Inventory is always `{action-path}/{inventory-file}`. `--action-path` defaults to `ACTION_PATH`, then `GITHUB_ACTION_PATH`, then the script directory. `--inventory-file` is a basename (default `inventory.json`). Omit `--output` to print compact JSON to stdout. Hard miss exits `1`; `--soft` writes `matched=false` / `approved=false` and exits `0`.
+Inventory matching is standalone on the inventory action:
 
 ```bash
-python3 -u actions/common/build-preprocess/preprocess.py --branch main --app-build-type maven
-python3 -u actions/common/build-preprocess/preprocess.py --branch feature/foo --app-build-type ng-ui --soft
+python3 -u actions/common/check-inventory/checkInventory.py --repo my-app
 ```
 
 Every build type reads `project.values` and `build.values` from the caller repo root (`GITHUB_WORKSPACE` after checkout, else the current directory). Missing files fail the step.

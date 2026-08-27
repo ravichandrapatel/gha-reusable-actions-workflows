@@ -6,7 +6,8 @@
 # EXIT_CODES/SIGNALS: 0 ok, 1 fail
 # AUTHORS: Platform Team
 # =============================================================================
-# temp/ is gitignored. Inventory is patched only in the overlay copy.
+# temp/ is gitignored. Inventory is patched only in the overlay copy
+# (actions/common/check-inventory/inventory.json).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -23,7 +24,7 @@ rm -rf "${MAP}"
 mkdir -p "${MAP}/.github/workflows"
 rsync -a "${ROOT}/actions/" "${MAP}/actions/"
 cp "${ROOT}/.github/workflows/ng-ui-build-pipeline.yml" "${MAP}/.github/workflows/ng-ui-build-pipeline.yml"
-printf '%s\n' "{\"repos\":[\"${REPO_NAME}\"]}" > "${MAP}/actions/common/build-preprocess/inventory.json"
+printf '%s\n' "[\"${REPO_NAME}\"]" > "${MAP}/actions/common/check-inventory/inventory.json"
 
 cat > "${APP}/project.values" <<'EOF'
 APPLICATION_NAME=ng-ui-act-fixture

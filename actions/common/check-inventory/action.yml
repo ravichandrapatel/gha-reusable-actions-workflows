@@ -1,0 +1,53 @@
+# =============================================================================
+# FILE_NAME: action.yml
+# DESCRIPTION: Match caller repo against shipped inventory.json.
+# VERSION: 1.1.0
+# AUTHORS: DevOps Team
+# =============================================================================
+
+name: 'Check Inventory'
+description: 'Match the caller repo against inventory.json and emit match outputs'
+
+inputs:
+  inventory_file:
+    description: 'Inventory JSON basename inside this action directory'
+    required: false
+    default: 'inventory.json'
+  repo:
+    description: 'Caller owner/repo or repo name to match; empty uses GITHUB_REPOSITORY'
+    required: false
+    default: ''
+
+outputs:
+  repos:
+    description: 'JSON array of repo names'
+    value: ${{ steps.read.outputs.repos }}
+  matched:
+    description: 'true when the caller repo is listed'
+    value: ${{ steps.read.outputs.matched }}
+  repo:
+    description: 'Resolved caller repo used for the inventory match'
+    value: ${{ steps.read.outputs.repo }}
+
+runs:
+  using: composite
+  steps:
+    - name: Match caller against inventory
+      id: read
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        INVENTORY_FILE: ${{ inputs.inventory_file }}
+        REPO: ${{ inputs.repo }}
+        PYTHONUNBUFFERED: "1"
+      run: |
+        set -euo pipefail
+        ARGS=(
+          --action-path "${ACTION_PATH}"
+          --inventory-file "${INVENTORY_FILE}"
+          --output "${GITHUB_OUTPUT}"
+        )
+        if [[ -n "${REPO}" ]]; then
+          ARGS+=(--repo "${REPO}")
+        fi
+        python3 -u "${ACTION_PATH}/checkInventory.py" "${ARGS[@]}"

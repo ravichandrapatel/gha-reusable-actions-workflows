@@ -123,5 +123,5 @@ export GITHUB_TOKEN   # from `gh auth token` so act can fetch setup-node / artif
   -j pipeline
 ```
 
-House inventory is patched only in `temp/gha-local-map` (not the real `inventory.json`). `push` on `main` runs build/owasp/sonar, not docker/publish.
+House inventory is patched only in `temp/gha-local-map/actions/common/check-inventory/inventory.json` (not the real catalog file). `push` on `main` runs build/owasp/sonar, not docker/publish.
 

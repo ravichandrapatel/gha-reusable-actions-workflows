@@ -488,7 +488,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Login to Nexus registry (image push)
-        uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/docker-login@docker-login/v1.2.0
+        uses: ./actions/common/docker-login
         with:
           registry: ${{ steps.images.outputs.registry }}
           username: ${{ secrets.NEXUS_USERNAME }}
@@ -496,7 +496,7 @@ jobs:
 
       - name: S2I build and push
         id: push
-        uses: ravichandrapatel/gha-reusable-actions-workflows/actions/common/s2i-build-and-push@s2i-build-and-push/v1.1.0
+        uses: ./actions/common/s2i-build-and-push
         with:
           builder_image: ${{ steps.images.outputs.builder_image }}
           artifact_path: ${{ steps.artifact.outputs.jar_path }}

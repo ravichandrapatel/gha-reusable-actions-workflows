@@ -16,7 +16,7 @@ Reusable workflow (`on: workflow_call`) for Angular/ng-ui apps. Preprocess emits
 | **Owner / Lead** | DevOps Team |
 | **Service Status** | Draft (pre-release) |
 | **Repository / Code** | `workflows/programming/ng-ui-build-pipeline` |
-| **Dependencies** | House composites: build-preprocess, owasp-dependency-check, sonar-scan, docker-login, docker-build-and-push |
+| **Dependencies** | House composites: build-preprocess (nests check-inventory/v1), owasp-dependency-check, sonar-scan, docker-login, docker-build-and-push |
 | **Slack / Support** | Platform / DevOps |
 
 ## Jobs / dependency graph
@@ -24,35 +24,32 @@ Reusable workflow (`on: workflow_call`) for Angular/ng-ui apps. Preprocess emits
 ```text
 build-preprocess
        │
-       ▼
-build-and-unit-test-lint   if build_and_unit_test == true
-       │  uploads ng-ui-dist (+ ng-ui-coverage when lcov exists)
-       ▼
-     owasp                 if stages contains owasp
-       │  uploads owasp-report (format ALL → reports/)
        ├──────────────────┐
        ▼                  ▼
-  sonarqube          sonarqube-pr
-  (not PR)           (pull_request)
+build-and-unit-test     owasp
        │                  │
        └────────┬─────────┘
-                ├──────────────► publish     if snapshot_artifact or release_artifact
-                └──────────────► docker-build if docker == true
+                ▼
+           sonarqube
+         (branch or PR)
+                │
+       ┌────────┴────────┐
+       ▼                 ▼
+    publish         docker-build
 ```
 
 | Job | Gate |
 | --- | --- |
-| `build-preprocess` | Inventory + branch allowlist; `app_build_type: ng-ui` |
-| `build-and-unit-test-lint` | `npm ci`, `npm run lint`, `npm test`, `npm run build` |
+| `build-preprocess` | Nested `check-inventory@check-inventory/v1`, then branch allowlist; `app_build_type: ng-ui` |
+| `build-and-unit-test` | `npm ci`, `npm run lint`, `npm test`, `npm run build` |
 | `owasp` | House OWASP action; `out: reports` |
-| `sonarqube` | Branch analysis via house `sonar-scan` |
-| `sonarqube-pr` | PR analysis (`pr_key` / `pr_branch` / `pr_base`) |
+| `sonarqube` | House `sonar-scan` (branch or PR) |
 | `publish` | `npx --no-install semantic-release` after quality gate |
 | `docker-build` | House docker-login + docker-build-and-push after quality gate |
 
 **Publish:** caller owns `.releaserc` / `release.config.js` (prerelease on `develop`, release on `release/*` and `hotfix/*`). Preprocess sets `snapshot_artifact` on develop (non-PR) and `release_artifact` on `push` or `workflow_dispatch` of `release/*` or `hotfix/*`. semantic-release must be in the caller `package.json` (no floating `npx` latest).
 
-**Docker:** enabled on `push` or `workflow_dispatch` (not PRs / libraries). `project_version` is the ng-ui `application_version` (package.json). Uses `vars.NEXUS_DOCKER_REGISTRY_DEV` plus `NEXUS_USERNAME` / `NEXUS_PASSWORD`.
+**Docker:** enabled on `push` or `workflow_dispatch` (not PRs / libraries). Image tag uses `project_version` (`package.json` `version`) and `parent_version` (`@test/components`, falling back to `application_version` when that dependency is absent). Uses `vars.NEXUS_DOCKER_REGISTRY_DEV` plus `NEXUS_USERNAME` / `NEXUS_PASSWORD`.
 
 ## Inputs
 
@@ -74,8 +71,10 @@ build-and-unit-test-lint   if build_and_unit_test == true
 | --- | --- |
 | `stages` | preprocess |
 | `application_name` | preprocess |
-| `parent_version` | preprocess |
-| `quality_gate_status` | sonarqube or sonarqube-pr |
+| `application_version` | preprocess (`@test/components` when declared, else `package.json` `version`) |
+| `parent_version` | preprocess (`@test/components`; empty when undeclared) |
+| `project_version` | preprocess (`package.json` `version`) |
+| `quality_gate_status` | sonarqube |
 | `docker_image` | docker-build |
 
 ## Secrets
@@ -84,7 +83,7 @@ Do not declare `workflow_call` secrets. Callers pass **`secrets: inherit`** so o
 
 | Secret | Required | Used by |
 | --- | --- | --- |
-| `SONAR_TOKEN` | **yes** | sonarqube, sonarqube-pr |
+| `SONAR_TOKEN` | **yes** | sonarqube |
 | `NPM_TOKEN` | no | publish (Nexus npm) |
 | `NEXUS_USERNAME` / `NEXUS_PASSWORD` | no | docker-build |
 | `GH_TOKEN` | no | publish + checkout; falls back to `github.token` |
@@ -93,7 +92,7 @@ Do not declare `workflow_call` secrets. Callers pass **`secrets: inherit`** so o
 
 1. Build uploads `ng-ui-dist` from `dist/` and optional `ng-ui-coverage` from `coverage/lcov.info`.
 2. OWASP writes `reports/` (HTML + JSON names expected by sonar-scan ng-ui properties) and uploads `owasp-report`.
-3. Sonar jobs download coverage and OWASP reports (warn/continue if missing).
+3. The `sonarqube` job downloads coverage and OWASP reports (warn/continue if missing).
 4. Docker downloads `ng-ui-dist` into `dist/` (no rebuild).
 
 ## Caller requirements
@@ -107,7 +106,7 @@ House composites are referenced by full repo path and release ref (never a secon
 
 | Component | `uses` |
 | --- | --- |
-| build-preprocess | `./actions/common/build-preprocess` |
+| build-preprocess | `./actions/common/build-preprocess` (nests `.../check-inventory@check-inventory/v1`) |
 | owasp-dependency-check | `.../actions/security/owasp-dependency-check@491b152c7dee57a80990de413f445c1fdeac1890` |
 | sonar-scan | `.../actions/security/sonar-scan@sonar-scan/v1.2.0` |
 | docker-login | `.../actions/common/docker-login@docker-login/v1.2.0` |
