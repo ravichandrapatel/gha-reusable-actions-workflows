@@ -1,0 +1,353 @@
+h1. maven-build-pipeline — GitHub Actions graph
+
+{toc:minLevel=2|maxLevel=3}
+
+{info:title=How to read this page}
+Left-to-right job graph as on a GitHub *workflow run* page. Boxes use the job {{name:}} from {{workflow.yml}}. {status:colour=Green|title=success} = {{if:}} true; {status:colour=Grey|title=skipped} = {{if:}} false — GitHub still *draws* skipped jobs.
+
+*12 jobs* in the reusable workflow. Columns are longest-path ranks from {{needs:}}. Diagrams below show *next-column* edges only (readable). GitHub also waits on earlier jobs — see *Full needs: wait edges* at the bottom for the fan-in (especially into {{notification-email}}).
+
+Open one expand for the scenario you care about. There is no live dropdown in wiki markup.
+{info}
+
+h2. Legend
+
+{status:colour=Green|title=success} job would run &nbsp;&nbsp; {status:colour=Grey|title=skipped} job would skip (still shown on the GitHub graph)
+
+h2. Scenario: develop push · single-module
+
+{expand:title=develop push · single-module (10 run / 2 skip)}
+Typical service/UI snapshot: Nexus Maven artifacts + image. Multi-module and release skip.
+
+|| Run || Skip ||
+| 10 | 2 ({{multi-module-artifacts}}, {{release-artifact}}) |
+
+h3. Column strip (no plugins)
+
+|| 1 || 2 || 3 || 4 || 5 || 6 || 7 || 8 ||
+| {status:colour=Green|title=build-preprocess} | {status:colour=Green|title=build-and-unit-test}\\
+{status:colour=Green|title=owasp} | {status:colour=Green|title=sonarqube} | {status:colour=Green|title=read-maven-pom} | {status:colour=Green|title=sonarqube-gate} | {status:colour=Grey|title=multi-module-artifacts}\\
+{status:colour=Green|title=nexus-maven-artifacts}\\
+{status:colour=Grey|title=release-artifact} | {status:colour=Green|title=docker-build} | {status:colour=Green|title=notification-email} |
+
+h3. Next-column graph (PlantUML)
+
+{plantuml}
+@startuml
+left to right direction
+skinparam shadowing false
+skinparam defaultFontSize 11
+skinparam rectangle {
+  BackgroundColor White
+  BorderColor #333333
+}
+skinparam rectangle<<skipped>> {
+  BackgroundColor #E8E8E8
+  FontColor #666666
+  BorderColor #BBBBBB
+}
+
+rectangle "build-preprocess" as pp
+rectangle "build-and-unit-test" as ut
+rectangle "owasp" as ow
+rectangle "sonarqube" as sq
+rectangle "read-maven-pom" as pom
+rectangle "sonarqube-gate" as gate
+rectangle "multi-module-artifacts" as mm <<skipped>>
+rectangle "nexus-maven-artifacts" as nx
+rectangle "release-artifact" as rel <<skipped>>
+rectangle "docker-build" as dk
+rectangle "notification-email" as mail
+
+pp --> ut
+pp --> ow
+ut --> sq
+ow --> sq
+sq --> pom
+pom --> gate
+gate --> mm
+gate --> nx
+gate --> rel
+mm --> dk
+nx --> dk
+rel --> dk
+dk --> mail
+@enduml
+{plantuml}
+{expand}
+
+h2. Scenario: develop push · multi-module
+
+{expand:title=develop push · multi-module (10 run / 2 skip)}
+Reactor POM: Multi-module artifacts ({{mvn deploy}}) runs; Nexus Maven {{deploy-file}} skips.
+
+|| Run || Skip ||
+| 10 | 2 ({{nexus-maven-artifacts}}, {{release-artifact}}) |
+
+h3. Column strip (no plugins)
+
+|| 1 || 2 || 3 || 4 || 5 || 6 || 7 || 8 ||
+| {status:colour=Green|title=build-preprocess} | {status:colour=Green|title=build-and-unit-test}\\
+{status:colour=Green|title=owasp} | {status:colour=Green|title=sonarqube} | {status:colour=Green|title=read-maven-pom} | {status:colour=Green|title=sonarqube-gate} | {status:colour=Green|title=multi-module-artifacts}\\
+{status:colour=Grey|title=nexus-maven-artifacts}\\
+{status:colour=Grey|title=release-artifact} | {status:colour=Green|title=docker-build} | {status:colour=Green|title=notification-email} |
+
+h3. Next-column graph (PlantUML)
+
+{plantuml}
+@startuml
+left to right direction
+skinparam shadowing false
+skinparam defaultFontSize 11
+skinparam rectangle {
+  BackgroundColor White
+  BorderColor #333333
+}
+skinparam rectangle<<skipped>> {
+  BackgroundColor #E8E8E8
+  FontColor #666666
+  BorderColor #BBBBBB
+}
+
+rectangle "build-preprocess" as pp
+rectangle "build-and-unit-test" as ut
+rectangle "owasp" as ow
+rectangle "sonarqube" as sq
+rectangle "read-maven-pom" as pom
+rectangle "sonarqube-gate" as gate
+rectangle "multi-module-artifacts" as mm
+rectangle "nexus-maven-artifacts" as nx <<skipped>>
+rectangle "release-artifact" as rel <<skipped>>
+rectangle "docker-build" as dk
+rectangle "notification-email" as mail
+
+pp --> ut
+pp --> ow
+ut --> sq
+ow --> sq
+sq --> pom
+pom --> gate
+gate --> mm
+gate --> nx
+gate --> rel
+mm --> dk
+nx --> dk
+rel --> dk
+dk --> mail
+@enduml
+{plantuml}
+{expand}
+
+h2. Scenario: release/* or hotfix/* push
+
+{expand:title=release/* or hotfix/* push (10 run / 2 skip)}
+{{snapshot_artifact}} off, {{release_artifact}} on. Snapshot jobs skip; Release artifact + image run.
+
+|| Run || Skip ||
+| 10 | 2 ({{multi-module-artifacts}}, {{nexus-maven-artifacts}}) |
+
+h3. Column strip (no plugins)
+
+|| 1 || 2 || 3 || 4 || 5 || 6 || 7 || 8 ||
+| {status:colour=Green|title=build-preprocess} | {status:colour=Green|title=build-and-unit-test}\\
+{status:colour=Green|title=owasp} | {status:colour=Green|title=sonarqube} | {status:colour=Green|title=read-maven-pom} | {status:colour=Green|title=sonarqube-gate} | {status:colour=Grey|title=multi-module-artifacts}\\
+{status:colour=Grey|title=nexus-maven-artifacts}\\
+{status:colour=Green|title=release-artifact} | {status:colour=Green|title=docker-build} | {status:colour=Green|title=notification-email} |
+
+h3. Next-column graph (PlantUML)
+
+{plantuml}
+@startuml
+left to right direction
+skinparam shadowing false
+skinparam defaultFontSize 11
+skinparam rectangle {
+  BackgroundColor White
+  BorderColor #333333
+}
+skinparam rectangle<<skipped>> {
+  BackgroundColor #E8E8E8
+  FontColor #666666
+  BorderColor #BBBBBB
+}
+
+rectangle "build-preprocess" as pp
+rectangle "build-and-unit-test" as ut
+rectangle "owasp" as ow
+rectangle "sonarqube" as sq
+rectangle "read-maven-pom" as pom
+rectangle "sonarqube-gate" as gate
+rectangle "multi-module-artifacts" as mm <<skipped>>
+rectangle "nexus-maven-artifacts" as nx <<skipped>>
+rectangle "release-artifact" as rel
+rectangle "docker-build" as dk
+rectangle "notification-email" as mail
+
+pp --> ut
+pp --> ow
+ut --> sq
+ow --> sq
+sq --> pom
+pom --> gate
+gate --> mm
+gate --> nx
+gate --> rel
+mm --> dk
+nx --> dk
+rel --> dk
+dk --> mail
+@enduml
+{plantuml}
+{expand}
+
+h2. Scenario: pull_request
+
+{expand:title=pull_request (8 run / 4 skip)}
+One {{sonarqube}} job (branch or PR args). Artifact and image jobs skip (not PR). Notification still runs ({{if: always()}}).
+
+|| Run || Skip ||
+| 8 | 4 ({{multi-module-artifacts}}, {{nexus-maven-artifacts}}, {{release-artifact}}, {{docker-build}}) |
+
+h3. Column strip (no plugins)
+
+|| 1 || 2 || 3 || 4 || 5 || 6 || 7 || 8 ||
+| {status:colour=Green|title=build-preprocess} | {status:colour=Green|title=build-and-unit-test}\\
+{status:colour=Green|title=owasp} | {status:colour=Green|title=sonarqube} | {status:colour=Green|title=read-maven-pom} | {status:colour=Green|title=sonarqube-gate} | {status:colour=Grey|title=multi-module-artifacts}\\
+{status:colour=Grey|title=nexus-maven-artifacts}\\
+{status:colour=Grey|title=release-artifact} | {status:colour=Grey|title=docker-build} | {status:colour=Green|title=notification-email} |
+
+h3. Next-column graph (PlantUML)
+
+{plantuml}
+@startuml
+left to right direction
+skinparam shadowing false
+skinparam defaultFontSize 11
+skinparam rectangle {
+  BackgroundColor White
+  BorderColor #333333
+}
+skinparam rectangle<<skipped>> {
+  BackgroundColor #E8E8E8
+  FontColor #666666
+  BorderColor #BBBBBB
+}
+
+rectangle "build-preprocess" as pp
+rectangle "build-and-unit-test" as ut
+rectangle "owasp" as ow
+rectangle "sonarqube" as sq
+rectangle "read-maven-pom" as pom
+rectangle "sonarqube-gate" as gate
+rectangle "multi-module-artifacts" as mm <<skipped>>
+rectangle "nexus-maven-artifacts" as nx <<skipped>>
+rectangle "release-artifact" as rel <<skipped>>
+rectangle "docker-build" as dk <<skipped>>
+rectangle "notification-email" as mail
+
+pp --> ut
+pp --> ow
+ut --> sq
+ow --> sq
+sq --> pom
+pom --> gate
+gate --> mm
+gate --> nx
+gate --> rel
+mm --> dk
+nx --> dk
+rel --> dk
+dk --> mail
+@enduml
+{plantuml}
+{expand}
+
+h2. What GitHub shows in each column
+
+Same left-to-right order GitHub uses (longest dependency path). Parallel jobs share a column.
+
+|| Column || Jobs ({{name:}}) || Typical skip ||
+| 1 | {{build-preprocess}} | Never (entry job) |
+| 2 | {{build-and-unit-test}} · {{owasp}} | Stage flags / {{skip_owasp}} |
+| 3 | {{sonarqube}} | Branch vs PR args inside the same job (like ng-ui) |
+| 4 | {{read-maven-pom}} | If preprocess or both Sonar jobs fail |
+| 5 | {{sonarqube-gate}} | {{skip_sonar}} or {{skip_quality_gate_check}} |
+| 6 | {{multi-module-artifacts}} · {{nexus-maven-artifacts}} · {{release-artifact}} | POM shape, snapshot vs release stage, PR |
+| 7 | {{docker-build}} | PR, missing docker stage, or a needed artifact job failed |
+| 8 | {{notification-email}} | Only when {{skip_notification}} is true |
+
+h2. Full needs: wait edges
+
+GitHub {{needs:}} is *not* only the next column. Every job after preprocess also waits on preprocess; {{notification-email}} waits on almost everything. Use this diagram when you need the real wait fan-in. Node colours below are the *develop · single-module* skip set.
+
+{expand:title=All needs: edges (PlantUML)}
+{plantuml}
+@startuml
+left to right direction
+skinparam shadowing false
+skinparam defaultFontSize 10
+skinparam rectangle {
+  BackgroundColor White
+  BorderColor #333333
+}
+skinparam rectangle<<skipped>> {
+  BackgroundColor #E8E8E8
+  FontColor #666666
+  BorderColor #BBBBBB
+}
+
+rectangle "build-preprocess" as pp
+rectangle "build-and-unit-test" as ut
+rectangle "owasp" as ow
+rectangle "sonarqube" as sq
+rectangle "read-maven-pom" as pom
+rectangle "sonarqube-gate" as gate
+rectangle "multi-module-artifacts" as mm <<skipped>>
+rectangle "nexus-maven-artifacts" as nx
+rectangle "release-artifact" as rel <<skipped>>
+rectangle "docker-build" as dk
+rectangle "notification-email" as mail
+
+pp --> ut
+pp --> ow
+pp --> sq
+pp --> pom
+pp --> gate
+pp --> mm
+pp --> nx
+pp --> rel
+pp --> dk
+pp --> mail
+ut --> sq
+ut --> dk
+ut --> mail
+ow --> sq
+ow --> mail
+sq --> pom
+sq --> gate
+sq --> mm
+sq --> nx
+sq --> rel
+sq --> dk
+sq --> mail
+pom --> gate
+pom --> mm
+pom --> nx
+pom --> rel
+pom --> dk
+pom --> mail
+gate --> mm
+gate --> nx
+gate --> rel
+gate --> dk
+gate --> mail
+mm --> dk
+mm --> mail
+nx --> dk
+nx --> mail
+rel --> dk
+rel --> mail
+dk --> mail
+@enduml
+{plantuml}
+{expand}
